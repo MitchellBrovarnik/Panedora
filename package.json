@@ -1,0 +1,21 @@
+{
+    "name": "pandora-glass",
+    "version": "1.0.0",
+    "description": "A premium Pandora client with a Spotify-inspired native interface",
+    "main": "main.js",
+    "scripts": {
+        "start": "electron .",
+        "dev": "electron . --dev"
+    },
+    "keywords": [
+        "pandora",
+        "music",
+        "electron",
+        "streaming"
+    ],
+    "author": "",
+    "license": "MIT",
+    "devDependencies": {
+        "electron": "^28.0.0"
+    }
+}

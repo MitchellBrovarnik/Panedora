@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https: blob:;">
+    <title>Pandora Glass</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <svg viewBox="0 0 32 32">
+                    <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2" />
+                    <path d="M12 10v12l10-6z" fill="currentColor" />
+                </svg>
+                <h1>Pandora Glass</h1>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" data-page="home">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+                    </svg>
+                    <span>Home</span>
+                </a>
+                <a href="#" class="nav-item" data-page="search">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                            d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+                    </svg>
+                    <span>Search</span>
+                </a>
+                <a href="#" class="nav-item" data-page="library">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                            d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9h-4v4h-2v-4H9V9h4V5h2v4h4v2z" />
+                    </svg>
+                    <span>Your Library</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-divider"></div>
+
+            <h2 class="sidebar-section-title">Your Stations</h2>
+            <div class="sidebar-stations" id="stations-list">
+                <!-- Stations populated dynamically -->
+                <div class="loading-container">
+                    <div class="loading-spinner"></div>
+                    <p>Loading stations...</p>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="main-header">
+                <div class="header-nav">
+                    <button class="header-nav-btn" id="nav-back" aria-label="Go back">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+                        </svg>
+                    </button>
+                    <button class="header-nav-btn" id="nav-forward" aria-label="Go forward">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z" />
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="search-container" id="search-container" style="display: none;">
+                    <span class="search-icon">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path
+                                d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+                        </svg>
+                    </span>
+                    <input type="text" class="search-input" id="search-input"
+                        placeholder="What do you want to listen to?">
+                </div>
+
+                <div id="header-spacer"></div>
+            </header>
+
+            <div class="main-scroll" id="main-scroll">
+                <!-- Dynamic content rendered here -->
+                <div id="page-content">
+                    <div class="welcome-container">
+                        <h1 class="welcome-title">Welcome to Pandora Glass</h1>
+                        <p class="welcome-subtitle">Connecting to Pandora...</p>
+                        <div class="loading-spinner"></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Player Footer -->
+        <footer class="player-footer">
+            <div class="now-playing">
+                <img class="now-playing-art" id="now-playing-art"
+                    src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56'%3E%3Crect fill='%23282828' width='56' height='56'/%3E%3C/svg%3E"
+                    alt="Album art">
+                <div class="now-playing-info">
+                    <span class="now-playing-title" id="now-playing-title">Not Playing</span>
+                    <span class="now-playing-artist" id="now-playing-artist">--</span>
+                </div>
+                <button class="now-playing-heart" id="heart-btn" aria-label="Save to Your Library">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                        <path
+                            d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="player-controls">
+                <div class="control-buttons">
+                    <button class="control-btn" id="shuffle-btn" aria-label="Shuffle">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path
+                                d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z" />
+                        </svg>
+                    </button>
+                    <button class="control-btn" id="prev-btn" aria-label="Previous">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+                        </svg>
+                    </button>
+                    <button class="play-pause-btn" id="play-pause-btn" aria-label="Play">
+                        <svg viewBox="0 0 24 24" fill="currentColor" id="play-icon">
+                            <path d="M8 5v14l11-7z" />
+                        </svg>
+                    </button>
+                    <button class="control-btn" id="next-btn" aria-label="Next">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+                        </svg>
+                    </button>
+                    <button class="control-btn" id="repeat-btn" aria-label="Repeat">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z" />
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="progress-container">
+                    <span class="progress-time" id="current-time">0:00</span>
+                    <div class="progress-bar" id="progress-bar">
+                        <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+                    </div>
+                    <span class="progress-time" id="total-time">0:00</span>
+                </div>
+            </div>
+
+            <div class="volume-controls">
+                <button class="volume-btn" id="volume-btn" aria-label="Volume">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                            d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
+                    </svg>
+                </button>
+                <input type="range" class="volume-slider" id="volume-slider" min="0" max="100" value="100">
+            </div>
+        </footer>
+    </div>
+
+    <script src="components.js"></script>
+    <script src="renderer.js"></script>
+</body>
+
+</html>
