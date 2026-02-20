@@ -30,6 +30,11 @@ const AppState = {
     authError: ''
 };
 
+const AudioState = {
+    element: null,
+    currentURL: null
+};
+
 // ============================================================================
 // DOM References
 // ============================================================================
@@ -444,6 +449,53 @@ function updatePlayerUI(state) {
     }
 }
 
+function initAudioPlayer() {
+    if (AudioState.element) return;
+
+    AudioState.element = new Audio();
+    AudioState.element.preload = 'auto';
+    AudioState.element.volume = AppState.playerState.volume / 100;
+
+    AudioState.element.addEventListener('play', () => {
+        updatePlayerUI({ isPlaying: true });
+    });
+
+    AudioState.element.addEventListener('pause', () => {
+        updatePlayerUI({ isPlaying: false });
+    });
+
+    AudioState.element.addEventListener('timeupdate', () => {
+        updatePlayerUI({
+            time: AudioState.element.currentTime || 0,
+            duration: AudioState.element.duration || AppState.playerState.duration || 0
+        });
+    });
+
+    AudioState.element.addEventListener('ended', async () => {
+        await window.api.player.next();
+    });
+
+    AudioState.element.addEventListener('error', (event) => {
+        console.error('[UI] Audio playback error:', event);
+    });
+}
+
+async function syncAudioPlaybackFromState(state) {
+    if (!AudioState.element) return;
+
+    if (state.audioURL && state.audioURL !== AudioState.currentURL) {
+        AudioState.currentURL = state.audioURL;
+        AudioState.element.src = state.audioURL;
+        AudioState.element.currentTime = 0;
+
+        try {
+            await AudioState.element.play();
+        } catch (error) {
+            console.error('[UI] Autoplay blocked/failed:', error);
+        }
+    }
+}
+
 // ============================================================================
 // Player Controls
 // ============================================================================
@@ -478,7 +530,20 @@ function initEventListeners() {
     });
 
     // Player controls
-    DOM.playPauseBtn.addEventListener('click', () => window.api.player.toggle());
+    DOM.playPauseBtn.addEventListener('click', async () => {
+        if (!AudioState.element) return;
+
+        if (AudioState.element.paused) {
+            try {
+                await AudioState.element.play();
+            } catch (error) {
+                console.error('[UI] Play failed:', error);
+            }
+            return;
+        }
+
+        AudioState.element.pause();
+    });
     DOM.prevBtn.addEventListener('click', () => window.api.player.prev());
     DOM.nextBtn.addEventListener('click', () => window.api.player.next());
     DOM.shuffleBtn.addEventListener('click', () => window.api.player.shuffle());
@@ -504,7 +569,12 @@ function initEventListeners() {
 
     // Volume
     DOM.volumeSlider.addEventListener('input', (e) => {
-        window.api.player.setVolume(parseInt(e.target.value));
+        const volume = parseInt(e.target.value);
+        AppState.playerState.volume = volume;
+        if (AudioState.element) {
+            AudioState.element.volume = volume / 100;
+        }
+        window.api.player.setVolume(volume);
     });
 
     // Progress bar seeking
@@ -512,6 +582,9 @@ function initEventListeners() {
         const rect = DOM.progressBar.getBoundingClientRect();
         const percent = (e.clientX - rect.left) / rect.width;
         const seekTime = percent * AppState.playerState.duration;
+        if (AudioState.element && !isNaN(seekTime)) {
+            AudioState.element.currentTime = seekTime;
+        }
         window.api.player.seek(seekTime);
     });
 }
@@ -522,8 +595,12 @@ function initEventListeners() {
 
 function initAPIListeners() {
     // Player state updates
-    window.api.onState((state) => {
-        updatePlayerUI(state);
+    window.api.onState(async (state) => {
+        await syncAudioPlaybackFromState(state);
+
+        const normalizedState = { ...state };
+        delete normalizedState.isPlaying;
+        updatePlayerUI(normalizedState);
     });
 
     // Collection/stations data
@@ -581,6 +658,7 @@ function initAPIListeners() {
 async function init() {
     console.log('[UI] Initializing Pandora Glass...');
 
+    initAudioPlayer();
     initEventListeners();
     initAPIListeners();
 
