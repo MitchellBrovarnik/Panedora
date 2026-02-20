@@ -39,14 +39,16 @@ contextBridge.exposeInMainWorld('api', {
         thumbUp: () => ipcRenderer.invoke('PLAYER:CMD', { action: 'thumbUp' }),
         thumbDown: () => ipcRenderer.invoke('PLAYER:CMD', { action: 'thumbDown' }),
         tuneStation: (mode) => ipcRenderer.invoke('PLAYER:CMD', { action: 'tune', value: mode }),
-        getMoreTracks: () => ipcRenderer.invoke('PLAYER:GET_MORE_TRACKS')
+        getMoreTracks: () => ipcRenderer.invoke('PLAYER:GET_MORE_TRACKS'),
+        prepareStream: () => ipcRenderer.invoke('PLAYER:PREPARE_STREAM')
     },
 
     // ========================================
     // Content/Navigation
     // ========================================
     content: {
-        getStations: () => ipcRenderer.invoke('APP:INIT'),
+        getStations: () => ipcRenderer.invoke('CONTENT:REFRESH_STATIONS'),
+        refreshStations: () => ipcRenderer.invoke('CONTENT:REFRESH_STATIONS'),
         playItem: (item) => ipcRenderer.invoke('NAV:PLAY_URI', { uri: `${item.type}:${item.id}`, ...item }),
         search: (query) => ipcRenderer.invoke('CONTENT:SEARCH', query),
         removeStation: (id) => ipcRenderer.invoke('CONTENT:REMOVE_STATION', id)

@@ -23,6 +23,48 @@ class PandoraAPI {
     }
 
     /**
+     * Pick the most compatible direct stream URL from a Pandora track payload.
+     */
+    static selectBestAudioUrl(track) {
+        if (!track) return null;
+        if (track.audioURL) return track.audioURL;
+
+        const map = track.audioUrlMap;
+        if (!map || typeof map !== 'object') return null;
+
+        const candidates = Object.values(map)
+            .filter(Boolean)
+            .map((entry) => ({
+                url: entry.audioUrl || entry.audioURL || null,
+                encoding: (entry.encoding || '').toLowerCase(),
+                protocol: (entry.protocol || '').toLowerCase(),
+                bitrate: Number(entry.bitrate || 0)
+            }))
+            .filter((entry) => entry.url);
+
+        if (candidates.length === 0) return null;
+
+        const score = (entry) => {
+            let value = 0;
+
+            // Prefer direct progressive streams over HLS when available.
+            if (entry.protocol === 'http' || entry.protocol === 'https') value += 1000;
+            if (entry.protocol.includes('hls')) value -= 200;
+
+            // Chromium compatibility preference.
+            if (entry.encoding.includes('mp3')) value += 300;
+            else if (entry.encoding.includes('aac')) value += 200;
+
+            // Prefer higher quality within compatible formats.
+            value += entry.bitrate;
+            return value;
+        };
+
+        const best = [...candidates].sort((a, b) => score(b) - score(a))[0];
+        return best?.url || null;
+    }
+
+    /**
      * Generate a random CSRF token
      */
     generateCsrfToken() {
@@ -280,16 +322,24 @@ class PandoraAPI {
                 response = await this._retryAfterSimStreamViolation(payload);
             }
 
-            console.log(`[API] Retrieved ${response.tracks?.length || 0} tracks`);
+            const tracks = (response.tracks || []).map((track) => {
+                const selectedUrl = PandoraAPI.selectBestAudioUrl(track);
+                return {
+                    ...track,
+                    audioURL: selectedUrl || track.audioURL || null
+                };
+            });
+
+            console.log(`[API] Retrieved ${tracks.length} tracks`);
 
             // Debug: log first track to see structure
-            if (response.tracks?.[0]) {
-                const t = response.tracks[0];
+            if (tracks[0]) {
+                const t = tracks[0];
                 console.log('[API] First track:', t.songTitle, '-', t.artistName);
                 console.log('[API] Audio URL:', t.audioURL ? t.audioURL.substring(0, 80) + '...' : 'MISSING');
             }
 
-            return response.tracks || [];
+            return tracks;
         } catch (error) {
             // Check for SimStreamViolation in error response
             const errorStr = JSON.stringify(error);
@@ -297,11 +347,16 @@ class PandoraAPI {
                 console.log('[API] SimStreamViolation in error - retrying...');
                 try {
                     const retryResponse = await this._retryAfterSimStreamViolation(payload);
-                    if (retryResponse.tracks?.[0]) {
-                        const t = retryResponse.tracks[0];
+                    const retryTracks = (retryResponse.tracks || []).map((track) => ({
+                        ...track,
+                        audioURL: PandoraAPI.selectBestAudioUrl(track) || track.audioURL || null
+                    }));
+
+                    if (retryTracks[0]) {
+                        const t = retryTracks[0];
                         console.log('[API] Retry first track:', t.songTitle, '-', t.artistName);
                     }
-                    return retryResponse.tracks || [];
+                    return retryTracks;
                 } catch (retryError) {
                     console.error('[API] All retries failed:', JSON.stringify(retryError));
                     return [];
@@ -345,6 +400,46 @@ class PandoraAPI {
 
         console.error('[API] SimStreamViolation persisted after 3 retries');
         return { tracks: [] };
+    }
+
+
+    /**
+     * Notify Pandora that we are about to consume a stream URL.
+     */
+    async prepareStream(track = {}, stationId = null) {
+        if (!track) return;
+
+        if (stationId && track.trackToken) {
+            await this.trackStarted(stationId, track.trackToken);
+        }
+
+        if (!track.audioReceiptURL) return;
+
+        await new Promise((resolve) => {
+            try {
+                const receiptUrl = new URL(track.audioReceiptURL);
+                const req = https.get({
+                    hostname: receiptUrl.hostname,
+                    path: `${receiptUrl.pathname}${receiptUrl.search}`,
+                    protocol: receiptUrl.protocol,
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    }
+                }, (res) => {
+                    res.resume();
+                    resolve();
+                });
+
+                req.on('error', () => resolve());
+                req.on('timeout', () => {
+                    req.destroy();
+                    resolve();
+                });
+                req.setTimeout(3000);
+            } catch (error) {
+                resolve();
+            }
+        });
     }
 
     /**

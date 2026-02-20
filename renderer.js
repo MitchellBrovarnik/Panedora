@@ -25,7 +25,14 @@ const AppState = {
     searchResults: null,
     searchQuery: '',
     isLoading: true,
-    isLoggedIn: false
+    isLoggedIn: false,
+    authLoading: false,
+    authError: ''
+};
+
+const AudioState = {
+    element: null,
+    currentURL: null
 };
 
 // ============================================================================
@@ -104,8 +111,19 @@ function renderHomePage() {
         DOM.pageContent.innerHTML = `
       <div class="welcome-container">
         <h1 class="welcome-title">Sign in to Pandora</h1>
-        <p class="welcome-subtitle">Please sign in to your Pandora account in the background window to continue.</p>
+        <p class="welcome-subtitle">Sign in with your Pandora account to load and sync your stations.</p>
+        <form class="login-form" id="login-form">
+          <input class="login-input" id="login-username" type="text" placeholder="Email" autocomplete="username" required>
+          <input class="login-input" id="login-password" type="password" placeholder="Password" autocomplete="current-password" required>
+          <button class="login-button" type="submit" ${AppState.authLoading ? 'disabled' : ''}>
+            ${AppState.authLoading ? 'Signing in…' : 'Sign In'}
+          </button>
+          ${AppState.authError ? `<p class="login-error">${AppState.authError}</p>` : ''}
+        </form>
       </div>`;
+
+        const loginForm = document.getElementById('login-form');
+        loginForm?.addEventListener('submit', handleLoginSubmit);
         return;
     }
 
@@ -135,6 +153,39 @@ function renderHomePage() {
             }
         });
     });
+}
+
+async function handleLoginSubmit(event) {
+    event.preventDefault();
+
+    if (AppState.authLoading) return;
+
+    const username = document.getElementById('login-username')?.value?.trim();
+    const password = document.getElementById('login-password')?.value;
+
+    if (!username || !password) {
+        AppState.authError = 'Please enter both email and password.';
+        renderPage(AppState.currentPage);
+        return;
+    }
+
+    AppState.authLoading = true;
+    AppState.authError = '';
+    renderPage(AppState.currentPage);
+
+    try {
+        const result = await window.api.auth.login(username, password);
+        if (!result?.success) {
+            AppState.authError = result?.error || 'Login failed. Please verify your credentials.';
+        } else {
+            AppState.isLoading = true;
+        }
+    } catch (error) {
+        AppState.authError = 'Login failed. Please try again.';
+    } finally {
+        AppState.authLoading = false;
+        renderPage(AppState.currentPage);
+    }
 }
 
 function renderSearchPage() {
@@ -398,6 +449,59 @@ function updatePlayerUI(state) {
     }
 }
 
+function initAudioPlayer() {
+    if (AudioState.element) return;
+
+    AudioState.element = new Audio();
+    AudioState.element.preload = 'auto';
+    AudioState.element.volume = AppState.playerState.volume / 100;
+
+    AudioState.element.addEventListener('play', () => {
+        updatePlayerUI({ isPlaying: true });
+    });
+
+    AudioState.element.addEventListener('pause', () => {
+        updatePlayerUI({ isPlaying: false });
+    });
+
+    AudioState.element.addEventListener('timeupdate', () => {
+        updatePlayerUI({
+            time: AudioState.element.currentTime || 0,
+            duration: AudioState.element.duration || AppState.playerState.duration || 0
+        });
+    });
+
+    AudioState.element.addEventListener('ended', async () => {
+        await window.api.player.next();
+    });
+
+    AudioState.element.addEventListener('error', () => {
+        const mediaError = AudioState.element.error;
+        console.error('[UI] Audio playback error:', mediaError ? { code: mediaError.code, message: mediaError.message } : 'unknown');
+    });
+}
+
+async function syncAudioPlaybackFromState(state) {
+    if (!AudioState.element) return;
+
+    if (state.audioURL && state.audioURL !== AudioState.currentURL) {
+        AudioState.currentURL = state.audioURL;
+
+        await window.api.player.prepareStream();
+
+        AudioState.element.pause();
+        AudioState.element.src = state.audioURL;
+        AudioState.element.currentTime = 0;
+        AudioState.element.load();
+
+        try {
+            await AudioState.element.play();
+        } catch (error) {
+            console.error('[UI] Autoplay blocked/failed:', error);
+        }
+    }
+}
+
 // ============================================================================
 // Player Controls
 // ============================================================================
@@ -432,7 +536,20 @@ function initEventListeners() {
     });
 
     // Player controls
-    DOM.playPauseBtn.addEventListener('click', () => window.api.player.toggle());
+    DOM.playPauseBtn.addEventListener('click', async () => {
+        if (!AudioState.element) return;
+
+        if (AudioState.element.paused) {
+            try {
+                await AudioState.element.play();
+            } catch (error) {
+                console.error('[UI] Play failed:', error);
+            }
+            return;
+        }
+
+        AudioState.element.pause();
+    });
     DOM.prevBtn.addEventListener('click', () => window.api.player.prev());
     DOM.nextBtn.addEventListener('click', () => window.api.player.next());
     DOM.shuffleBtn.addEventListener('click', () => window.api.player.shuffle());
@@ -458,7 +575,12 @@ function initEventListeners() {
 
     // Volume
     DOM.volumeSlider.addEventListener('input', (e) => {
-        window.api.player.setVolume(parseInt(e.target.value));
+        const volume = parseInt(e.target.value);
+        AppState.playerState.volume = volume;
+        if (AudioState.element) {
+            AudioState.element.volume = volume / 100;
+        }
+        window.api.player.setVolume(volume);
     });
 
     // Progress bar seeking
@@ -466,6 +588,9 @@ function initEventListeners() {
         const rect = DOM.progressBar.getBoundingClientRect();
         const percent = (e.clientX - rect.left) / rect.width;
         const seekTime = percent * AppState.playerState.duration;
+        if (AudioState.element && !isNaN(seekTime)) {
+            AudioState.element.currentTime = seekTime;
+        }
         window.api.player.seek(seekTime);
     });
 }
@@ -476,8 +601,12 @@ function initEventListeners() {
 
 function initAPIListeners() {
     // Player state updates
-    window.api.onState((state) => {
-        updatePlayerUI(state);
+    window.api.onState(async (state) => {
+        await syncAudioPlaybackFromState(state);
+
+        const normalizedState = { ...state };
+        delete normalizedState.isPlaying;
+        updatePlayerUI(normalizedState);
     });
 
     // Collection/stations data
@@ -506,17 +635,23 @@ function initAPIListeners() {
         const statusChanged = wasLoggedIn !== status.isLoggedIn;
 
         AppState.isLoggedIn = status.isLoggedIn;
+        AppState.authLoading = false;
 
         // If we just detected login for the first time, fetch collection
         if (status.isLoggedIn && !wasLoggedIn) {
-            console.log('[UI] User logged in, fetching collection...');
-            AppState.isLoading = false;
-            window.api.init();
+            console.log('[UI] User logged in, waiting for station collection...');
+            AppState.isLoading = true;
+            AppState.authError = '';
             renderPage(AppState.currentPage);
+            return;
         }
 
-        // Only re-render if status actually changed
-        if (statusChanged && !status.isLoggedIn) {
+        // Show login screen whenever we're logged out
+        if (!status.isLoggedIn) {
+            AppState.isLoading = false;
+            if (statusChanged) {
+                AppState.authError = '';
+            }
             renderPage(AppState.currentPage);
         }
     });
@@ -529,11 +664,15 @@ function initAPIListeners() {
 async function init() {
     console.log('[UI] Initializing Pandora Glass...');
 
+    initAudioPlayer();
     initEventListeners();
     initAPIListeners();
 
     // Request initial data
-    await window.api.init();
+    const initResult = await window.api.init();
+    if (initResult?.status === 'needsLogin') {
+        AppState.isLoading = false;
+    }
 
     // Render initial page
     renderPage('home');
