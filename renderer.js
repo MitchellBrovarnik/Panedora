@@ -25,7 +25,9 @@ const AppState = {
     searchResults: null,
     searchQuery: '',
     isLoading: true,
-    isLoggedIn: false
+    isLoggedIn: false,
+    authLoading: false,
+    authError: ''
 };
 
 // ============================================================================
@@ -104,8 +106,19 @@ function renderHomePage() {
         DOM.pageContent.innerHTML = `
       <div class="welcome-container">
         <h1 class="welcome-title">Sign in to Pandora</h1>
-        <p class="welcome-subtitle">Please sign in to your Pandora account in the background window to continue.</p>
+        <p class="welcome-subtitle">Sign in with your Pandora account to load and sync your stations.</p>
+        <form class="login-form" id="login-form">
+          <input class="login-input" id="login-username" type="text" placeholder="Email" autocomplete="username" required>
+          <input class="login-input" id="login-password" type="password" placeholder="Password" autocomplete="current-password" required>
+          <button class="login-button" type="submit" ${AppState.authLoading ? 'disabled' : ''}>
+            ${AppState.authLoading ? 'Signing in…' : 'Sign In'}
+          </button>
+          ${AppState.authError ? `<p class="login-error">${AppState.authError}</p>` : ''}
+        </form>
       </div>`;
+
+        const loginForm = document.getElementById('login-form');
+        loginForm?.addEventListener('submit', handleLoginSubmit);
         return;
     }
 
@@ -135,6 +148,39 @@ function renderHomePage() {
             }
         });
     });
+}
+
+async function handleLoginSubmit(event) {
+    event.preventDefault();
+
+    if (AppState.authLoading) return;
+
+    const username = document.getElementById('login-username')?.value?.trim();
+    const password = document.getElementById('login-password')?.value;
+
+    if (!username || !password) {
+        AppState.authError = 'Please enter both email and password.';
+        renderPage(AppState.currentPage);
+        return;
+    }
+
+    AppState.authLoading = true;
+    AppState.authError = '';
+    renderPage(AppState.currentPage);
+
+    try {
+        const result = await window.api.auth.login(username, password);
+        if (!result?.success) {
+            AppState.authError = result?.error || 'Login failed. Please verify your credentials.';
+        } else {
+            AppState.isLoading = true;
+        }
+    } catch (error) {
+        AppState.authError = 'Login failed. Please try again.';
+    } finally {
+        AppState.authLoading = false;
+        renderPage(AppState.currentPage);
+    }
 }
 
 function renderSearchPage() {
@@ -506,17 +552,23 @@ function initAPIListeners() {
         const statusChanged = wasLoggedIn !== status.isLoggedIn;
 
         AppState.isLoggedIn = status.isLoggedIn;
+        AppState.authLoading = false;
 
         // If we just detected login for the first time, fetch collection
         if (status.isLoggedIn && !wasLoggedIn) {
-            console.log('[UI] User logged in, fetching collection...');
-            AppState.isLoading = false;
-            window.api.init();
+            console.log('[UI] User logged in, waiting for station collection...');
+            AppState.isLoading = true;
+            AppState.authError = '';
             renderPage(AppState.currentPage);
+            return;
         }
 
-        // Only re-render if status actually changed
-        if (statusChanged && !status.isLoggedIn) {
+        // Show login screen whenever we're logged out
+        if (!status.isLoggedIn) {
+            AppState.isLoading = false;
+            if (statusChanged) {
+                AppState.authError = '';
+            }
             renderPage(AppState.currentPage);
         }
     });
@@ -533,7 +585,10 @@ async function init() {
     initAPIListeners();
 
     // Request initial data
-    await window.api.init();
+    const initResult = await window.api.init();
+    if (initResult?.status === 'needsLogin') {
+        AppState.isLoading = false;
+    }
 
     // Render initial page
     renderPage('home');

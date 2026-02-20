@@ -46,7 +46,8 @@ contextBridge.exposeInMainWorld('api', {
     // Content/Navigation
     // ========================================
     content: {
-        getStations: () => ipcRenderer.invoke('APP:INIT'),
+        getStations: () => ipcRenderer.invoke('CONTENT:REFRESH_STATIONS'),
+        refreshStations: () => ipcRenderer.invoke('CONTENT:REFRESH_STATIONS'),
         playItem: (item) => ipcRenderer.invoke('NAV:PLAY_URI', { uri: `${item.type}:${item.id}`, ...item }),
         search: (query) => ipcRenderer.invoke('CONTENT:SEARCH', query),
         removeStation: (id) => ipcRenderer.invoke('CONTENT:REMOVE_STATION', id)

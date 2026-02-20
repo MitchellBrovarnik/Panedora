@@ -39,6 +39,7 @@ let currentStations = [];
 let currentStation = null;
 let currentPlaylist = [];
 let currentTrackIndex = 0;
+let stationSyncInterval = null;
 
 // ============================================================================
 // Window Creation
@@ -141,8 +142,10 @@ async function login(username, password) {
     if (result.success) {
         sendLoginStatus(true);
         await loadStations();
+        startStationSync();
     } else {
         sendLoginStatus(false);
+        stopStationSync();
     }
 
     return result;
@@ -153,6 +156,40 @@ async function loadStations() {
     currentStations = await api.getStations();
     sendStations(currentStations);
     return currentStations;
+}
+
+async function syncStationsInBackground() {
+    if (!api?.isAuthenticated()) return;
+
+    try {
+        const previousCount = currentStations.length;
+        const stations = await loadStations();
+        if (stations.length !== previousCount) {
+            console.log(`[Main] Station sync updated count: ${previousCount} -> ${stations.length}`);
+        }
+    } catch (error) {
+        console.error('[Main] Background station sync failed:', error);
+    }
+}
+
+function startStationSync() {
+    if (stationSyncInterval) clearInterval(stationSyncInterval);
+
+    // Keep station list synced with changes from other devices/Pandora web.
+    stationSyncInterval = setInterval(() => {
+        syncStationsInBackground();
+    }, 60000);
+
+    // Run an early sync shortly after auth restore/login.
+    setTimeout(() => {
+        syncStationsInBackground();
+    }, 5000);
+}
+
+function stopStationSync() {
+    if (!stationSyncInterval) return;
+    clearInterval(stationSyncInterval);
+    stationSyncInterval = null;
 }
 
 async function playStation(stationId, modeId = null) {
@@ -233,9 +270,11 @@ ipcMain.handle('APP:INIT', async () => {
         console.log('[Main] Restored auth, loading stations...');
         sendLoginStatus(true);
         await loadStations();
+        startStationSync();
         return { status: 'authenticated' };
     } else {
         sendLoginStatus(false);
+        stopStationSync();
         return { status: 'needsLogin' };
     }
 });
@@ -249,9 +288,15 @@ ipcMain.handle('AUTH:LOGIN', async (event, { username, password }) => {
 // Logout
 ipcMain.handle('AUTH:LOGOUT', async () => {
     console.log('[IPC] AUTH:LOGOUT');
+    stopStationSync();
     api.logout();
     sendLoginStatus(false);
     return { success: true };
+});
+
+ipcMain.handle('CONTENT:REFRESH_STATIONS', async () => {
+    console.log('[IPC] CONTENT:REFRESH_STATIONS');
+    return await loadStations();
 });
 
 // Player commands
@@ -475,6 +520,7 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+    stopStationSync();
     if (process.platform !== 'darwin') {
         app.quit();
     }
