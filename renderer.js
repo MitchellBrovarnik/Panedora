@@ -44,8 +44,6 @@ const DOM = {
     playIcon: document.getElementById('play-icon'),
     prevBtn: document.getElementById('prev-btn'),
     nextBtn: document.getElementById('next-btn'),
-    shuffleBtn: document.getElementById('shuffle-btn'),
-    repeatBtn: document.getElementById('repeat-btn'),
     heartBtn: document.getElementById('heart-btn'),
     progressBar: document.getElementById('progress-bar'),
     progressFill: document.getElementById('progress-fill'),
@@ -649,8 +647,6 @@ function initEventListeners() {
     });
     // DOM.prevBtn event listener moved down
     DOM.nextBtn.addEventListener('click', () => window.api.player.next());
-    DOM.shuffleBtn.addEventListener('click', () => window.api.player.shuffle());
-    DOM.repeatBtn.addEventListener('click', () => window.api.player.repeat());
     DOM.heartBtn.addEventListener('click', () => {
         DOM.heartBtn.classList.toggle('liked');
         window.api.player.thumbUp();
