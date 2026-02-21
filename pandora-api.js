@@ -132,6 +132,16 @@ class PandoraAPI {
     }
 
     /**
+     * Clear local auth state and logout
+     */
+    logout() {
+        console.log('[API] Logging out...');
+        this.authToken = null;
+        this.csrfToken = this.generateCsrfToken();
+        config.clearAll();
+    }
+
+    /**
      * Get user's stations
      */
     async getStations() {
@@ -239,9 +249,6 @@ class PandoraAPI {
      */
     async getPlaylist(stationId, isStationStart = false, modeId = null) {
         console.log(`[API] Fetching playlist for station ${stationId} (Mode: ${modeId || 'default'})...`);
-
-        // Always pause first to release any existing stream
-        await this.playbackPaused();
 
         try {
             const payload = {
@@ -474,11 +481,7 @@ class PandoraAPI {
         }
     }
 
-    logout() {
-        this.authToken = null;
-        this.csrfToken = null;
-        config.clearAll();
-    }
+
 
     /**
      * Search for songs, artists, and stations

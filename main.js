@@ -120,9 +120,8 @@ function getCurrentState() {
         stationId: currentStation?.stationId || null,
         coverArt: PandoraAPI.getHighResArt(track?.albumArt),
         time: 0, // UI will track via audio element
-        time: 0, // UI will track via audio element
         duration: track?.trackLength || 0,
-        isPlaying: false, // UI will track
+        isPlaying: !!(track?.audioURL), // Auto-play when we have a valid audio URL
         trackToken: track?.trackToken || null,
         audioURL: track?.audioURL || null,
         trackIndex: currentTrackIndex,
@@ -141,9 +140,9 @@ async function login(username, password) {
     if (result.success) {
         sendLoginStatus(true);
         await loadStations();
-    } else {
-        sendLoginStatus(false);
     }
+    // Don't sendLoginStatus(false) on failure — the UI already shows the
+    // login form and will display the error inline without re-rendering.
 
     return result;
 }
@@ -157,6 +156,14 @@ async function loadStations() {
 
 async function playStation(stationId, modeId = null) {
     console.log(`[Main] Playing station: ${stationId} ${modeId ? '(Mode: ' + modeId + ')' : ''}`);
+
+    if (currentStation) {
+        // Pause the existing stream cleanly before fetching a new one
+        const track = currentPlaylist[currentTrackIndex];
+        if (track && track.trackToken) {
+            await api.playbackPaused(currentStation.stationId, track.trackToken);
+        }
+    }
 
     currentStation = currentStations.find(s => s.stationId === stationId);
     currentPlaylist = await api.getPlaylist(stationId, true, modeId);
@@ -191,7 +198,9 @@ async function skipTrack() {
 
     if (currentTrackIndex < currentPlaylist.length) {
         const track = currentPlaylist[currentTrackIndex];
-        api.trackStarted(currentStation?.stationId, track.trackToken);
+        if (track && track.trackToken) {
+            api.trackStarted(currentStation?.stationId, track.trackToken);
+        }
     }
 
     sendPlayerState(getCurrentState());
@@ -249,7 +258,20 @@ ipcMain.handle('AUTH:LOGIN', async (event, { username, password }) => {
 // Logout
 ipcMain.handle('AUTH:LOGOUT', async () => {
     console.log('[IPC] AUTH:LOGOUT');
+
+    // Tell Pandora to stop the stream for this session so it doesn't hang
+    const track = currentPlaylist[currentTrackIndex];
+    if (currentStation && track && track.trackToken) {
+        await api.playbackPaused(currentStation.stationId, track.trackToken);
+    }
+
     api.logout();
+
+    // Clear playback state
+    currentPlaylist = [];
+    currentTrackIndex = -1;
+    sendPlayerState(getCurrentState());
+
     sendLoginStatus(false);
     return { success: true };
 });

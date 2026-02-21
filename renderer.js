@@ -104,8 +104,57 @@ function renderHomePage() {
         DOM.pageContent.innerHTML = `
       <div class="welcome-container">
         <h1 class="welcome-title">Sign in to Pandora</h1>
-        <p class="welcome-subtitle">Please sign in to your Pandora account in the background window to continue.</p>
+        <p class="welcome-subtitle">Enter your Pandora credentials to continue.</p>
+        <form id="login-form" style="display: flex; flex-direction: column; gap: 12px; max-width: 320px; margin: 24px auto 0;">
+            <input type="email" id="login-email" placeholder="Email" required
+                style="padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: #fff; font-size: 14px; outline: none;">
+            <input type="password" id="login-password" placeholder="Password" required
+                style="padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: #fff; font-size: 14px; outline: none;">
+            <button type="submit" id="login-submit-btn"
+                style="padding: 10px 14px; border-radius: 8px; border: none; background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity 0.2s;">
+                Sign In
+            </button>
+            <p id="login-error" style="color: #ef4444; font-size: 13px; text-align: center; display: none;"></p>
+        </form>
       </div>`;
+
+        // Attach login form handler
+        const loginForm = document.getElementById('login-form');
+        if (loginForm) {
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const email = document.getElementById('login-email').value;
+                const password = document.getElementById('login-password').value;
+                const submitBtn = document.getElementById('login-submit-btn');
+                const errorEl = document.getElementById('login-error');
+
+                submitBtn.textContent = 'Signing in...';
+                submitBtn.disabled = true;
+                errorEl.style.display = 'none';
+
+                try {
+                    const result = await window.api.auth.login(email, password);
+                    if (result && result.success) {
+                        console.log('[UI] Login successful!');
+                        // The onLoginStatus handler will take care of rendering home
+                    } else {
+                        errorEl.textContent = 'Incorrect email or password.';
+                        errorEl.style.display = 'block';
+                        submitBtn.textContent = 'Sign In';
+                        submitBtn.disabled = false;
+                        // Only clear password, keep email
+                        document.getElementById('login-password').value = '';
+                    }
+                } catch (err) {
+                    console.error('[UI] Login error:', err);
+                    errorEl.textContent = 'Connection error. Please try again.';
+                    errorEl.style.display = 'block';
+                    submitBtn.textContent = 'Sign In';
+                    submitBtn.disabled = false;
+                    document.getElementById('login-password').value = '';
+                }
+            });
+        }
         return;
     }
 
@@ -267,28 +316,12 @@ function renderNowPlayingPage() {
         <div class="np-content">
             <div class="np-left">
                 <div class="np-artwork">
-                    <img src="${coverArt || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300"%3E%3Crect fill="%23333" width="300" height="300"/%3E%3Ctext x="150" y="160" text-anchor="middle" fill="%23666" font-size="48"%3E♪%3C/text%3E%3C/svg%3E'}" alt="Album Art" />
+                    <img id="np-large-art" src="${coverArt || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300"%3E%3Crect fill="%23333" width="300" height="300"/%3E%3Ctext x="150" y="160" text-anchor="middle" fill="%23666" font-size="48"%3E♪%3C/text%3E%3C/svg%3E'}" alt="Album Art" />
                 </div>
                 <div class="np-track-info">
-                    <h2 class="np-track">${track || 'Not Playing'}</h2>
-                    <p class="np-artist">${artist || 'Select a station'}</p>
-                    <p class="np-album">${album || ''}</p>
-                </div>
-                
-                <div class="np-controls">
-                    <button class="np-ctrl-btn" id="np-thumbdown" title="Thumbs Down">-</button>
-                    <button class="np-ctrl-btn" id="np-prev" title="Previous">|◀</button>
-                    <button class="np-ctrl-btn np-play-btn" id="np-play">${isPlaying ? '| |' : '▶'}</button>
-                    <button class="np-ctrl-btn" id="np-next" title="Next">▶|</button>
-                    <button class="np-ctrl-btn" id="np-thumbup" title="Thumbs Up">+</button>
-                </div>
-                
-                <div class="np-progress">
-                    <span class="np-time">${formatTime(time)}</span>
-                    <div class="np-progress-bar">
-                        <div class="np-progress-fill" style="width: ${duration > 0 ? (time / duration) * 100 : 0}%"></div>
-                    </div>
-                    <span class="np-time">${formatTime(duration)}</span>
+                    <h2 class="np-track" id="np-large-title">${track || 'Not Playing'}</h2>
+                    <p class="np-artist" id="np-large-artist">${artist || 'Select a station'}</p>
+                    <p class="np-album" id="np-large-album">${album || ''}</p>
                 </div>
             </div>
             
@@ -381,8 +414,9 @@ function updatePlayerUI(state) {
         DOM.playPauseBtn.setAttribute('aria-label', state.isPlaying ? 'Pause' : 'Play');
     }
 
-    // Update progress
-    if (state.duration > 0) {
+    // Update progress (only if we don't have a live audio element overriding it)
+    const audioEl = document.querySelector('audio');
+    if (state.duration > 0 && !audioEl) {
         const progress = (state.time / state.duration) * 100;
         DOM.progressFill.style.width = `${progress}%`;
         DOM.currentTime.textContent = formatTime(state.time);
@@ -426,14 +460,36 @@ function initEventListeners() {
         });
     });
 
+    // Logout
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+            window.api.auth.logout();
+        });
+    }
+
     // Search input
     DOM.searchInput.addEventListener('input', (e) => {
         debouncedSearch(e.target.value);
     });
 
     // Player controls
-    DOM.playPauseBtn.addEventListener('click', () => window.api.player.toggle());
-    DOM.prevBtn.addEventListener('click', () => window.api.player.prev());
+    DOM.playPauseBtn.addEventListener('click', () => {
+        window.api.player.toggle();
+        // Also toggle actual audio
+        const audioEl = document.querySelector('audio');
+        if (audioEl) {
+            if (audioEl.paused) {
+                audioEl.play().catch(e => console.error(e));
+                AppState.playerState.isPlaying = true;
+            } else {
+                audioEl.pause();
+                AppState.playerState.isPlaying = false;
+            }
+            updatePlayerUI(AppState.playerState);
+        }
+    });
+    // DOM.prevBtn event listener moved down
     DOM.nextBtn.addEventListener('click', () => window.api.player.next());
     DOM.shuffleBtn.addEventListener('click', () => window.api.player.shuffle());
     DOM.repeatBtn.addEventListener('click', () => window.api.player.repeat());
@@ -456,17 +512,47 @@ function initEventListeners() {
         DOM.nowPlayingArtist.style.cursor = 'pointer';
     }
 
+    // Previous track button logic (Reset audio to 0, or skip to previous track)
+    DOM.prevBtn.addEventListener('click', () => {
+        const audioEl = document.querySelector('audio');
+        if (audioEl && audioEl.currentTime > 3) {
+            // If more than 3 sec in, restart current track
+            audioEl.currentTime = 0;
+            if (audioEl.paused) {
+                audioEl.play().catch(e => console.error(e));
+                AppState.playerState.isPlaying = true;
+                updatePlayerUI(AppState.playerState);
+            }
+        } else {
+            // Otherwise go to previous track
+            window.api.player.prev();
+        }
+    });
+
     // Volume
     DOM.volumeSlider.addEventListener('input', (e) => {
+        const vol = parseInt(e.target.value) / 100;
         window.api.player.setVolume(parseInt(e.target.value));
+        // Also set volume directly on the audio element
+        const audioEl = document.querySelector('audio');
+        if (audioEl) audioEl.volume = vol;
     });
 
     // Progress bar seeking
     DOM.progressBar.addEventListener('click', (e) => {
         const rect = DOM.progressBar.getBoundingClientRect();
         const percent = (e.clientX - rect.left) / rect.width;
-        const seekTime = percent * AppState.playerState.duration;
-        window.api.player.seek(seekTime);
+        const audioEl = document.querySelector('audio');
+        if (audioEl && audioEl.duration) {
+            audioEl.currentTime = percent * audioEl.duration;
+            // Update UI immediately
+            DOM.progressFill.style.width = `${percent * 100}%`;
+            DOM.currentTime.textContent = formatTime(audioEl.currentTime);
+        } else {
+            // Fallback if no audio element
+            const seekTime = percent * AppState.playerState.duration;
+            window.api.player.seek(seekTime);
+        }
     });
 }
 
@@ -475,9 +561,88 @@ function initEventListeners() {
 // ============================================================================
 
 function initAPIListeners() {
+    // Manage a single Audio instance to prevent overlapping event listeners and track skipping
+    let currentAudio = null;
+
     // Player state updates
     window.api.onState((state) => {
         updatePlayerUI(state);
+
+        // Audio Playback override
+        if (state.audioURL) {
+            if (!currentAudio) {
+                console.log('[UI] Creating new Audio instance');
+                currentAudio = document.createElement('audio');
+                document.body.appendChild(currentAudio);
+
+                // Sync time with UI
+                currentAudio.addEventListener('timeupdate', () => {
+                    if (!AppState.playerState.isPlaying) return;
+                    const progress = (currentAudio.currentTime / currentAudio.duration) * 100;
+                    DOM.progressFill.style.width = `${progress}%`;
+                    DOM.currentTime.textContent = formatTime(currentAudio.currentTime);
+                    DOM.totalTime.textContent = formatTime(currentAudio.duration || 0);
+                });
+
+                // Prevent rapid skipping by notifying main process only once per natural end
+                currentAudio.addEventListener('ended', () => {
+                    console.log('[UI] Track ended naturally, requesting next');
+                    window.api.player.next();
+                });
+
+                currentAudio.addEventListener('error', (e) => {
+                    console.error('[UI] Audio element error:', currentAudio.error);
+
+                    // Don't auto-skip if the source was intentionally cleared
+                    if (!currentAudio.getAttribute('src') || currentAudio.getAttribute('src') === '') {
+                        console.log('[UI] Ignoring audio error: source is intentionally empty.');
+                        return;
+                    }
+
+                    // Only auto-skip if we are actually logged in and trying to play
+                    if (AppState.isLoggedIn) {
+                        setTimeout(() => window.api.player.next(), 2000);
+                    }
+                });
+            }
+
+            // Only update source and play if the URL actually changed
+            if (currentAudio.src !== state.audioURL) {
+                console.log('[UI] Loading new audioURL into existing Audio instance');
+                console.log('[UI] audioURL:', state.audioURL.substring(0, 80) + '...');
+                console.log('[UI] isPlaying:', AppState.playerState.isPlaying);
+                currentAudio.src = state.audioURL;
+                currentAudio.play().then(() => {
+                    console.log('[UI] Audio play() succeeded!');
+                }).catch(e => console.error('[UI] Play error:', e));
+            }
+        } else if (state.audioURL === null && currentAudio) {
+            // Clear audio if specifically set to null
+            currentAudio.pause();
+            currentAudio.src = '';
+        }
+
+        if (state.isPlaying && currentAudio && currentAudio.paused) {
+            currentAudio.play().catch(e => console.error('[UI] Play error:', e));
+        } else if (!state.isPlaying && currentAudio && !currentAudio.paused) {
+            currentAudio.pause();
+        }
+
+        // Update large artwork if on Now Playing page
+        const largeArt = document.getElementById('np-large-art');
+        if (largeArt && state.coverArt) {
+            largeArt.src = state.coverArt;
+        }
+
+        // Update large text if on Now Playing page
+        const largeTitle = document.getElementById('np-large-title');
+        if (largeTitle && state.track) largeTitle.textContent = state.track;
+
+        const largeArtist = document.getElementById('np-large-artist');
+        if (largeArtist && state.artist) largeArtist.textContent = state.artist;
+
+        const largeAlbum = document.getElementById('np-large-album');
+        if (largeAlbum && state.album) largeAlbum.textContent = state.album;
     });
 
     // Collection/stations data
@@ -500,24 +665,42 @@ function initAPIListeners() {
         }
     });
 
-    // Login status - only update when status actually changes
+    // Login status updates
     window.api.onLoginStatus((status) => {
-        const wasLoggedIn = AppState.isLoggedIn;
-        const statusChanged = wasLoggedIn !== status.isLoggedIn;
-
+        console.log('[UI] Login status received:', status.isLoggedIn, '(was:', AppState.isLoggedIn, ')');
         AppState.isLoggedIn = status.isLoggedIn;
 
-        // If we just detected login for the first time, fetch collection
-        if (status.isLoggedIn && !wasLoggedIn) {
-            console.log('[UI] User logged in, fetching collection...');
+        if (status.isLoggedIn) {
+            // Successfully logged in — backend will soon send UI:COLLECTION
+            console.log('[UI] User logged in, waiting for collection...');
             AppState.isLoading = false;
-            window.api.init();
-            renderPage(AppState.currentPage);
-        }
+            renderPage('home');
+        } else {
+            // Logged out — clear data, pause audio, and show login form
+            console.log('[UI] User logged out, showing login form...');
+            AppState.isLoading = false;
+            AppState.stations = [];
+            AppState.playerState = { volume: 50 };
 
-        // Only re-render if status actually changed
-        if (statusChanged && !status.isLoggedIn) {
-            renderPage(AppState.currentPage);
+            // Clear physical UI text and artwork
+            if (DOM.nowPlayingTitle) DOM.nowPlayingTitle.textContent = 'Not Playing';
+            if (DOM.nowPlayingArtist) DOM.nowPlayingArtist.textContent = '--';
+            if (DOM.nowPlayingArt) DOM.nowPlayingArt.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56'%3E%3Crect fill='%23282828' width='56' height='56'/%3E%3C/svg%3E";
+            if (DOM.progressFill) DOM.progressFill.style.width = '0%';
+            if (DOM.currentTime) DOM.currentTime.textContent = '0:00';
+            if (DOM.totalTime) DOM.totalTime.textContent = '0:00';
+
+            const audioEl = document.querySelector('audio');
+            if (audioEl) {
+                audioEl.pause();
+                audioEl.src = '';
+            }
+
+            const stationsList = document.getElementById('stations-list');
+            if (stationsList) stationsList.innerHTML = '';
+
+            updatePlayerUI(AppState.playerState);
+            renderPage('home');
         }
     });
 }
