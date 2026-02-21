@@ -79,6 +79,10 @@ npx electron-packager . PandoraGlass --platform=win32 --arch=x64 --out=dist
    * Review your recently played list. If you made a mistake, use the "Undo" button on any disliked track to remove the negative feedback.
 5. **Sign Out:** Hover over the left sidebar to expand it, and click the Sign Out button at the bottom to safely terminate your session.
 
+## Troubleshooting
+
+*   **Playback Interruptions:** If stations fail to load or playback stops unexpectedly, it may indicate a "multi-device timeout." This occurs when your Pandora account is being accessed on more than one device simultaneously. To resolve this, close all other Pandora applications for a few minutes and then try again.
+
 ## Privacy and Security
 
 Pandora Glass is designed with user privacy as a priority:
