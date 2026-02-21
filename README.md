@@ -1,0 +1,88 @@
+# Pandora Glass
+
+A premium, immersive Pandora desktop client built with Electron. Pandora Glass features a modern Glassmorphism design system, persistent session management, and an enhanced playback experience that gives you deep control over your music library and station curation.
+
+## Overview
+
+Pandora Glass is designed to provide the absolute best desktop listening experience for Pandora users. By enforcing the highest quality audio streams (HE-AAC / aacplus) and providing real-time feedback synchronization with your Pandora account, it operates as a fully native, lightweight alternative to browser-based listening.
+
+## Key Features
+
+### Immersive Glassmorphism Design
+*   **Frosted Aesthetic:** The application is built on a deep violet-to-black gradient background with high-gloss translucent panels using backdrop blur effects.
+*   **Detached Navigation & Player:** The side navigation and footer player bar render as floating islands with gap transitions, providing a premium, native feel.
+*   **Collapsible Sidebar:** The sidebar collapses into a sleek icon-only view and expands smoothly on hover to maximize space for your station library.
+*   **Immersive Now Playing:** A full-bleed dedicated page for focused listening, featuring large artwork, track metadata, and tuning controls.
+
+### Enhanced Player Experience
+*   **Station Tuning:** Instantly switch your current station's mode (e.g., Artist Only, Newly Released, Discovery, Deep Cuts) directly from the Now Playing page without interrupting playback.
+*   **High-Fidelity Audio:** The client enforces the `aacplus` streaming format during API requests, ensuring you receive Pandora's highest-quality audio streams available.
+*   **Seamless Playback Controls:** Standard controls (Play, Pause, Skip, Previous) integrated cleanly into a floating player footer. The previous button intelligently restarts the track if you are more than a few seconds in, or skips to the previous track otherwise.
+
+### Intelligent Feedback & History System
+*   **Reactive Feedback:** Large, interactive Like (Thumbs Up) and Dislike (Thumbs Down) buttons on the Now Playing page feature dynamic visual states and synchronize directly with the Pandora API.
+*   **Smart Toggling:** Clicking an active feedback button (for example, clicking a green thumb to un-like a track) automatically calls the Pandora API to delete the feedback preference, rather than just changing the local UI state.
+*   **Persistent Song History:** A dedicated "Recently Played" section tracks and displays the last 20 songs you have listened to, complete with album art and your feedback status.
+*   **Undo Dislike:** If you dislike a song (which automatically skips it and removes it from rotation), you can find it in your history list and click the "Undo" button. This instantly communicates with the API to delete the negative feedback and restore the song to your station's rotation.
+*   **Live Synchronization:** The history list updates in real-time as songs change or feedback is toggled, requiring no manual page refreshes.
+
+### Robust Session Management
+*   **Secure Authentication:** Securely logs in using Pandora's partner credentials and generates required CSRF tokens for API communication.
+*   **Clean Sign Out:** A dedicated sign-out process permanently wipes session tokens, pauses active streams, and safely tears down the player state to prevent ghost playback or infinite reload loops.
+
+## Technical Architecture
+
+Pandora Glass is built using a modern Electron stack, emphasizing security and separation of concerns:
+
+*   **Main Process (`main.js`):** Acts as the orchestrator. It manages the application lifecycle, handles secure API requests to Pandora, builds the playlist queues, manages the `songHistory` array, and maintains the global player state.
+*   **Pandora API Controller (`pandora-api.js`):** A robust class that handles all communication with Pandora's backend endpoints. It manages authentication tokens, fetches stations, retrieves high-quality AAC+ playlists, and handles all feedback (add/delete) operations.
+*   **Renderer Process (`renderer.js`):** The frontend layer. Built with vanilla JavaScript, HTML5, and CSS3, it is responsible for DOM manipulation, audio playback via the HTML5 `<audio>` element, and rendering the Glassmorphism UI.
+*   **Preload Script (`preload-ui.js`):** Establishes a secure IPC (Inter-Process Communication) bridge. Context isolation is enabled, meaning the renderer process has zero access to Node.js capabilities. It can only communicate with the main process through strictly defined channels (e.g., `window.api.player.thumbUp()`).
+*   **Styling (`styles.css`):** Employs modern CSS features including CSS Grid, Flexbox, CSS Variables (Custom Properties), and advanced backdrop filters to achieve the Glassmorphism aesthetic.
+
+## Installation
+
+### Prerequisites
+*   [Node.js](https://nodejs.org/) (v16 or higher)
+*   A valid Pandora account
+
+### Setup Steps
+1. Clone the repository to your local machine:
+   ```bash
+   git clone https://github.com/MitchellBrovarnik/Pandora-Glass.git
+   cd Pandora-Glass
+   ```
+2. Install the necessary dependencies:
+   ```bash
+   npm install
+   ```
+3. Start the application in development mode:
+   ```bash
+   npm start
+   ```
+
+## Creating a Production Build
+To package Pandora Glass for your specific operating system into a standalone executable, you can use Electron Forge or electron-builder (ensure they are installed in your project). For a standard package using electron-packager, you can add a script to your `package.json` or run:
+```bash
+npx electron-packager . PandoraGlass --platform=win32 --arch=x64 --out=dist
+```
+*(Replace `win32` and `x64` with your target platform and architecture).*
+
+## Usage
+
+1. **Sign In:** Launch the application and sign in using your standard Pandora credentials. The application requires an active internet connection to communicate with Pandora's servers.
+2. **Library Navigation:** Upon logging in, your full list of saved stations will populate the home screen. Click any station card to begin playback.
+3. **Now Playing:** Click the album artwork in the footer player bar to expand the full-screen Now Playing view.
+4. **Curating Your Station:**
+   * Use the Thumbs Up / Thumbs Down buttons to inform the algorithm of your preferences.
+   * Toggle the tune buttons (e.g., "Artist Only", "Discovery") on the right column to adjust the station's mix.
+   * Review your recently played list. If you made a mistake, use the "Undo" button on any disliked track to remove the negative feedback.
+5. **Sign Out:** Hover over the left sidebar to expand it, and click the Sign Out button at the bottom to safely terminate your session.
+
+## License
+
+This project is licensed under the MIT License. See the LICENSE file for details.
+
+## Disclaimer
+
+This application is an unofficial, third-party client. It is not affiliated with, endorsed by, or sponsored by Pandora Media, LLC. All product names, logos, and brands are property of their respective owners.
