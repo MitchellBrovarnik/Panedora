@@ -79,6 +79,13 @@ npx electron-packager . PandoraGlass --platform=win32 --arch=x64 --out=dist
    * Review your recently played list. If you made a mistake, use the "Undo" button on any disliked track to remove the negative feedback.
 5. **Sign Out:** Hover over the left sidebar to expand it, and click the Sign Out button at the bottom to safely terminate your session.
 
+## Privacy and Security
+
+Pandora Glass is designed with user privacy as a priority:
+*   **Direct Authentication:** Your login credentials (email and password) are used solely to authenticate directly with Pandora's official API servers.
+*   **No Data Storage:** This application does not store your password or personal account data on disk. Authentication tokens are maintained in-memory for the duration of your session and are wiped entirely when you sign out or close the application.
+*   **No Third-Party Tracking:** No personal data is collected, transmitted, or shared with any third-party services. The application communicates only with Pandora's infrastructure to facilitate music playback and station management.
+
 ## License
 
 This project is licensed under the MIT License. See the LICENSE file for details.
