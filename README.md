@@ -81,7 +81,7 @@ npx electron-packager . PandoraGlass --platform=win32 --arch=x64 --out=dist
 
 ## Troubleshooting
 
-*   **Playback Interruptions:** If stations fail to load or playback stops unexpectedly, it may indicate a "multi-device timeout." This occurs when your Pandora account is being accessed on more than one device simultaneously. To resolve this, close all other Pandora applications for a few minutes and then try again.
+*   **Playback Interruptions:** If stations fail to load or playback stops unexpectedly, it may indicate a multi-device timeout, i.e. trying to stream on more than one device/tab. This occurs when your Pandora account is being accessed on more than one device simultaneously. To resolve this, close all other Pandora applications for a few minutes and then try again.
 
 ## Privacy and Security
 
