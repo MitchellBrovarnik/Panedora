@@ -38,6 +38,7 @@ contextBridge.exposeInMainWorld('api', {
         repeat: () => ipcRenderer.invoke('PLAYER:CMD', { action: 'repeat' }),
         thumbUp: () => ipcRenderer.invoke('PLAYER:CMD', { action: 'thumbUp' }),
         thumbDown: () => ipcRenderer.invoke('PLAYER:CMD', { action: 'thumbDown' }),
+        undoFeedback: (trackToken) => ipcRenderer.invoke('PLAYER:UNDO_FEEDBACK', { trackToken }),
         tuneStation: (mode) => ipcRenderer.invoke('PLAYER:CMD', { action: 'tune', value: mode }),
         getMoreTracks: () => ipcRenderer.invoke('PLAYER:GET_MORE_TRACKS')
     },

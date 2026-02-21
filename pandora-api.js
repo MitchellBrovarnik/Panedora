@@ -366,10 +366,29 @@ class PandoraAPI {
                 isPositive
             });
 
-            console.log('[API] Feedback added successfully');
-            return { success: true, ...response };
+            console.log('[API] Feedback added successfully, feedbackId:', response?.feedbackId);
+            return { success: true, feedbackId: response?.feedbackId, ...response };
         } catch (error) {
             console.error('[API] Failed to add feedback:', error);
+            return { success: false, error };
+        }
+    }
+
+    /**
+     * Delete feedback (undo thumbs up/down)
+     */
+    async deleteFeedback(feedbackId) {
+        console.log(`[API] Deleting feedback ${feedbackId}...`);
+
+        try {
+            const response = await this.request('/v1/station/deleteFeedback', {
+                feedbackId
+            });
+
+            console.log('[API] Feedback deleted successfully');
+            return { success: true, ...response };
+        } catch (error) {
+            console.error('[API] Failed to delete feedback:', error);
             return { success: false, error };
         }
     }

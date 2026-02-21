@@ -309,6 +309,37 @@ function renderNowPlayingPage() {
         </button>
     `).join('');
 
+    // Build history section
+    let pastSongs = [...(AppState.playerState.history || [])];
+    if (pastSongs.length > 0 && pastSongs[pastSongs.length - 1].trackToken === AppState.playerState.trackToken) {
+        pastSongs.pop(); // Remove currently playing song
+    }
+    pastSongs.reverse(); // Show newest first
+    let historyHtml = '';
+    if (pastSongs.length > 0) {
+        historyHtml = `
+            <div class="np-history">
+                <h3 class="tune-title">RECENTLY PLAYED</h3>
+                <div class="history-list">
+                    ${pastSongs.map(h => `
+                        <div class="history-item ${h.feedback ? 'history-' + h.feedback : ''}" data-token="${h.trackToken}">
+                            <img class="history-art" src="${h.coverArt || ''}" alt="">
+                            <div class="history-info">
+                                <span class="history-title">${escapeHtml(h.songTitle)}</span>
+                                <span class="history-artist">${escapeHtml(h.artistName)}</span>
+                            </div>
+                            <div class="history-feedback">
+                                ${h.feedback === 'liked' ? '<span class="history-badge history-badge-liked" title="Liked">👍</span>' : ''}
+                                ${h.feedback === 'disliked' ? '<button class="history-undo-btn" title="Undo dislike" data-token="' + h.trackToken + '">Undo 👎</button>' : ''}
+                                ${!h.feedback ? '<span class="history-badge">—</span>' : ''}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
     DOM.pageContent.innerHTML = `
     <div class="now-playing-page fade-in">
         <button class="back-btn" id="np-back-btn">← Back</button>
@@ -323,6 +354,20 @@ function renderNowPlayingPage() {
                     <p class="np-artist" id="np-large-artist">${artist || 'Select a station'}</p>
                     <p class="np-album" id="np-large-album">${album || ''}</p>
                 </div>
+
+                <div class="np-feedback-row">
+                    <button class="np-feedback-btn" id="np-thumbdown" aria-label="Thumbs Down" title="Thumbs Down">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M17 2H7.28a2 2 0 0 0-2 1.7L3.9 12.7a2 2 0 0 0 2 2.3H10l-1 4a3 3 0 0 0 3 3l5-9"/>
+                            <path d="M17 2v11h3a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2h-3z"/>
+                        </svg>
+                    </button>
+                    <button class="np-feedback-btn" id="np-thumbup" aria-label="Thumbs Up" title="Thumbs Up">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
             
             <div class="np-right">
@@ -330,17 +375,51 @@ function renderNowPlayingPage() {
                 <div class="tune-options">
                     ${tuneOptionsHtml}
                 </div>
+
+                ${historyHtml}
             </div>
         </div>
     </div>`;
 
     // Attach event handlers
     document.getElementById('np-back-btn')?.addEventListener('click', () => renderPage('home'));
-    document.getElementById('np-play')?.addEventListener('click', () => window.api.player.toggle());
-    document.getElementById('np-next')?.addEventListener('click', () => window.api.player.next());
-    document.getElementById('np-prev')?.addEventListener('click', () => window.api.player.prev());
-    document.getElementById('np-thumbup')?.addEventListener('click', () => window.api.player.thumbUp());
-    document.getElementById('np-thumbdown')?.addEventListener('click', () => window.api.player.thumbDown());
+
+    // Thumb up — toggle liked state & call API or Undo
+    document.getElementById('np-thumbup')?.addEventListener('click', function () {
+        const isCurrentlyLiked = this.classList.contains('liked');
+        const token = AppState.playerState.trackToken;
+
+        if (isCurrentlyLiked) {
+            // Undo the like
+            this.classList.remove('liked');
+            DOM.heartBtn?.classList.remove('liked');
+            if (token) window.api.player.undoFeedback(token);
+        } else {
+            // Add the like
+            this.classList.add('liked');
+            document.getElementById('np-thumbdown')?.classList.remove('disliked');
+            window.api.player.thumbUp();
+            DOM.heartBtn?.classList.add('liked');
+        }
+    });
+
+    // Thumb down — toggle disliked state & call API or Undo
+    document.getElementById('np-thumbdown')?.addEventListener('click', function () {
+        const isCurrentlyDisliked = this.classList.contains('disliked');
+        const token = AppState.playerState.trackToken;
+
+        if (isCurrentlyDisliked) {
+            // Undo the dislike (if they somehow manage to click it before it skips)
+            this.classList.remove('disliked');
+            if (token) window.api.player.undoFeedback(token);
+        } else {
+            // Add the dislike
+            this.classList.add('disliked');
+            document.getElementById('np-thumbup')?.classList.remove('liked');
+            DOM.heartBtn?.classList.remove('liked');
+            window.api.player.thumbDown();
+        }
+    });
 
     // Tune option handlers
     document.querySelectorAll('.tune-option').forEach(btn => {
@@ -350,6 +429,25 @@ function renderNowPlayingPage() {
             // Update active state
             document.querySelectorAll('.tune-option').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
+        });
+    });
+
+    // History undo-dislike handlers
+    document.querySelectorAll('.history-undo-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const token = btn.dataset.token;
+            const result = await window.api.player.undoFeedback(token);
+            if (result && result.success) {
+                // Update the UI: remove disliked state from this history item
+                const item = btn.closest('.history-item');
+                if (item) {
+                    item.classList.remove('history-disliked');
+                    btn.replaceWith(Object.assign(document.createElement('span'), {
+                        className: 'history-badge',
+                        textContent: '✓ Removed'
+                    }));
+                }
+            }
         });
     });
 }
@@ -429,6 +527,66 @@ function updatePlayerUI(state) {
     }
     if (state.repeat !== undefined) {
         DOM.repeatBtn.classList.toggle('active', state.repeat);
+    }
+
+    // Live-update the history section if the Now Playing page is visible
+    if (state.history && document.querySelector('.np-history') || (state.history && document.querySelector('.np-right'))) {
+        const histContainer = document.querySelector('.np-right');
+        if (histContainer) {
+            // Remove old history section
+            const oldHistory = histContainer.querySelector('.np-history');
+            if (oldHistory) oldHistory.remove();
+
+            // Build fresh history
+            let pastSongs = [...(state.history || [])];
+            if (pastSongs.length > 0 && pastSongs[pastSongs.length - 1].trackToken === state.trackToken) {
+                pastSongs.pop(); // Remove currently playing song
+            }
+            pastSongs.reverse(); // Show newest first
+
+            if (pastSongs.length > 0) {
+                const histDiv = document.createElement('div');
+                histDiv.className = 'np-history';
+                histDiv.innerHTML = `
+                    <h3 class="tune-title">RECENTLY PLAYED</h3>
+                    <div class="history-list">
+                        ${pastSongs.map(h => `
+                            <div class="history-item ${h.feedback ? 'history-' + h.feedback : ''}" data-token="${h.trackToken}">
+                                <img class="history-art" src="${h.coverArt || ''}" alt="">
+                                <div class="history-info">
+                                    <span class="history-title">${escapeHtml(h.songTitle)}</span>
+                                    <span class="history-artist">${escapeHtml(h.artistName)}</span>
+                                </div>
+                                <div class="history-feedback">
+                                    ${h.feedback === 'liked' ? '<span class="history-badge history-badge-liked" title="Liked">\ud83d\udc4d</span>' : ''}
+                                    ${h.feedback === 'disliked' ? '<button class="history-undo-btn" title="Undo dislike" data-token="' + h.trackToken + '">Undo \ud83d\udc4e</button>' : ''}
+                                    ${!h.feedback ? '<span class="history-badge">\u2014</span>' : ''}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                histContainer.appendChild(histDiv);
+
+                // Re-attach undo handlers
+                histDiv.querySelectorAll('.history-undo-btn').forEach(btn => {
+                    btn.addEventListener('click', async () => {
+                        const token = btn.dataset.token;
+                        const result = await window.api.player.undoFeedback(token);
+                        if (result && result.success) {
+                            const item = btn.closest('.history-item');
+                            if (item) {
+                                item.classList.remove('history-disliked');
+                                btn.replaceWith(Object.assign(document.createElement('span'), {
+                                    className: 'history-badge',
+                                    textContent: '\u2713 Removed'
+                                }));
+                            }
+                        }
+                    });
+                });
+            }
+        }
     }
 }
 
@@ -615,6 +773,11 @@ function initAPIListeners() {
                 currentAudio.play().then(() => {
                     console.log('[UI] Audio play() succeeded!');
                 }).catch(e => console.error('[UI] Play error:', e));
+
+                // Reset feedback buttons on the Now Playing page
+                document.getElementById('np-thumbup')?.classList.remove('liked');
+                document.getElementById('np-thumbdown')?.classList.remove('disliked');
+                DOM.heartBtn?.classList.remove('liked');
             }
         } else if (state.audioURL === null && currentAudio) {
             // Clear audio if specifically set to null

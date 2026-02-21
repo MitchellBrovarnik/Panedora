@@ -39,6 +39,7 @@ let currentStations = [];
 let currentStation = null;
 let currentPlaylist = [];
 let currentTrackIndex = 0;
+let songHistory = []; // Track played songs for history display
 
 // ============================================================================
 // Window Creation
@@ -125,7 +126,8 @@ function getCurrentState() {
         trackToken: track?.trackToken || null,
         audioURL: track?.audioURL || null,
         trackIndex: currentTrackIndex,
-        playlistLength: currentPlaylist.length
+        playlistLength: currentPlaylist.length,
+        history: songHistory.slice(-20) // Send last 20 played
     };
 }
 
@@ -180,6 +182,18 @@ async function playStation(stationId, modeId = null) {
         // Report track started
         const track = currentPlaylist[0];
         api.trackStarted(stationId, track.trackToken);
+
+        // Record first track in history
+        if (!songHistory.length || songHistory[songHistory.length - 1].trackToken !== track.trackToken) {
+            songHistory.push({
+                songTitle: track.songTitle,
+                artistName: track.artistName,
+                albumTitle: track.albumTitle,
+                coverArt: PandoraAPI.getHighResArt(track.albumArt),
+                trackToken: track.trackToken,
+                feedback: null
+            });
+        }
     }
 
     sendPlayerState(getCurrentState());
@@ -204,6 +218,20 @@ async function skipTrack() {
     }
 
     sendPlayerState(getCurrentState());
+
+    // Record in history (skip duplicates)
+    const nowTrack = currentPlaylist[currentTrackIndex];
+    if (nowTrack && (!songHistory.length || songHistory[songHistory.length - 1].trackToken !== nowTrack.trackToken)) {
+        songHistory.push({
+            songTitle: nowTrack.songTitle,
+            artistName: nowTrack.artistName,
+            albumTitle: nowTrack.albumTitle,
+            coverArt: PandoraAPI.getHighResArt(nowTrack.albumArt),
+            trackToken: nowTrack.trackToken,
+            feedback: null // null = no feedback, 'liked', 'disliked'
+        });
+    }
+
     return getCurrentState();
 }
 
@@ -216,14 +244,28 @@ async function replayTrack() {
 async function thumbUp() {
     const track = currentPlaylist[currentTrackIndex];
     if (track?.trackToken) {
-        await api.addFeedback(track.trackToken, true);
+        const result = await api.addFeedback(track.trackToken, true);
+        // Mark in history with feedbackId for undo
+        const histItem = songHistory.find(h => h.trackToken === track.trackToken);
+        if (histItem) {
+            histItem.feedback = 'liked';
+            histItem.feedbackId = result.feedbackId || null;
+        }
+        // Push updated history to UI
+        sendPlayerState(getCurrentState());
     }
 }
 
 async function thumbDown() {
     const track = currentPlaylist[currentTrackIndex];
     if (track?.trackToken) {
-        await api.addFeedback(track.trackToken, false);
+        const result = await api.addFeedback(track.trackToken, false);
+        // Mark in history with feedbackId for undo
+        const histItem = songHistory.find(h => h.trackToken === track.trackToken);
+        if (histItem) {
+            histItem.feedback = 'disliked';
+            histItem.feedbackId = result.feedbackId || null;
+        }
         // Auto-skip on thumbs down
         return skipTrack();
     }
@@ -311,6 +353,22 @@ ipcMain.handle('PLAYER:CMD', async (event, { action, value }) => {
         default:
             return { success: false, error: 'Unknown action' };
     }
+});
+
+// Undo feedback
+ipcMain.handle('PLAYER:UNDO_FEEDBACK', async (event, { trackToken }) => {
+    console.log('[IPC] PLAYER:UNDO_FEEDBACK', trackToken);
+    const histItem = songHistory.find(h => h.trackToken === trackToken);
+    if (histItem && histItem.feedbackId) {
+        const result = await api.deleteFeedback(histItem.feedbackId);
+        if (result.success) {
+            histItem.feedback = null;
+            histItem.feedbackId = null;
+            sendPlayerState(getCurrentState());
+        }
+        return result;
+    }
+    return { success: false, error: 'No feedback to undo' };
 });
 
 // Play a station
