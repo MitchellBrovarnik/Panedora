@@ -75,7 +75,7 @@ npx electron-packager . PandoraGlass --platform=win32 --arch=x64 --out=dist
 3. **Now Playing:** Click the album artwork in the footer player bar to expand the full-screen Now Playing view.
 4. **Curating Your Station:**
    * Use the Thumbs Up / Thumbs Down buttons to inform the algorithm of your preferences.
-   * Toggle the tune buttons (e.g., "Artist Only", "Discovery") on the right column to adjust the station's mix.
+   * Toggle the tune buttons (e.g., "Artist Only", "Discovery") on the right column to adjust the station's mix.(Currently a work in progress)
    * Review your recently played list. If you made a mistake, use the "Undo" button on any disliked track to remove the negative feedback.
 5. **Sign Out:** Hover over the left sidebar to expand it, and click the Sign Out button at the bottom to safely terminate your session.
 
