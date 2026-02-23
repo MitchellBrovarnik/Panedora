@@ -85,9 +85,10 @@ npx electron-packager . PandoraGlass --platform=win32 --arch=x64 --out=dist
    * Review your recently played list. If you made a mistake, use the "Undo" button on any disliked track to remove the negative feedback.
 5. **Sign Out:** Hover over the left sidebar to expand it, and click the Sign Out button at the bottom to safely terminate your session.
 
-## Troubleshooting
+## Known Issues
 
 *   **Playback Interruptions:** If stations fail to load or playback stops unexpectedly, it may indicate a multi-device timeout, i.e. trying to stream on more than one device/tab. This occurs when your Pandora account is being accessed on more than one device simultaneously. To resolve this, close all other Pandora applications for a few minutes and then try again.
+*   **Station Tuning Limitations:** The "Tune Station" feature is currently a work in progress. You may find that manual mode switching (e.g., Discovery, Artist Only) does not always take effect immediately or as expected. Some stations may default to "Artist Only" or "My Station" modes automatically.
 
 ## Privacy and Security
 
@@ -103,3 +104,6 @@ This project is licensed under the MIT License. See the LICENSE file for details
 ## Disclaimer
 
 This application is an unofficial, third-party client created for personal, non-commercial use and educational purposes. It is not affiliated with, endorsed by, or sponsored by Pandora Media, LLC. No trademark infringement is intended. Users are responsible for ensuring their use of this software complies with all applicable terms of service.
+
+> [!TIP]
+> **Legal & Safety Note:** This application is optimized for use with an active Pandora Plus or Premium subscription. Using a paid account ensures you are fully supporting the artists you listen to and provides the most stable, ad-free experience while minimizing the risk of automated account flagging.
