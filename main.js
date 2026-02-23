@@ -151,7 +151,12 @@ async function login(username, password) {
 
 async function loadStations() {
     console.log('[Main] Loading stations...');
-    currentStations = await api.getStations();
+    const stations = await api.getStations();
+    if (stations === null) {
+        console.log('[Main] Station load failed (Auth error). Aborting list update.');
+        return null;
+    }
+    currentStations = stations;
     sendStations(currentStations);
     return currentStations;
 }
@@ -544,6 +549,13 @@ ipcMain.handle('PLAYER:GET_MORE_TRACKS', async () => {
 app.whenReady().then(() => {
     // Initialize API
     api = new PandoraAPI();
+
+    // Handle session expiration
+    api.onSessionExpired = () => {
+        console.log('[Main] Session expired handler triggered! Forcing logout...');
+        api.logout(); // Clears config and tokens
+        sendLoginStatus(false);
+    };
 
     createUIWindow();
 

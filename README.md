@@ -22,7 +22,7 @@ Pandora Glass is designed to provide the absolute best desktop listening experie
 
 ### Enhanced Player Experience
 *   **Station Tuning:** Instantly switch your current station's mode (e.g., Artist Only, Newly Released, Discovery, Deep Cuts) directly from the Now Playing page without interrupting playback.
-*   **High-Fidelity Audio:** The client utilizes the `aacplus` streaming format during API requests, ensuring you receive a clear and consistent listening experience.
+*   **High-Quality Audio:** The client utilizes the `aacplus` (HE-AAC) streaming format during API requests, ensuring you receive a clear and consistent listening experience.
 *   **Seamless Playback Controls:** Standard controls (Play, Pause, Skip, Previous) integrated cleanly into a floating player footer. The previous button intelligently restarts the track if you are more than a few seconds in, or skips to the previous track otherwise.
 
 ### Intelligent Feedback & History System
@@ -80,15 +80,16 @@ npx electron-packager . PandoraGlass --platform=win32 --arch=x64 --out=dist
 2. **Library Navigation:** Upon logging in, your full list of saved stations will populate the home screen. Click any station card to begin playback.
 3. **Now Playing:** Click the album artwork in the footer player bar to expand the full-screen Now Playing view.
 4. **Curating Your Station:**
-   * Use the Thumbs Up / Thumbs Down buttons to inform the algorithm of your preferences.
-    * Toggle the tune buttons (e.g., "Artist Only", "Discovery") on the right column to adjust the station's mix.
-   * Review your recently played list. If you made a mistake, use the "Undo" button on any disliked track to remove the negative feedback.
-5. **Sign Out:** Hover over the left sidebar to expand it, and click the Sign Out button at the bottom to safely terminate your session.
+   * Use the **Thumbs Up** / **Thumbs Down** buttons to inform the algorithm of your preferences.
+   * Toggle the **Tune** buttons (e.g., "Artist Only", "Discovery") on the right column to adjust the station's mix.
+   * Review your recently played list. If you made a mistake, use the **Undo** button on any disliked track to remove the negative feedback.
+5. **Sign Out:** Hover over the left sidebar to expand it, and click the **Sign Out** button at the bottom to safely terminate your session.
 
 ## Known Issues
 
 *   **Playback Interruptions:** If stations fail to load or playback stops unexpectedly, it may indicate a multi-device timeout, i.e. trying to stream on more than one device/tab. This occurs when your Pandora account is being accessed on more than one device simultaneously. To resolve this, close all other Pandora applications for a few minutes and then try again.
-*   **Station Tuning Limitations:** The "Tune Station" feature is currently a work in progress. You may find that manual mode switching (e.g., Discovery, Artist Only) does not always take effect immediately or as expected. Some stations may default to "Artist Only" or "My Station" modes automatically.
+*   **Station Tuning Limitations:** The "Tune Your Station" feature is currently a work in progress. You may find that manual mode switching (e.g., Discovery, Artist Only) does not work. Some stations may default to "Artist Only" or "My Station" modes automatically.
+*   **Search Functionality:** The search tab is currently a work in progress. Searching for a specific song may not actually play that specific track, and artist selection is not currently functional.
 
 ## Privacy and Security
 
@@ -103,7 +104,7 @@ This project is licensed under the MIT License. See the LICENSE file for details
 
 ## Disclaimer
 
-This application is an unofficial, third-party client created for personal, non-commercial use and educational purposes. It is not affiliated with, endorsed by, or sponsored by Pandora Media, LLC. No trademark infringement is intended. Users are responsible for ensuring their use of this software complies with all applicable terms of service.
+This application is an unofficial, third-party client created for personal, non-commercial use and educational purposes. It is not affiliated with, endorsed by, or sponsored by Pandora Media, LLC. No trademark infringement is intended. This project is provided for educational and research purposes only; users are advised that using third-party clients may violate the service's Terms of Service, and use of this software is entirely at the user's own risk.
 
 > [!TIP]
-> **Legal & Safety Note:** This application is optimized for use with an active Pandora Plus or Premium subscription. Using a paid account ensures you are fully supporting the artists you listen to and provides the most stable, ad-free experience while minimizing the risk of automated account flagging.
+> **Recommendation:** This application is best experienced with an active Pandora Plus or Premium subscription. Using a paid account ensures full compatibility with all playback features, provides the highest audio quality, and directly supports the artists on the platform.

@@ -44,7 +44,7 @@ function createStationListItem(name, id, type, isActive = false) {
   return `
     <div class="station-item ${isActive ? 'active' : ''}" data-id="${id}" data-type="${type}" tabindex="0">
       <span class="station-name">${escapeHtml(name)}</span>
-      <button class="delete-btn" title="Delete Station" style="display: none;">×</button>
+      <button class="delete-btn" title="Delete Station">×</button>
     </div>`;
 }
 

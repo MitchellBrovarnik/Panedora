@@ -12,6 +12,7 @@ class PandoraAPI {
         this.apiPath = '/api';
         this.authToken = config.getAuthToken();
         this.csrfToken = config.getCsrfToken();
+        this.onSessionExpired = null; // Callback for main process
 
         // Generate CSRF token if missing - Pandora API docs say client can generate their own
         // The API just validates that the X-CsrfToken header matches the csrftoken cookie
@@ -80,6 +81,10 @@ class PandoraAPI {
                         if (res.statusCode >= 200 && res.statusCode < 300) {
                             resolve(json);
                         } else {
+                            if (res.statusCode === 401 || json.errorCode === 1000) {
+                                console.log('[API] Session expired (401 or Code 1000)');
+                                if (this.onSessionExpired) this.onSessionExpired();
+                            }
                             reject({ status: res.statusCode, ...json });
                         }
                     } catch (e) {
@@ -164,6 +169,10 @@ class PandoraAPI {
             return response.stations || [];
         } catch (error) {
             console.error('[API] Failed to get stations:', error);
+            // If it's an auth error, don't return an empty array, let the UI handle the status
+            if (error.status === 401 || error.errorCode === 1000) {
+                return null;
+            }
             return [];
         }
     }

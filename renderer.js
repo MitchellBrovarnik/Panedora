@@ -481,6 +481,29 @@ function renderStationsList() {
                 playStation(station);
             }
         });
+
+        // Attach delete handlers
+        const deleteBtn = item.querySelector('.delete-btn');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', async (e) => {
+                e.stopPropagation(); // Don't play the station
+                const id = item.dataset.id;
+                const station = AppState.stations.find(s => s.id === id);
+                if (!station) return;
+
+                const confirmed = confirm(`Are you sure you want to delete the station "${station.name}"?`);
+                if (confirmed) {
+                    item.style.opacity = '0.5';
+                    item.style.pointerEvents = 'none';
+                    const success = await window.api.content.removeStation(id);
+                    if (!success) {
+                        alert('Failed to delete station. Please try again.');
+                        item.style.opacity = '1';
+                        item.style.pointerEvents = 'all';
+                    }
+                }
+            });
+        }
     });
 }
 
