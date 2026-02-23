@@ -1,10 +1,16 @@
 # Pandora Glass
 
+## Project Purpose
+Pandora Glass is a personal, educational, and experimental project created purely for fun. It was built as a creative exercise to explore modern UI design (Glassmorphism) and Electron-based desktop application development. This project is intended for personal use only and was developed with zero intent to cause harm, bypass security, or interfere with Pandora's business operations. It is shared as a demonstration of UI/UX design and technical integration.
+
+![App Interface](screenshot.png)
+*A preview of the Pandora Glass immersive station library.*
+
 A premium, immersive Pandora desktop client built with Electron. Pandora Glass features a modern Glassmorphism design system, persistent session management, and an enhanced playback experience that gives you deep control over your music library and station curation.
 
 ## Overview
 
-Pandora Glass is designed to provide the absolute best desktop listening experience for Pandora users. By enforcing the highest quality audio streams (HE-AAC / aacplus) and providing real-time feedback synchronization with your Pandora account, it operates as a fully native, lightweight alternative to browser-based listening.
+Pandora Glass is designed to provide the absolute best desktop listening experience for Pandora users. By requesting high-quality audio streams (HE-AAC / aacplus) and providing real-time feedback synchronization with your Pandora account, it operates as a fully native, lightweight alternative to browser-based listening.
 
 ## Key Features
 
@@ -16,7 +22,7 @@ Pandora Glass is designed to provide the absolute best desktop listening experie
 
 ### Enhanced Player Experience
 *   **Station Tuning:** Instantly switch your current station's mode (e.g., Artist Only, Newly Released, Discovery, Deep Cuts) directly from the Now Playing page without interrupting playback.
-*   **High-Fidelity Audio:** The client enforces the `aacplus` streaming format during API requests, ensuring you receive Pandora's highest-quality audio streams available.
+*   **High-Fidelity Audio:** The client utilizes the `aacplus` streaming format during API requests, ensuring you receive a clear and consistent listening experience.
 *   **Seamless Playback Controls:** Standard controls (Play, Pause, Skip, Previous) integrated cleanly into a floating player footer. The previous button intelligently restarts the track if you are more than a few seconds in, or skips to the previous track otherwise.
 
 ### Intelligent Feedback & History System
@@ -27,7 +33,7 @@ Pandora Glass is designed to provide the absolute best desktop listening experie
 *   **Live Synchronization:** The history list updates in real-time as songs change or feedback is toggled, requiring no manual page refreshes.
 
 ### Robust Session Management
-*   **Secure Authentication:** Securely logs in using Pandora's partner credentials and generates required CSRF tokens for API communication.
+*   **Secure Authentication:** Securely authenticates your active user session and generates required CSRF tokens for API communication.
 *   **Clean Sign Out:** A dedicated sign-out process permanently wipes session tokens, pauses active streams, and safely tears down the player state to prevent ghost playback or infinite reload loops.
 
 ## Technical Architecture
@@ -75,7 +81,7 @@ npx electron-packager . PandoraGlass --platform=win32 --arch=x64 --out=dist
 3. **Now Playing:** Click the album artwork in the footer player bar to expand the full-screen Now Playing view.
 4. **Curating Your Station:**
    * Use the Thumbs Up / Thumbs Down buttons to inform the algorithm of your preferences.
-   * Toggle the tune buttons (e.g., "Artist Only", "Discovery") on the right column to adjust the station's mix.(Currently a work in progress)
+    * Toggle the tune buttons (e.g., "Artist Only", "Discovery") on the right column to adjust the station's mix.
    * Review your recently played list. If you made a mistake, use the "Undo" button on any disliked track to remove the negative feedback.
 5. **Sign Out:** Hover over the left sidebar to expand it, and click the Sign Out button at the bottom to safely terminate your session.
 
@@ -96,4 +102,4 @@ This project is licensed under the MIT License. See the LICENSE file for details
 
 ## Disclaimer
 
-This application is an unofficial, third-party client. It is not affiliated with, endorsed by, or sponsored by Pandora Media, LLC. All product names, logos, and brands are property of their respective owners.
+This application is an unofficial, third-party client created for personal, non-commercial use and educational purposes. It is not affiliated with, endorsed by, or sponsored by Pandora Media, LLC. No trademark infringement is intended. Users are responsible for ensuring their use of this software complies with all applicable terms of service.

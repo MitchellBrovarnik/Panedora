@@ -129,7 +129,8 @@ body::before {
     position: relative;
     z-index: 1;
     display: grid;
-    grid-template-columns: auto 1fr;
+    /* Lock the sidebar column to the collapsed width so expanding it floats over the main content */
+    grid-template-columns: var(--sidebar-collapsed) 1fr;
     grid-template-rows: 1fr auto;
     grid-template-areas:
         "sidebar main"
@@ -164,6 +165,8 @@ body::before {
     flex-direction: column;
     overflow: hidden;
     transition: width 300ms var(--ease);
+    position: relative;
+    z-index: 10;
 }
 
 .sidebar:hover {
