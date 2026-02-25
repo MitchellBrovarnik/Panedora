@@ -12,6 +12,8 @@ class AudioPlayer extends EventEmitter {
         this.playlist = [];
         this.currentTrackIndex = 0;
         this.currentTrack = null;
+        this.cachedCoverArt = null;
+        this.cachedArtistArt = null;
         this.stationId = null;
         this.isPlaying = false;
         this.volume = 1.0;
@@ -85,6 +87,10 @@ class AudioPlayer extends EventEmitter {
 
         this.currentTrackIndex = index;
         this.currentTrack = this.playlist[index];
+
+        // Cache high-res art URLs to avoid repeated sorting in getState loop
+        this.cachedCoverArt = this.getHighResArt(this.currentTrack?.albumArt);
+        this.cachedArtistArt = this.getHighResArt(this.currentTrack?.artistArt);
 
         if (this.audio) {
             this.audio.src = this.currentTrack.audioURL;
@@ -184,8 +190,8 @@ class AudioPlayer extends EventEmitter {
             album: track?.albumTitle || null,
             stationName: null, // Will be set by main process
             stationId: this.stationId,
-            coverArt: this.getHighResArt(track?.albumArt),
-            artistArt: this.getHighResArt(track?.artistArt),
+            coverArt: this.cachedCoverArt,
+            artistArt: this.cachedArtistArt,
             time: this.audio?.currentTime || 0,
             duration: track?.trackLength || this.audio?.duration || 0,
             isPlaying: this.isPlaying,
@@ -210,8 +216,15 @@ class AudioPlayer extends EventEmitter {
         if (!artArray || !Array.isArray(artArray) || artArray.length === 0) {
             return null;
         }
-        const sorted = [...artArray].sort((a, b) => (b.size || 0) - (a.size || 0));
-        return sorted[0]?.url || null;
+
+        // Find largest artwork in O(N) instead of O(N log N) sorting
+        let best = artArray[0];
+        for (let i = 1; i < artArray.length; i++) {
+            if ((artArray[i].size || 0) > (best.size || 0)) {
+                best = artArray[i];
+            }
+        }
+        return best?.url || null;
     }
 
     /**

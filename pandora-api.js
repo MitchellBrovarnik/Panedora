@@ -442,9 +442,14 @@ class PandoraAPI {
             return null;
         }
 
-        // Sort by size descending and return largest
-        const sorted = [...artArray].sort((a, b) => (b.size || 0) - (a.size || 0));
-        return sorted[0]?.url || null;
+        // Find largest artwork in O(N) instead of O(N log N) sorting
+        let best = artArray[0];
+        for (let i = 1; i < artArray.length; i++) {
+            if ((artArray[i].size || 0) > (best.size || 0)) {
+                best = artArray[i];
+            }
+        }
+        return best?.url || null;
     }
 
     /**
