@@ -237,18 +237,25 @@ class PandoraAPI {
             'energy_boost': 7,
             'relax': 8
         };
-        const numericMode = modeMap[modeId] || modeId;
+        const numericMode = modeMap[modeId] !== undefined ? modeMap[modeId] : modeId;
+
+        const payload = {
+            stationId,
+            modeId: numericMode,
+            previousModeId
+        };
+
+        console.log('[API] setInteractiveRadioMode PAYLOAD:', JSON.stringify(payload));
 
         try {
-            const response = await this.request('/v1/station/setInteractiveRadioMode', {
-                stationId,
-                modeId: numericMode,
-                previousModeId
-            });
-            console.log('[API] Set interactive radio mode result:', JSON.stringify(response));
+            const response = await this.request('/v1/station/setInteractiveRadioMode', payload);
+            console.log('[API] setInteractiveRadioMode SUCCESS:', JSON.stringify(response));
             return response;
         } catch (e) {
-            console.log('[API] setInteractiveRadioMode failed:', e?.message || JSON.stringify(e));
+            console.error('[API] setInteractiveRadioMode FAILED:', JSON.stringify(e, null, 2));
+            console.error('[API] setInteractiveRadioMode error message:', e?.message);
+            console.error('[API] setInteractiveRadioMode error status:', e?.status);
+            console.error('[API] setInteractiveRadioMode error code:', e?.errorCode);
             return null;
         }
     }
@@ -256,8 +263,8 @@ class PandoraAPI {
     /**
      * Get playlist tracks for a station
      */
-    async getPlaylist(stationId, isStationStart = false, modeId = null) {
-        console.log(`[API] Fetching playlist for station ${stationId} (Mode: ${modeId || 'default'})...`);
+    async getPlaylist(stationId, isStationStart = false, startingAtTrackId = null) {
+        console.log(`[API] Fetching playlist for station ${stationId} (StartTrack: ${startingAtTrackId || 'none'})...`);
 
         try {
             const payload = {
@@ -265,28 +272,10 @@ class PandoraAPI {
                 isStationStart,
                 fragmentRequestReason: 'Normal',
                 audioFormat: 'aacplus',
-                startingAtTrackId: null,
+                startingAtTrackId: startingAtTrackId || null,
                 onDemandArtistMessageArtistUidHex: null,
                 onDemandArtistMessageIdHex: null
             };
-
-            if (modeId && modeId !== 'default' && modeId !== 'mystation') {
-                // Map string mode names to numeric IDs used by Pandora API
-                const modeMap = {
-                    'crowd_faves': 1,
-                    'discovery': 2,
-                    'deep_cuts': 3,
-                    'newly_released': 4,
-                    'artist_only': 6,
-                    'energy_boost': 7,
-                    'relax': 8
-                };
-                const numericMode = modeMap[modeId] || modeId;
-                console.log(`[API] Using mode: ${modeId} -> numeric: ${numericMode}`);
-                payload.mode = numericMode;
-                payload.modeId = numericMode;
-                payload.modePandoraId = numericMode;
-            }
 
             let response = await this.request('/v1/playlist/getFragment', payload);
 
@@ -302,6 +291,7 @@ class PandoraAPI {
             if (response.tracks?.[0]) {
                 const t = response.tracks[0];
                 console.log('[API] First track:', t.songTitle, '-', t.artistName);
+                console.log('[API] Track mode info: requestedModeId=', t.requestedModeId, 'modeId=', t.modeId);
                 console.log('[API] Audio URL:', t.audioURL ? t.audioURL.substring(0, 80) + '...' : 'MISSING');
             }
 

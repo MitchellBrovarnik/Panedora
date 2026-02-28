@@ -1660,3 +1660,158 @@ body::before {
     border-color: rgba(239, 68, 68, 0.4);
     transform: scale(1.05);
 }
+
+/* ============================================================================
+   Settings / Theme Picker
+   ============================================================================ */
+
+.settings-section {
+    padding: 8px 0;
+}
+
+.settings-description {
+    color: var(--text-2);
+    font-size: 13px;
+    margin-bottom: 24px;
+}
+
+.theme-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 14px;
+}
+
+.theme-swatch {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 0;
+    border-radius: var(--r);
+    border: 2px solid var(--glass-border);
+    background: var(--glass);
+    backdrop-filter: blur(var(--blur));
+    cursor: pointer;
+    overflow: hidden;
+    transition: all 250ms var(--ease);
+}
+
+.theme-swatch:hover {
+    border-color: var(--glass-border-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.theme-swatch.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent), 0 4px 20px var(--accent-glow);
+}
+
+.swatch-preview {
+    display: flex;
+    height: 64px;
+    border-radius: var(--r-sm) var(--r-sm) 0 0;
+    overflow: hidden;
+}
+
+.swatch-color {
+    flex: 1;
+}
+
+.swatch-accent {
+    width: 40%;
+}
+
+.swatch-label {
+    padding: 10px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-1);
+    text-align: left;
+    letter-spacing: 0.02em;
+}
+
+.swatch-check {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    box-shadow: 0 2px 8px var(--accent-glow);
+}
+
+/* ============================================================================
+   Home Page — Greeting
+   ============================================================================ */
+
+.home-greeting {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 28px;
+    background: var(--accent-grad);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* ============================================================================
+   Library Page — Filter & Header
+   ============================================================================ */
+
+.library-header {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 4px;
+}
+
+.library-count {
+    font-size: 12px;
+    color: var(--text-3);
+    font-weight: 500;
+}
+
+.library-filter-container {
+    position: relative;
+    margin-bottom: 20px;
+}
+
+.library-filter-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    color: var(--text-3);
+    pointer-events: none;
+}
+
+.library-filter-input {
+    width: 100%;
+    padding: 10px 14px 10px 40px;
+    border-radius: var(--r-pill);
+    border: 1px solid var(--glass-border);
+    background: var(--glass);
+    backdrop-filter: blur(var(--blur));
+    color: var(--text-1);
+    font-size: 13px;
+    transition: border-color 200ms var(--ease), background 200ms var(--ease);
+}
+
+.library-filter-input::placeholder {
+    color: var(--text-3);
+}
+
+.library-filter-input:focus {
+    border-color: var(--accent);
+    background: var(--glass-hover);
+}

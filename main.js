@@ -6,7 +6,6 @@
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const musicFallback = require('./music-fallback');
 
 // Debug Logging
 const LOG_FILE = path.join(__dirname, 'debug.log');
@@ -96,9 +95,11 @@ function sendStations(stations) {
     // Transform to match expected format
     const formatted = stations.map(s => ({
         id: s.stationId,
+        stationId: s.stationId,
         name: s.name,
         type: 'station',
-        image: PandoraAPI.getHighResArt(s.art)
+        image: PandoraAPI.getHighResArt(s.art),
+        lastUpdated: s.lastPlayed || s.lastUpdated || s.dateCreated
     }));
     sendToUI('UI:COLLECTION_DATA', formatted);
 }
@@ -161,8 +162,8 @@ async function loadStations() {
     return currentStations;
 }
 
-async function playStation(stationId, modeId = null) {
-    console.log(`[Main] Playing station: ${stationId} ${modeId ? '(Mode: ' + modeId + ')' : ''}`);
+async function playStation(stationId, startingAtTrackId = null) {
+    console.log(`[Main] Playing station: ${stationId} ${startingAtTrackId ? '(StartTrack: ' + startingAtTrackId + ')' : ''}`);
 
     if (currentStation) {
         // Pause the existing stream cleanly before fetching a new one
@@ -173,13 +174,7 @@ async function playStation(stationId, modeId = null) {
     }
 
     currentStation = currentStations.find(s => s.stationId === stationId);
-    currentPlaylist = await api.getPlaylist(stationId, true, modeId);
-    // Filter playlist based on mode (Workaround)
-    if (modeId) {
-        currentPlaylist = filterPlaylist(currentPlaylist, modeId, currentStation);
-    }
-
-    // If filter removed everything, fetch more (fallback) -> Not implemented yet to avoid loops
+    currentPlaylist = await api.getPlaylist(stationId, true, startingAtTrackId);
 
     currentTrackIndex = 0;
 
@@ -347,14 +342,6 @@ ipcMain.handle('PLAYER:CMD', async (event, { action, value }) => {
             return { success: true, volume: value };
         case 'seek':
             return { success: true, seek: value };
-        case 'tune':
-            console.log(`[IPC] PLAYER:CMD - Tune Station Mode: ${value}`);
-            if (currentStation) {
-                // Try to play with mode directly (skip transform as it's unreliable)
-                console.log(`[IPC] Tuning to station ${currentStation.stationId} (Mode: ${value})`);
-                await playStation(currentStation.stationId, value);
-            }
-            return { success: true, mode: value };
         default:
             return { success: false, error: 'Unknown action' };
     }
@@ -389,87 +376,72 @@ ipcMain.handle('NAV:PLAY_URI', async (event, payload) => {
     const firstColon = uri.indexOf(':');
     if (firstColon === -1) return { error: 'Invalid URI format' };
 
-    const type = uri.substring(0, firstColon); // 'song', 'station', 'TR', 'TR:123'
+    const type = uri.substring(0, firstColon);
     const id = uri.substring(firstColon + 1);
 
     if (type === 'station') {
-        return await playStation(id);
-    } else if (type === 'song' || type === 'TR' || type === 'track' || type === 'artist') {
+        console.log(`[IPC] Station play request - ID: ${id}`);
+        sendToUI('UI:LOADING', { isLoading: true });
 
-        // Try YouTube Fallback for Songs
-        const songTitle = metadata.name || metadata.title;
-        if ((type === 'song' || type === 'TR' || type === 'track') && songTitle && metadata.artist) {
-            console.log(`[Main] Attempting YouTube fallback for: ${songTitle} - ${metadata.artist}`);
-            try {
-                const query = `${metadata.artist} ${songTitle} audio`;
-                const searchResult = await musicFallback.search(query);
+        // Check if this station already exists in the user's collection
+        const existingStation = currentStations.find(s =>
+            s.stationId === id ||
+            s.pandoraId === id ||
+            s.stationFactoryPandoraId === id
+        );
 
-                if (searchResult) {
-                    const streamUrl = await musicFallback.getStreamUrl(searchResult.videoId);
-                    if (streamUrl) {
-                        console.log(`[Main] Found fallback stream: ${streamUrl}`);
-
-                        // Create station in background so it appears in list
-                        api.createStation(id).then(async (s) => {
-                            if (s) {
-                                console.log('[Main] Background station created:', s.stationId);
-                                const newStations = await loadStations(); // Refresh list
-
-                                // OPTIONAL: Auto-queue station tracks after this song?
-                                // For now, let's just create it so user can click it.
-                            }
-                        });
-
-                        // Construct fake track
-                        const fakeTrack = {
-                            songTitle: songTitle,
-                            artistName: metadata.artist,
-                            albumTitle: 'On Demand (via YouTube)',
-                            albumArt: metadata.image ? [{ url: metadata.image }] : [],
-                            audioURL: streamUrl,
-                            trackLength: searchResult.lengthSeconds || 0,
-                            trackToken: null,
-                            identity: 'youtube'
-                        };
-
-                        currentPlaylist = [fakeTrack];
-                        currentTrackIndex = 0;
-                        // Use a fake station container
-                        currentStation = {
-                            stationId: 'youtube-' + id,
-                            name: `Song: ${songTitle}`,
-                            art: metadata.image ? [{ url: metadata.image }] : []
-                        };
-
-                        sendPlayerState(getCurrentState());
-                        sendToUI('UI:LOADING', { isLoading: false }); // Stop loading
-                        return { success: true };
-                    }
-                }
-            } catch (e) {
-                console.error('[Main] Fallback failed:', e);
-            }
-            sendToUI('UI:LOADING', { isLoading: false }); // Stop loading regardless of error
+        if (existingStation) {
+            console.log(`[IPC] Found existing station: ${existingStation.stationId}`);
+            const result = await playStation(existingStation.stationId);
+            sendToUI('UI:LOADING', { isLoading: false });
+            return result;
         }
 
-        // Fallback or Artist: Create station from seed
-        console.log(`[IPC] Creating station from ${type}: ${id}`);
-        sendToUI('UI:LOADING', { isLoading: true });
-        const station = await api.createStation(id);
+        // Try playing directly as a station ID first
+        try {
+            const result = await playStation(id);
+            sendToUI('UI:LOADING', { isLoading: false });
+            return result;
+        } catch (e) {
+            console.log(`[IPC] Direct play failed for ${id}, trying createStation...`);
+        }
 
+        // If direct play failed, try creating a station from this seed
+        const station = await api.createStation(id);
         if (station && station.stationId) {
-            // Reload station list to include new station
             await loadStations();
-            // Play the new station
             const result = await playStation(station.stationId);
             sendToUI('UI:LOADING', { isLoading: false });
             return result;
         }
+
+        console.error(`[IPC] Failed to play or create station for: ${id}`);
         sendToUI('UI:LOADING', { isLoading: false });
-        return { error: 'Failed to create station' };
+        return { error: 'Failed to play station' };
+
+    } else if (type === 'song' || type === 'TR' || type === 'track' || type === 'artist') {
+        // Create station from seed (Song or Artist)
+        console.log(`[IPC] Creating native Pandora station from ${type}: ${id}`);
+        sendToUI('UI:LOADING', { isLoading: true });
+        const station = await api.createStation(id);
+
+        if (station && station.stationId) {
+            // Reload station list so it appears in sidebar
+            await loadStations();
+
+            // For songs, pass the pandoraId as startingAtTrackId so Pandora plays this exact track first
+            const startTrackId = (type === 'song' || type === 'TR' || type === 'track') ? (metadata.pandoraId || id) : null;
+            const result = await playStation(station.stationId, null, startTrackId);
+            sendToUI('UI:LOADING', { isLoading: false });
+            return result;
+        }
+
+        console.error(`[IPC] Failed to create native station for ${type}: ${id}`);
+        sendToUI('UI:LOADING', { isLoading: false });
+        return { error: 'Failed to create Pandora station' };
     }
 
-    return { error: 'Unknown type' };
+    return { error: 'Unknown URI type' };
 });
 
 // Helper for 'Tune' workaround

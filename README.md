@@ -89,7 +89,7 @@ npx electron-packager . PandoraGlass --platform=win32 --arch=x64 --out=dist
 
 *   **Playback Interruptions:** If stations fail to load or playback stops unexpectedly, it may indicate a multi-device timeout, i.e. trying to stream on more than one device/tab. This occurs when your Pandora account is being accessed on more than one device simultaneously. To resolve this, close all other Pandora applications for a few minutes and then try again.
 *   **Station Tuning Limitations:** The "Tune Your Station" feature is currently a work in progress. You may find that manual mode switching (e.g., Discovery, Artist Only) does not work. Some stations may default to "Artist Only" or "My Station" modes automatically.
-*   **Search Functionality:** The search tab is currently a work in progress. Searching for a specific song may not actually play that specific track, and artist selection is not currently functional.
+*   **Search Functionality:** You can now search for and play specific songs directly via Pandora's "On-Demand" capability (best for Premium accounts). Note that individual artist selection in search results is still a work in progress.
 
 ## Privacy and Security
 

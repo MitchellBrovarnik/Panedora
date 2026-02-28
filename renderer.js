@@ -82,12 +82,17 @@ function renderPage(page) {
         case 'nowplaying':
             renderNowPlayingPage();
             break;
+        case 'settings':
+            renderSettingsPage();
+            break;
         default:
             renderHomePage();
     }
 }
 
 function renderHomePage() {
+    console.log('[UI] Rendering Home Page');
+    console.trace('renderHomePage called from:');
     if (AppState.isLoading) {
         DOM.pageContent.innerHTML = `
       <div class="welcome-container">
@@ -134,13 +139,11 @@ function renderHomePage() {
                     const result = await window.api.auth.login(email, password);
                     if (result && result.success) {
                         console.log('[UI] Login successful!');
-                        // The onLoginStatus handler will take care of rendering home
                     } else {
                         errorEl.textContent = 'Incorrect email or password.';
                         errorEl.style.display = 'block';
                         submitBtn.textContent = 'Sign In';
                         submitBtn.disabled = false;
-                        // Only clear password, keep email
                         document.getElementById('login-password').value = '';
                     }
                 } catch (err) {
@@ -156,32 +159,105 @@ function renderHomePage() {
         return;
     }
 
-    let cardsHtml = '';
-    AppState.stations.forEach(station => {
-        cardsHtml += createCard(
-            station.image || null,
-            station.name,
-            station.type === 'playlist' ? 'Playlist' : 'Station',
-            () => playStation(station)
-        );
-    });
+    // Dynamic greeting based on time of day
+    const hour = new Date().getHours();
+    let greeting = 'Good Evening';
+    if (hour < 12) greeting = 'Good Morning';
+    else if (hour < 18) greeting = 'Good Afternoon';
 
     DOM.pageContent.innerHTML = `
-    <section class="fade-in">
-      <h2 class="section-title">Your Stations</h2>
-      <div class="card-grid" id="home-cards">
-        ${cardsHtml || createEmptyState('No stations found', 'Your Pandora stations will appear here')}
-      </div>
-    </section>`;
+    <div class="fade-in">
+      <h1 class="home-greeting">${greeting}</h1>
 
-    // Attach click handlers to cards
-    document.querySelectorAll('.card').forEach((card, index) => {
-        card.addEventListener('click', () => {
-            if (AppState.stations[index]) {
-                playStation(AppState.stations[index]);
+      <section>
+        <h2 class="section-title">Jump Back In</h2>
+        <div class="card-grid" id="home-recent">
+        </div>
+      </section>
+
+      <section id="home-more-section" style="margin-top: 32px; display: none;">
+        <h2 class="section-title">More from Your Collection</h2>
+        <div class="card-grid" id="home-more">
+        </div>
+      </section>
+    </div>`;
+
+    updateHomeGrids();
+}
+
+function updateHomeGrids() {
+    const recentContainer = document.getElementById('home-recent');
+    const moreContainer = document.getElementById('home-more');
+    const moreSection = document.getElementById('home-more-section');
+    if (!recentContainer) return;
+
+    // Sort stations by lastUpdated for "Jump Back In"
+    const recentStations = [...AppState.stations]
+        .sort((a, b) => new Date(b.lastUpdated || 0) - new Date(a.lastUpdated || 0))
+        .slice(0, 6);
+
+    // A second batch for "More from Your Collection"
+    const moreStations = [...AppState.stations]
+        .sort((a, b) => new Date(b.lastUpdated || 0) - new Date(a.lastUpdated || 0))
+        .slice(6, 12);
+
+    // Helper to update a container's children without destroying elements that just moved
+    function updateGridNodes(container, stationsArray) {
+        if (!container) return;
+
+        // Convert to map for easy lookup
+        const existingCards = Array.from(container.querySelectorAll('.card'));
+        const cardMap = {};
+        existingCards.forEach(card => cardMap[card.dataset.id] = card);
+
+        // Build new arrangement
+        const newFragment = document.createDocumentFragment();
+        let hasChanges = existingCards.length !== stationsArray.length;
+
+        stationsArray.forEach((station, index) => {
+            const dataId = station.id || station.stationId;
+            let card = cardMap[dataId];
+
+            if (card) {
+                // Card exists, check if it moved
+                if (existingCards[index] !== card) {
+                    hasChanges = true;
+                }
+                newFragment.appendChild(card);
+            } else {
+                // Completely new card
+                const temp = document.createElement('div');
+                temp.innerHTML = createCard(station.image || null, station.name, station.type === 'playlist' ? 'Playlist' : 'Station', dataId);
+                const newCard = temp.firstElementChild;
+                newCard.addEventListener('click', () => playStation(station));
+                newFragment.appendChild(newCard);
+                hasChanges = true;
             }
         });
-    });
+
+        // Only touch the DOM if something actually changed order or items
+        if (hasChanges) {
+            container.innerHTML = '';
+            container.appendChild(newFragment);
+        }
+    }
+
+    // Fallback if empty
+    if (recentStations.length === 0) {
+        recentContainer.innerHTML = createEmptyState('No stations found', 'Your Pandora stations will appear here');
+    } else {
+        updateGridNodes(recentContainer, recentStations);
+    }
+
+    if (moreContainer && moreSection) {
+        if (moreStations.length > 0) {
+            updateGridNodes(moreContainer, moreStations);
+            moreSection.style.display = 'block';
+        } else {
+            moreContainer.innerHTML = '';
+            moreSection.style.display = 'none';
+        }
+    }
 }
 
 function renderSearchPage() {
@@ -225,7 +301,7 @@ function renderSearchPage() {
         html += `
       <section class="search-section">
         <h2 class="section-title">Artists</h2>
-        <div class="card-grid">${artistCards}</div>
+        <div class="card-grid" id="search-artists">${artistCards}</div>
       </section>`;
     }
 
@@ -238,7 +314,7 @@ function renderSearchPage() {
         html += `
       <section class="search-section">
         <h2 class="section-title">Stations</h2>
-        <div class="card-grid">${stationCards}</div>
+        <div class="card-grid" id="search-stations">${stationCards}</div>
       </section>`;
     }
 
@@ -249,7 +325,7 @@ function renderSearchPage() {
     html += '</div>';
     DOM.pageContent.innerHTML = html;
 
-    // Attach click handlers
+    // Attach click handlers — Songs
     document.querySelectorAll('#search-songs .track-row').forEach((row, index) => {
         row.addEventListener('click', () => {
             if (songs[index]) {
@@ -257,11 +333,44 @@ function renderSearchPage() {
             }
         });
     });
+
+    // Attach click handlers — Artists
+    document.querySelectorAll('#search-artists .card').forEach((card, index) => {
+        card.addEventListener('click', () => {
+            if (artists[index]) {
+                window.api.content.playItem(artists[index]);
+            }
+        });
+    });
+
+    // Attach click handlers — Stations
+    document.querySelectorAll('#search-stations .card').forEach((card, index) => {
+        card.addEventListener('click', () => {
+            if (stations[index]) {
+                const s = stations[index];
+                console.log('[UI] Station search click:', JSON.stringify(s));
+                // Use playItem with the best available ID for station creation
+                const stationSeed = s.stationId || s.stationFactoryPandoraId || s.pandoraId || s.id;
+                window.api.content.playItem({ ...s, type: 'station', id: stationSeed });
+            }
+        });
+    });
 }
 
 function renderLibraryPage() {
+    const filterQuery = AppState.libraryFilter || '';
+
+    // Sort alphabetically for the full collection
+    const sortedStations = [...AppState.stations]
+        .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+    // Apply filter
+    const filtered = filterQuery
+        ? sortedStations.filter(s => s.name.toLowerCase().includes(filterQuery.toLowerCase()))
+        : sortedStations;
+
     let cardsHtml = '';
-    AppState.stations.forEach(station => {
+    filtered.forEach(station => {
         cardsHtml += createCard(
             station.image,
             station.name,
@@ -269,20 +378,226 @@ function renderLibraryPage() {
         );
     });
 
+    const countLabel = filterQuery
+        ? `${filtered.length} of ${AppState.stations.length} stations`
+        : `${AppState.stations.length} Stations`;
+
     DOM.pageContent.innerHTML = `
-    <section class="fade-in">
-      <h2 class="section-title">Your Library</h2>
-      <div class="card-grid">
-        ${cardsHtml || createEmptyState('Library Empty', 'Your saved content will appear here')}
+    <div class="fade-in">
+      <div class="library-header">
+        <h2 class="section-title">Your Collection</h2>
+        <span class="library-count">${countLabel}</span>
       </div>
-    </section>`;
+      <div class="library-filter-container">
+        <svg class="library-filter-icon" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+        </svg>
+        <input type="text" class="library-filter-input" id="library-filter"
+          placeholder="Filter your stations..." value="${escapeHtml(filterQuery)}">
+      </div>
+      <div class="card-grid" id="library-cards">
+        ${cardsHtml || createEmptyState('No matches', `No stations matching "${filterQuery}"`)}
+      </div>
+    </div>`;
+
+    // Attach filter handler
+    const filterInput = document.getElementById('library-filter');
+    if (filterInput) {
+        filterInput.addEventListener('input', debounce((e) => {
+            AppState.libraryFilter = e.target.value;
+            renderLibraryPage();
+            // Re-focus input and restore cursor position
+            const el = document.getElementById('library-filter');
+            if (el) {
+                el.focus();
+                el.selectionStart = el.selectionEnd = el.value.length;
+            }
+        }, 150));
+    }
 
     // Attach click handlers
-    document.querySelectorAll('.card').forEach((card, index) => {
+    document.querySelectorAll('#library-cards .card').forEach((card, index) => {
         card.addEventListener('click', () => {
-            if (AppState.stations[index]) {
-                playStation(AppState.stations[index]);
+            if (filtered[index]) {
+                playStation(filtered[index]);
             }
+        });
+    });
+}
+
+// ============================================================================
+// Theme System
+// ============================================================================
+
+const THEMES = {
+    midnight: {
+        name: 'Midnight Violet',
+        preview: ['#1a0a2e', '#0d1b3e', '#7c5bf5'],
+        vars: {
+            '--bg-base': '#080810',
+            '--grad-1': '#1a0a2e',
+            '--grad-2': '#0d1b3e',
+            '--grad-3': '#1e0a3a',
+            '--accent': '#7c5bf5',
+            '--accent-glow': 'rgba(124, 91, 245, 0.3)',
+            '--accent-grad': 'linear-gradient(135deg, #6366f1, #a855f7)',
+            '--accent-soft': 'rgba(124, 91, 245, 0.12)'
+        }
+    },
+    ocean: {
+        name: 'Deep Ocean',
+        preview: ['#0a1628', '#0c2340', '#3b82f6'],
+        vars: {
+            '--bg-base': '#060d1a',
+            '--grad-1': '#0a1628',
+            '--grad-2': '#0c2340',
+            '--grad-3': '#0a1e38',
+            '--accent': '#3b82f6',
+            '--accent-glow': 'rgba(59, 130, 246, 0.3)',
+            '--accent-grad': 'linear-gradient(135deg, #2563eb, #06b6d4)',
+            '--accent-soft': 'rgba(59, 130, 246, 0.12)'
+        }
+    },
+    emerald: {
+        name: 'Emerald Forest',
+        preview: ['#0a1e14', '#0d2818', '#10b981'],
+        vars: {
+            '--bg-base': '#060f0a',
+            '--grad-1': '#0a1e14',
+            '--grad-2': '#0d2818',
+            '--grad-3': '#0a2416',
+            '--accent': '#10b981',
+            '--accent-glow': 'rgba(16, 185, 129, 0.3)',
+            '--accent-grad': 'linear-gradient(135deg, #059669, #34d399)',
+            '--accent-soft': 'rgba(16, 185, 129, 0.12)'
+        }
+    },
+    sunset: {
+        name: 'Sunset Blaze',
+        preview: ['#2a0a0a', '#3d1a0a', '#f97316'],
+        vars: {
+            '--bg-base': '#120606',
+            '--grad-1': '#2a0a0a',
+            '--grad-2': '#3d1a0a',
+            '--grad-3': '#2e0e08',
+            '--accent': '#f97316',
+            '--accent-glow': 'rgba(249, 115, 22, 0.3)',
+            '--accent-grad': 'linear-gradient(135deg, #ea580c, #fbbf24)',
+            '--accent-soft': 'rgba(249, 115, 22, 0.12)'
+        }
+    },
+    rose: {
+        name: 'Rose Quartz',
+        preview: ['#2a0a1e', '#3d0a28', '#ec4899'],
+        vars: {
+            '--bg-base': '#120610',
+            '--grad-1': '#2a0a1e',
+            '--grad-2': '#3d0a28',
+            '--grad-3': '#2e0820',
+            '--accent': '#ec4899',
+            '--accent-glow': 'rgba(236, 72, 153, 0.3)',
+            '--accent-grad': 'linear-gradient(135deg, #db2777, #f472b6)',
+            '--accent-soft': 'rgba(236, 72, 153, 0.12)'
+        }
+    },
+    arctic: {
+        name: 'Arctic Frost',
+        preview: ['#0a1420', '#0e1c2e', '#67e8f9'],
+        vars: {
+            '--bg-base': '#060c14',
+            '--grad-1': '#0a1420',
+            '--grad-2': '#0e1c2e',
+            '--grad-3': '#0c1826',
+            '--accent': '#67e8f9',
+            '--accent-glow': 'rgba(103, 232, 249, 0.3)',
+            '--accent-grad': 'linear-gradient(135deg, #06b6d4, #a5f3fc)',
+            '--accent-soft': 'rgba(103, 232, 249, 0.12)'
+        }
+    },
+    neon: {
+        name: 'Neon Cyber',
+        preview: ['#0a0a1a', '#1a0a2e', '#22d3ee'],
+        vars: {
+            '--bg-base': '#050510',
+            '--grad-1': '#0a0a1a',
+            '--grad-2': '#1a0a2e',
+            '--grad-3': '#0a0a20',
+            '--accent': '#22d3ee',
+            '--accent-glow': 'rgba(34, 211, 238, 0.3)',
+            '--accent-grad': 'linear-gradient(135deg, #8b5cf6, #22d3ee)',
+            '--accent-soft': 'rgba(34, 211, 238, 0.12)'
+        }
+    },
+    classic: {
+        name: 'Classic Dark',
+        preview: ['#121212', '#1a1a1a', '#1db954'],
+        vars: {
+            '--bg-base': '#0a0a0a',
+            '--grad-1': '#121212',
+            '--grad-2': '#1a1a1a',
+            '--grad-3': '#161616',
+            '--accent': '#1db954',
+            '--accent-glow': 'rgba(29, 185, 84, 0.3)',
+            '--accent-grad': 'linear-gradient(135deg, #1db954, #1ed760)',
+            '--accent-soft': 'rgba(29, 185, 84, 0.12)'
+        }
+    }
+};
+
+function applyTheme(themeId) {
+    const theme = THEMES[themeId];
+    if (!theme) return;
+
+    const root = document.documentElement;
+    Object.entries(theme.vars).forEach(([prop, value]) => {
+        root.style.setProperty(prop, value);
+    });
+
+    localStorage.setItem('pandora-glass-theme', themeId);
+    AppState.currentTheme = themeId;
+    console.log(`[UI] Theme applied: ${theme.name}`);
+}
+
+function loadSavedTheme() {
+    const saved = localStorage.getItem('pandora-glass-theme');
+    if (saved && THEMES[saved]) {
+        applyTheme(saved);
+    }
+}
+
+function renderSettingsPage() {
+    const currentTheme = AppState.currentTheme || localStorage.getItem('pandora-glass-theme') || 'midnight';
+
+    let themeSwatches = '';
+    Object.entries(THEMES).forEach(([id, theme]) => {
+        const isActive = id === currentTheme;
+        themeSwatches += `
+            <button class="theme-swatch ${isActive ? 'active' : ''}" data-theme="${id}" title="${theme.name}">
+                <div class="swatch-preview">
+                    <div class="swatch-color" style="background: ${theme.preview[0]}"></div>
+                    <div class="swatch-color" style="background: ${theme.preview[1]}"></div>
+                    <div class="swatch-accent" style="background: ${theme.preview[2]}"></div>
+                </div>
+                <span class="swatch-label">${theme.name}</span>
+                ${isActive ? '<span class="swatch-check">\u2713</span>' : ''}
+            </button>`;
+    });
+
+    DOM.pageContent.innerHTML = `
+    <div class="fade-in">
+      <section class="settings-section">
+        <h2 class="section-title">Appearance</h2>
+        <p class="settings-description">Choose a theme to personalize your experience.</p>
+        <div class="theme-grid">${themeSwatches}</div>
+      </section>
+    </div>`;
+
+    // Attach click handlers
+    document.querySelectorAll('.theme-swatch').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const themeId = btn.dataset.theme;
+            applyTheme(themeId);
+            renderSettingsPage();
         });
     });
 }
@@ -290,22 +605,6 @@ function renderLibraryPage() {
 function renderNowPlayingPage() {
     const { track, artist, album, coverArt, time, duration, isPlaying } = AppState.playerState;
 
-    const tuneOptions = [
-        { id: 'mystation', label: 'My Station' },
-        { id: 'crowdfaves', label: 'Crowd Faves' },
-        { id: 'discovery', label: 'Discovery' },
-        { id: 'deepcuts', label: 'Deep Cuts' },
-        { id: 'newlyreleased', label: 'Newly Released' },
-        { id: 'artistonly', label: 'Artist Only' },
-        { id: 'energyboost', label: 'Energy Boost' },
-        { id: 'relax', label: 'Relax' }
-    ];
-
-    const tuneOptionsHtml = tuneOptions.map(opt => `
-        <button class="tune-option" data-tune="${opt.id}">
-            ${opt.label}
-        </button>
-    `).join('');
 
     // Build history section
     let pastSongs = [...(AppState.playerState.history || [])];
@@ -369,10 +668,6 @@ function renderNowPlayingPage() {
             </div>
             
             <div class="np-right">
-                <h3 class="tune-title">TUNE YOUR STATION</h3>
-                <div class="tune-options">
-                    ${tuneOptionsHtml}
-                </div>
 
                 ${historyHtml}
             </div>
@@ -419,16 +714,6 @@ function renderNowPlayingPage() {
         }
     });
 
-    // Tune option handlers
-    document.querySelectorAll('.tune-option').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const tuneMode = btn.dataset.tune;
-            window.api.player.tuneStation(tuneMode);
-            // Update active state
-            document.querySelectorAll('.tune-option').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-        });
-    });
 
     // History undo-dislike handlers
     document.querySelectorAll('.history-undo-btn').forEach(btn => {
@@ -616,6 +901,13 @@ function updatePlayerUI(state) {
 // ============================================================================
 
 function playStation(station) {
+    // Update lastUpdated locally so Home page "Jump Back In" reflects this on next visit
+    const match = AppState.stations.find(s => s.id === station.id || s.name === station.name);
+    if (match) {
+        match.lastUpdated = new Date().toISOString();
+    }
+
+
     window.api.content.playItem(station);
 }
 
@@ -833,8 +1125,15 @@ function initAPIListeners() {
         AppState.stations = data || [];
         AppState.isLoading = false;
         renderStationsList();
-        if (AppState.currentPage === 'home' || AppState.currentPage === 'library') {
-            renderPage(AppState.currentPage);
+
+        if (AppState.currentPage === 'home') {
+            // Only update the home page automatically if it has no station cards (e.g. fresh login)
+            const recentContainer = document.getElementById('home-recent');
+            if (recentContainer && recentContainer.querySelectorAll('.card').length === 0 && AppState.stations.length > 0) {
+                updateHomeGrids();
+            }
+        } else if (AppState.currentPage === 'library') {
+            renderPage('library');
         }
     });
 
@@ -893,6 +1192,9 @@ function initAPIListeners() {
 
 async function init() {
     console.log('[UI] Initializing Pandora Glass...');
+
+    // Restore saved theme before rendering
+    loadSavedTheme();
 
     initEventListeners();
     initAPIListeners();
