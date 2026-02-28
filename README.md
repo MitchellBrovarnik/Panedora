@@ -18,10 +18,11 @@ Pandora Glass is designed to provide the absolute best desktop listening experie
 *   **Frosted Aesthetic:** The application is built on a deep violet-to-black gradient background with high-gloss translucent panels using backdrop blur effects.
 *   **Detached Navigation & Player:** The side navigation and footer player bar render as floating islands with gap transitions, providing a premium, native feel.
 *   **Collapsible Sidebar:** The sidebar collapses into a sleek icon-only view and expands smoothly on hover to maximize space for your station library.
-*   **Immersive Now Playing:** A full-bleed dedicated page for focused listening, featuring large artwork, track metadata, and tuning controls.
+*   **Immersive Now Playing:** A full-bleed dedicated page for focused listening, featuring large artwork and high-res track metadata.
+*   **Theme Customization:** Personalize your experience with 8 premium theme presets (Midnight, Emerald, Sunset, etc.) that instantly transform the app's color palette and gradients.
 
 ### Enhanced Player Experience
-*   **Station Tuning:** Instantly switch your current station's mode (e.g., Artist Only, Newly Released, Discovery, Deep Cuts) directly from the Now Playing page without interrupting playback.
+*   **High-Resolution UI:** Every aspect of the playback interface is optimized for visual clarity and smooth transitions.
 *   **High-Quality Audio:** The client utilizes the `aacplus` (HE-AAC) streaming format during API requests, ensuring you receive a clear and consistent listening experience.
 *   **Seamless Playback Controls:** Standard controls (Play, Pause, Skip, Previous) integrated cleanly into a floating player footer. The previous button intelligently restarts the track if you are more than a few seconds in, or skips to the previous track otherwise.
 
@@ -79,17 +80,16 @@ npx electron-packager . PandoraGlass --platform=win32 --arch=x64 --out=dist
 1. **Sign In:** Launch the application and sign in using your standard Pandora credentials. The application requires an active internet connection to communicate with Pandora's servers.
 2. **Library Navigation:** Upon logging in, your full list of saved stations will populate the home screen. Click any station card to begin playback.
 3. **Now Playing:** Click the album artwork in the footer player bar to expand the full-screen Now Playing view.
-4. **Curating Your Station:**
+4. **Curating & History:**
    * Use the **Thumbs Up** / **Thumbs Down** buttons to inform the algorithm of your preferences.
-   * Toggle the **Tune** buttons (e.g., "Artist Only", "Discovery") on the right column to adjust the station's mix.
-   * Review your recently played list. If you made a mistake, use the **Undo** button on any disliked track to remove the negative feedback.
-5. **Sign Out:** Hover over the left sidebar to expand it, and click the **Sign Out** button at the bottom to safely terminate your session.
+   * Review your recently played list on the right side of the Now Playing page. If you made a mistake, use the **Undo** button on any disliked track to remove the negative feedback.
+5. **Themes & Settings:** Click the **Settings** gear in the sidebar to browse and apply different visual themes.
+6. **Sign Out:** Hover over the left sidebar to expand it, and click the **Sign Out** button at the bottom to safely terminate your session.
 
 ## Known Issues
 
 *   **Playback Interruptions:** If stations fail to load or playback stops unexpectedly, it may indicate a multi-device timeout, i.e. trying to stream on more than one device/tab. This occurs when your Pandora account is being accessed on more than one device simultaneously. To resolve this, close all other Pandora applications for a few minutes and then try again.
-*   **Station Tuning Limitations:** The "Tune Your Station" feature is currently a work in progress. You may find that manual mode switching (e.g., Discovery, Artist Only) does not work. Some stations may default to "Artist Only" or "My Station" modes automatically.
-*   **Search Functionality:** The search tab is currently a work in progress. Searching for a specific song may not actually play that specific track, and artist selection is not currently functional.
+*   **Search Functionality:** You can now search for and play specific songs directly via Pandora's "On-Demand" capability (best for Premium accounts).
 
 ## Privacy and Security
 

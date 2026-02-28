@@ -86,6 +86,10 @@ class AudioPlayer extends EventEmitter {
         this.currentTrackIndex = index;
         this.currentTrack = this.playlist[index];
 
+        // Cache high-res artwork URLs on load
+        this.currentCoverArt = this.getHighResArt(this.currentTrack?.albumArt);
+        this.currentArtistArt = this.getHighResArt(this.currentTrack?.artistArt);
+
         if (this.audio) {
             this.audio.src = this.currentTrack.audioURL;
             this.audio.volume = this.volume;
@@ -184,8 +188,8 @@ class AudioPlayer extends EventEmitter {
             album: track?.albumTitle || null,
             stationName: null, // Will be set by main process
             stationId: this.stationId,
-            coverArt: this.getHighResArt(track?.albumArt),
-            artistArt: this.getHighResArt(track?.artistArt),
+            coverArt: this.currentCoverArt || null,
+            artistArt: this.currentArtistArt || null,
             time: this.audio?.currentTime || 0,
             duration: track?.trackLength || this.audio?.duration || 0,
             isPlaying: this.isPlaying,
@@ -210,8 +214,14 @@ class AudioPlayer extends EventEmitter {
         if (!artArray || !Array.isArray(artArray) || artArray.length === 0) {
             return null;
         }
-        const sorted = [...artArray].sort((a, b) => (b.size || 0) - (a.size || 0));
-        return sorted[0]?.url || null;
+
+        let maxArt = artArray[0];
+        for (let i = 1; i < artArray.length; i++) {
+            if ((artArray[i].size || 0) > (maxArt.size || 0)) {
+                maxArt = artArray[i];
+            }
+        }
+        return maxArt?.url || null;
     }
 
     /**

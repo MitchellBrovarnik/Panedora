@@ -612,30 +612,40 @@ function renderNowPlayingPage() {
         pastSongs.pop(); // Remove currently playing song
     }
     pastSongs.reverse(); // Show newest first
-    let historyHtml = '';
+    let historyHtml = `
+        <div class="np-history">
+            <h3 class="tune-title">RECENTLY PLAYED</h3>
+            <div class="history-list">
+    `;
+
     if (pastSongs.length > 0) {
-        historyHtml = `
-            <div class="np-history">
-                <h3 class="tune-title">RECENTLY PLAYED</h3>
-                <div class="history-list">
-                    ${pastSongs.map(h => `
-                        <div class="history-item ${h.feedback ? 'history-' + h.feedback : ''}" data-token="${h.trackToken}">
-                            <img class="history-art" src="${h.coverArt || ''}" alt="">
-                            <div class="history-info">
-                                <span class="history-title">${escapeHtml(h.songTitle)}</span>
-                                <span class="history-artist">${escapeHtml(h.artistName)}</span>
-                            </div>
-                            <div class="history-feedback">
-                                ${h.feedback === 'liked' ? '<span class="history-badge history-badge-liked" title="Liked">👍</span>' : ''}
-                                ${h.feedback === 'disliked' ? '<button class="history-undo-btn" title="Undo dislike" data-token="' + h.trackToken + '">Undo 👎</button>' : ''}
-                                ${!h.feedback ? '<span class="history-badge">—</span>' : ''}
-                            </div>
-                        </div>
-                    `).join('')}
+        historyHtml += pastSongs.map(h => `
+            <div class="history-item ${h.feedback ? 'history-' + h.feedback : ''}" data-token="${h.trackToken}">
+                <img class="history-art" src="${h.coverArt || ''}" alt="">
+                <div class="history-info">
+                    <span class="history-title">${escapeHtml(h.songTitle)}</span>
+                    <span class="history-artist">${escapeHtml(h.artistName)}</span>
                 </div>
+                <div class="history-feedback">
+                    ${h.feedback === 'liked' ? '<span class="history-badge history-badge-liked" title="Liked">👍</span>' : ''}
+                    ${h.feedback === 'disliked' ? '<button class="history-undo-btn" title="Undo dislike" data-token="' + h.trackToken + '">Undo 👎</button>' : ''}
+                    ${!h.feedback ? '<span class="history-badge">—</span>' : ''}
+                </div>
+            </div>
+        `).join('');
+    } else {
+        historyHtml += `
+            <div class="empty-state" style="padding: 24px 0; min-height: auto;">
+                <p style="text-align: left; color: rgba(255,255,255,0.7); margin-bottom: 8px;">Songs you've played will appear here.</p>
+                <p style="text-align: left; color: rgba(255,255,255,0.4); font-size: 13px;">Stores your last 20 tracks.</p>
             </div>
         `;
     }
+
+    historyHtml += `
+            </div>
+        </div>
+    `;
 
     DOM.pageContent.innerHTML = `
     <div class="now-playing-page fade-in">
@@ -850,48 +860,59 @@ function updatePlayerUI(state) {
             }
             pastSongs.reverse(); // Show newest first
 
+            const histDiv = document.createElement('div');
+            histDiv.className = 'np-history';
+
+            let listContent = '';
             if (pastSongs.length > 0) {
-                const histDiv = document.createElement('div');
-                histDiv.className = 'np-history';
-                histDiv.innerHTML = `
-                    <h3 class="tune-title">RECENTLY PLAYED</h3>
-                    <div class="history-list">
-                        ${pastSongs.map(h => `
-                            <div class="history-item ${h.feedback ? 'history-' + h.feedback : ''}" data-token="${h.trackToken}">
-                                <img class="history-art" src="${h.coverArt || ''}" alt="">
-                                <div class="history-info">
-                                    <span class="history-title">${escapeHtml(h.songTitle)}</span>
-                                    <span class="history-artist">${escapeHtml(h.artistName)}</span>
-                                </div>
-                                <div class="history-feedback">
-                                    ${h.feedback === 'liked' ? '<span class="history-badge history-badge-liked" title="Liked">\ud83d\udc4d</span>' : ''}
-                                    ${h.feedback === 'disliked' ? '<button class="history-undo-btn" title="Undo dislike" data-token="' + h.trackToken + '">Undo \ud83d\udc4e</button>' : ''}
-                                    ${!h.feedback ? '<span class="history-badge">\u2014</span>' : ''}
-                                </div>
-                            </div>
-                        `).join('')}
+                listContent = pastSongs.map(h => `
+                    <div class="history-item ${h.feedback ? 'history-' + h.feedback : ''}" data-token="${h.trackToken}">
+                        <img class="history-art" src="${h.coverArt || ''}" alt="">
+                        <div class="history-info">
+                            <span class="history-title">${escapeHtml(h.songTitle)}</span>
+                            <span class="history-artist">${escapeHtml(h.artistName)}</span>
+                        </div>
+                        <div class="history-feedback">
+                            ${h.feedback === 'liked' ? '<span class="history-badge history-badge-liked" title="Liked">\ud83d\udc4d</span>' : ''}
+                            ${h.feedback === 'disliked' ? '<button class="history-undo-btn" title="Undo dislike" data-token="' + h.trackToken + '">Undo \ud83d\udc4e</button>' : ''}
+                            ${!h.feedback ? '<span class="history-badge">\u2014</span>' : ''}
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                listContent = `
+                    <div class="empty-state" style="padding: 24px 0; min-height: auto;">
+                        <p style="text-align: left; color: rgba(255,255,255,0.7); margin-bottom: 8px;">Songs you've played will appear here.</p>
+                        <p style="text-align: left; color: rgba(255,255,255,0.4); font-size: 13px;">Stores your last 20 tracks.</p>
                     </div>
                 `;
-                histContainer.appendChild(histDiv);
-
-                // Re-attach undo handlers
-                histDiv.querySelectorAll('.history-undo-btn').forEach(btn => {
-                    btn.addEventListener('click', async () => {
-                        const token = btn.dataset.token;
-                        const result = await window.api.player.undoFeedback(token);
-                        if (result && result.success) {
-                            const item = btn.closest('.history-item');
-                            if (item) {
-                                item.classList.remove('history-disliked');
-                                btn.replaceWith(Object.assign(document.createElement('span'), {
-                                    className: 'history-badge',
-                                    textContent: '\u2713 Removed'
-                                }));
-                            }
-                        }
-                    });
-                });
             }
+
+            histDiv.innerHTML = `
+                <h3 class="tune-title">RECENTLY PLAYED</h3>
+                <div class="history-list">
+                    ${listContent}
+                </div>
+            `;
+            histContainer.appendChild(histDiv);
+
+            // Re-attach undo handlers
+            histDiv.querySelectorAll('.history-undo-btn').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const token = btn.dataset.token;
+                    const result = await window.api.player.undoFeedback(token);
+                    if (result && result.success) {
+                        const item = btn.closest('.history-item');
+                        if (item) {
+                            item.classList.remove('history-disliked');
+                            btn.replaceWith(Object.assign(document.createElement('span'), {
+                                className: 'history-badge',
+                                textContent: '\u2713 Removed'
+                            }));
+                        }
+                    }
+                });
+            });
         }
     }
 }
