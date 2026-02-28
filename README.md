@@ -89,7 +89,7 @@ npx electron-packager . PandoraGlass --platform=win32 --arch=x64 --out=dist
 ## Known Issues
 
 *   **Station Tuning Limitations:** The "Tune Your Station" feature is currently a work in progress. You may find that manual mode switching (e.g., Discovery, Artist Only) does not work. Some stations may default to "Artist Only" or "My Station" modes automatically.
-*   **Search Functionality:** The search tab is currently a work in progress. Searching for a specific song may not actually play that specific track, and artist selection is not currently functional.
+*   **Search Functionality:** The search tab is currently a work in progress. Searching for a specific song may not actually play that specific track.
 
 ## Privacy and Security
 
