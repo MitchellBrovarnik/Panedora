@@ -110,7 +110,7 @@ Pandora Glass is designed with user privacy as a priority:
 
 ## License
 
-This project is licensed under the MIT License. See the LICENSE file for details.
+This project is licensed under the CC BY-NC 4.0 License. See the LICENSE file for details.
 
 ## Disclaimer
 
