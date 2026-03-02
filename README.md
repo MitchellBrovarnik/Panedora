@@ -20,7 +20,7 @@ A premium, immersive Pandora desktop client built with Electron. Pandora Glass f
 
 ## Overview
 
-Pandora Glass is designed to provide the absolute best desktop listening experience for Pandora users. By requesting high-quality audio streams (HE-AAC / aacplus) and providing real-time feedback synchronization with your Pandora account, it operates as a fully native, lightweight alternative to browser-based listening.
+Pandora Glass is designed to provide the absolute best desktop listening experience for Pandora users. By providing real-time feedback synchronization with your Pandora account, it operates as a fully native, lightweight alternative to browser-based listening.
 
 ## Key Features
 
