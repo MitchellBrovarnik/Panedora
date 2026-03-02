@@ -7,6 +7,10 @@ const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
+// Disable GPU caching to prevent 'Access is denied' cache_util_win errors on Windows startup
+app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
+app.commandLine.appendSwitch('disable-gpu-disk-cache');
+
 // Debug Logging
 const LOG_FILE = path.join(__dirname, 'debug.log');
 function logToFile(msg) {
@@ -39,6 +43,8 @@ let currentStation = null;
 let currentPlaylist = [];
 let currentTrackIndex = 0;
 let songHistory = []; // Track played songs for history display
+let isMiniPlayer = false;
+let savedBounds = null; // Save window position/size before entering mini mode
 
 // ============================================================================
 // Window Creation
@@ -50,9 +56,9 @@ function createUIWindow() {
         height: 800,
         minWidth: 900,
         minHeight: 600,
-        frame: true,
-        backgroundColor: '#121212',
-        titleBarStyle: 'hiddenInset',
+        frame: false,
+        transparent: true,
+        backgroundColor: '#00000000', // MUST be transparent to allow CSS transparency
         webPreferences: {
             preload: path.join(__dirname, 'preload-ui.js'),
             contextIsolation: true,
@@ -70,6 +76,53 @@ function createUIWindow() {
         uiWindow = null;
     });
 }
+
+// ============================================================================
+// Mini Player Toggle
+// ============================================================================
+
+ipcMain.handle('WINDOW:TOGGLE_MINI', async () => {
+    if (!uiWindow) return { isMini: false };
+
+    isMiniPlayer = !isMiniPlayer;
+
+    if (isMiniPlayer) {
+        // Save current bounds before shrinking
+        savedBounds = uiWindow.getBounds();
+        uiWindow.setMenuBarVisibility(false);
+        uiWindow.setAutoHideMenuBar(true);
+        uiWindow.setMinimumSize(480, 80);
+        uiWindow.setSize(540, 100);
+        // Use 'screen-saver' level to stay on top of fullscreen borderless games
+        uiWindow.setAlwaysOnTop(true, 'screen-saver');
+        uiWindow.setResizable(true); // Let user resize it a bit horizontally if they want
+    } else {
+        // Restore saved bounds
+        uiWindow.setAlwaysOnTop(false);
+        uiWindow.setResizable(true);
+        uiWindow.setMenuBarVisibility(true);
+        uiWindow.setAutoHideMenuBar(false);
+        uiWindow.setMinimumSize(900, 600);
+        if (savedBounds) {
+            uiWindow.setBounds(savedBounds);
+        } else {
+            uiWindow.setSize(1200, 800);
+        }
+    }
+
+    // Notify the renderer about the mode change
+    sendToUI('UI:MINI_MODE', { isMini: isMiniPlayer });
+    return { isMini: isMiniPlayer };
+});
+
+// Window control handlers for custom title bar
+ipcMain.handle('WINDOW:MINIMIZE', () => { if (uiWindow) uiWindow.minimize(); });
+ipcMain.handle('WINDOW:MAXIMIZE', () => {
+    if (!uiWindow) return;
+    if (uiWindow.isMaximized()) uiWindow.unmaximize();
+    else uiWindow.maximize();
+});
+ipcMain.handle('WINDOW:CLOSE', () => { if (uiWindow) uiWindow.close(); });
 
 // ============================================================================
 // Send data to UI
@@ -106,12 +159,18 @@ function sendStations(stations) {
 
 function getCurrentState() {
     const track = currentPlaylist[currentTrackIndex];
+    let currentFeedback = null;
 
-    // Debug: log track data to see audio URL field
     if (track) {
-        console.log('[Main] Track keys:', Object.keys(track));
-        console.log('[Main] Audio URL:', track.audioURL);
-        console.log('[Main] Audio URL Alt:', track.audioUrlMap);
+        // Debug: log track data to see audio URL field
+        // console.log('[Main] Track keys:', Object.keys(track));
+
+        // Find current track in history to get active feedback
+        const histItem = songHistory.find(h => h.trackToken === track.trackToken);
+        if (histItem) {
+            if (histItem.feedback === 'liked') currentFeedback = 'thumbUp';
+            else if (histItem.feedback === 'disliked') currentFeedback = 'thumbDown';
+        }
     }
 
     return {
@@ -126,6 +185,7 @@ function getCurrentState() {
         isPlaying: !!(track?.audioURL), // Auto-play when we have a valid audio URL
         trackToken: track?.trackToken || null,
         audioURL: track?.audioURL || null,
+        feedback: currentFeedback, // Send current feedback to UI
         trackIndex: currentTrackIndex,
         playlistLength: currentPlaylist.length,
         history: songHistory.slice(-20) // Send last 20 played
@@ -191,7 +251,7 @@ async function playStation(stationId, startingAtTrackId = null) {
                 albumTitle: track.albumTitle,
                 coverArt: PandoraAPI.getHighResArt(track.albumArt),
                 trackToken: track.trackToken,
-                feedback: null
+                feedback: track.songRating === 1 ? 'liked' : null
             });
         }
     }
@@ -228,7 +288,7 @@ async function skipTrack() {
             albumTitle: nowTrack.albumTitle,
             coverArt: PandoraAPI.getHighResArt(nowTrack.albumArt),
             trackToken: nowTrack.trackToken,
-            feedback: null // null = no feedback, 'liked', 'disliked'
+            feedback: nowTrack.songRating === 1 ? 'liked' : null // Read existing Pandora thumb up
         });
     }
 
@@ -492,6 +552,51 @@ ipcMain.handle('CONTENT:REMOVE_STATION', async (event, id) => {
         await loadStations();
     }
     return success;
+});
+
+// Fetch lyrics via Node env to bypass CORS
+ipcMain.handle('CONTENT:FETCH_LYRICS', async (event, artist, title) => {
+    try {
+        const getUrl = `https://lrclib.net/api/get?artist_name=${encodeURIComponent(artist)}&track_name=${encodeURIComponent(title)}`;
+        console.log(`[Main] Fetching lyrics from: ${getUrl}`);
+
+        let response = await fetch(getUrl, {
+            headers: { 'User-Agent': 'PandoraGlass/1.0.0 (https://github.com/mitchell/pandora-glass)' }
+        });
+
+        if (response.ok) {
+            const json = await response.json();
+            return { success: true, lyrics: json.syncedLyrics || json.plainLyrics || 'Lyrics not found.' };
+        }
+
+        // Fallback to fuzzy search if exact match fails
+        if (response.status === 404) {
+            const searchUrl = `https://lrclib.net/api/search?q=${encodeURIComponent(artist + ' ' + title)}`;
+            console.log(`[Main] Exact match failed. Falling back to fuzzy search: ${searchUrl}`);
+
+            let searchResponse = await fetch(searchUrl, {
+                headers: { 'User-Agent': 'PandoraGlass/1.0.0 (https://github.com/mitchell/pandora-glass)' }
+            });
+
+            if (searchResponse.ok) {
+                const results = await searchResponse.json();
+                if (results && results.length > 0) {
+                    // Find the best match that actually has lyrics attached
+                    const bestMatch = results.find(r => r.syncedLyrics || r.plainLyrics);
+                    if (bestMatch) {
+                        return { success: true, lyrics: bestMatch.syncedLyrics || bestMatch.plainLyrics };
+                    }
+                }
+            }
+            return { success: false, error: 'Lyrics not found for this track.' };
+        }
+
+        return { success: false, error: `Lyrics service unavailable (Error ${response.status}).` };
+
+    } catch (e) {
+        console.error('[Main] Lyrics fetch error:', e);
+        return { success: false, error: 'Network error while fetching lyrics.' };
+    }
 });
 
 // Get more tracks

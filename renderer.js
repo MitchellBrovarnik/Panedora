@@ -441,7 +441,8 @@ const THEMES = {
             '--accent': '#7c5bf5',
             '--accent-glow': 'rgba(124, 91, 245, 0.3)',
             '--accent-grad': 'linear-gradient(135deg, #6366f1, #a855f7)',
-            '--accent-soft': 'rgba(124, 91, 245, 0.12)'
+            '--accent-soft': 'rgba(124, 91, 245, 0.12)',
+            '--glass': 'rgba(255, 255, 255, 0.045)'
         }
     },
     ocean: {
@@ -455,7 +456,8 @@ const THEMES = {
             '--accent': '#3b82f6',
             '--accent-glow': 'rgba(59, 130, 246, 0.3)',
             '--accent-grad': 'linear-gradient(135deg, #2563eb, #06b6d4)',
-            '--accent-soft': 'rgba(59, 130, 246, 0.12)'
+            '--accent-soft': 'rgba(59, 130, 246, 0.12)',
+            '--glass': 'rgba(255, 255, 255, 0.06)'
         }
     },
     emerald: {
@@ -469,7 +471,8 @@ const THEMES = {
             '--accent': '#10b981',
             '--accent-glow': 'rgba(16, 185, 129, 0.3)',
             '--accent-grad': 'linear-gradient(135deg, #059669, #34d399)',
-            '--accent-soft': 'rgba(16, 185, 129, 0.12)'
+            '--accent-soft': 'rgba(16, 185, 129, 0.12)',
+            '--glass': 'rgba(255, 255, 255, 0.05)'
         }
     },
     sunset: {
@@ -483,7 +486,8 @@ const THEMES = {
             '--accent': '#f97316',
             '--accent-glow': 'rgba(249, 115, 22, 0.3)',
             '--accent-grad': 'linear-gradient(135deg, #ea580c, #fbbf24)',
-            '--accent-soft': 'rgba(249, 115, 22, 0.12)'
+            '--accent-soft': 'rgba(249, 115, 22, 0.12)',
+            '--glass': 'rgba(255, 255, 255, 0.06)'
         }
     },
     rose: {
@@ -497,7 +501,8 @@ const THEMES = {
             '--accent': '#ec4899',
             '--accent-glow': 'rgba(236, 72, 153, 0.3)',
             '--accent-grad': 'linear-gradient(135deg, #db2777, #f472b6)',
-            '--accent-soft': 'rgba(236, 72, 153, 0.12)'
+            '--accent-soft': 'rgba(236, 72, 153, 0.12)',
+            '--glass': 'rgba(255, 255, 255, 0.055)'
         }
     },
     arctic: {
@@ -511,7 +516,8 @@ const THEMES = {
             '--accent': '#67e8f9',
             '--accent-glow': 'rgba(103, 232, 249, 0.3)',
             '--accent-grad': 'linear-gradient(135deg, #06b6d4, #a5f3fc)',
-            '--accent-soft': 'rgba(103, 232, 249, 0.12)'
+            '--accent-soft': 'rgba(103, 232, 249, 0.12)',
+            '--glass': 'rgba(255, 255, 255, 0.08)'
         }
     },
     neon: {
@@ -525,7 +531,8 @@ const THEMES = {
             '--accent': '#22d3ee',
             '--accent-glow': 'rgba(34, 211, 238, 0.3)',
             '--accent-grad': 'linear-gradient(135deg, #8b5cf6, #22d3ee)',
-            '--accent-soft': 'rgba(34, 211, 238, 0.12)'
+            '--accent-soft': 'rgba(34, 211, 238, 0.12)',
+            '--glass': 'rgba(255, 255, 255, 0.08)'
         }
     },
     classic: {
@@ -539,9 +546,39 @@ const THEMES = {
             '--accent': '#1db954',
             '--accent-glow': 'rgba(29, 185, 84, 0.3)',
             '--accent-grad': 'linear-gradient(135deg, #1db954, #1ed760)',
-            '--accent-soft': 'rgba(29, 185, 84, 0.12)'
+            '--accent-soft': 'rgba(29, 185, 84, 0.12)',
+            '--glass': 'rgba(255, 255, 255, 0.07)'
+        }
+    },
+    adaptive: {
+        name: 'Adaptive (Dynamic)',
+        preview: ['#1e1e24', 'linear-gradient(to right, #ff0000, #00ff00, #0000ff)', '#ffffff'],
+        vars: {
+            // These are defaults; they will be overwritten dynamically when a song plays
+            '--bg-base': '#0a0a0a',
+            '--grad-1': '#121212',
+            '--grad-2': '#1a1a1a',
+            '--grad-3': '#161616',
+            '--accent': '#7c5bf5',
+            '--accent-glow': 'rgba(124, 91, 245, 0.4)',
+            '--accent-grad': 'linear-gradient(135deg, #7c5bf5, #000000)',
+            '--accent-soft': 'rgba(124, 91, 245, 0.12)',
+            '--glass': 'rgba(255, 255, 255, 0.07)'
         }
     }
+};
+
+const BG_EFFECTS = {
+    waves: { name: 'Waves', desc: 'Flowing neon lines' },
+    orbs: { name: 'Orbs', desc: 'Floating glowing spheres' },
+    space: { name: 'Space', desc: 'Parallax starfield' },
+    grid: { name: 'Grid', desc: 'Synthwave 3D floor' },
+    particles: { name: 'Particles', desc: 'Falling digital snow' },
+    rings: { name: 'Rings', desc: 'Pulsing concentric circles' },
+    'reactive-bars': { name: 'Reactive (Bars)', desc: 'Frequency visualizer' },
+    'reactive-circle': { name: 'Reactive (Circle)', desc: 'Pulsing equalizer ring' },
+    'reactive-wave': { name: 'Reactive (Wave)', desc: 'Oscilloscope waveform' },
+    static: { name: 'Static', desc: 'Clean gradient only' }
 };
 
 function applyTheme(themeId) {
@@ -559,14 +596,203 @@ function applyTheme(themeId) {
 }
 
 function loadSavedTheme() {
-    const saved = localStorage.getItem('pandora-glass-theme');
-    if (saved && THEMES[saved]) {
-        applyTheme(saved);
+    const savedTheme = localStorage.getItem('pandora-glass-theme');
+    if (savedTheme && THEMES[savedTheme]) {
+        applyTheme(savedTheme);
+    } else {
+        applyTheme('midnight'); // Default fallback
     }
+}
+
+function loadSavedEffect() {
+    const savedEffect = localStorage.getItem('pandora-glass-effect');
+    // Ensure the effect still exists in the registry
+    if (savedEffect && BG_EFFECTS[savedEffect]) {
+        applyBgEffect(savedEffect);
+    } else {
+        applyBgEffect('aurora'); // Default fallback
+    }
+}
+
+// Helper: Extract dominant color from image URL
+async function extractDominantColor(imgSrc) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'Anonymous';
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 50; // Scale down for speed
+            canvas.height = 50;
+            ctx.drawImage(img, 0, 0, 50, 50);
+
+            try {
+                const imageData = ctx.getImageData(0, 0, 50, 50).data;
+                const colors = {};
+                let maxCount = 0;
+                let dominant = [124, 91, 245]; // default purple fallback
+
+                // Skip by 4 (RGBA)
+                for (let i = 0; i < imageData.length; i += 4) {
+                    const r = imageData[i];
+                    const g = imageData[i + 1];
+                    const b = imageData[i + 2];
+
+                    // Ignore colors that are too dark/black or too bright/white
+                    if ((r < 30 && g < 30 && b < 30) || (r > 240 && g > 240 && b > 240)) continue;
+
+                    // Group similar colors by rounding
+                    const rgb = `${Math.round(r / 10) * 10},${Math.round(g / 10) * 10},${Math.round(b / 10) * 10}`;
+                    colors[rgb] = (colors[rgb] || 0) + 1;
+
+                    if (colors[rgb] > maxCount) {
+                        maxCount = colors[rgb];
+                        dominant = [r, g, b];
+                    }
+                }
+
+                // Ensure the color isn't too dark for a neon accent
+                const hsl = rgbToHsl(dominant[0], dominant[1], dominant[2]);
+                if (hsl[2] < 0.4) {
+                    // Boost lightness if it's too dark
+                    const rgb = hslToRgb(hsl[0], hsl[1], 0.5);
+                    dominant = [rgb[0], rgb[1], rgb[2]];
+                }
+
+                resolve(`rgb(${dominant[0]}, ${dominant[1]}, ${dominant[2]})`);
+            } catch (e) {
+                console.error('[UI] Error extracting color:', e);
+                resolve('rgb(124, 91, 245)');
+            }
+        };
+        img.onerror = () => resolve('rgb(124, 91, 245)');
+        img.src = imgSrc;
+    });
+}
+
+function rgbToHsl(r, g, b) {
+    r /= 255, g /= 255, b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h, s, l = (max + min) / 2;
+
+    if (max === min) {
+        h = s = 0; // achromatic
+    } else {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+            case g: h = (b - r) / d + 2; break;
+            case b: h = (r - g) / d + 4; break;
+        }
+        h /= 6;
+    }
+    return [h, s, l];
+}
+
+function hslToRgb(h, s, l) {
+    let r, g, b;
+
+    if (s === 0) {
+        r = g = b = l; // achromatic
+    } else {
+        const hue2rgb = (p, q, t) => {
+            if (t < 0) t += 1;
+            if (t > 1) t -= 1;
+            if (t < 1 / 6) return p + (q - p) * 6 * t;
+            if (t < 1 / 2) return q;
+            if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+            return p;
+        };
+
+        const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+        const p = 2 * l - q;
+        r = hue2rgb(p, q, h + 1 / 3);
+        g = hue2rgb(p, q, h);
+        b = hue2rgb(p, q, h - 1 / 3);
+    }
+    return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+}
+
+function applyBgEffect(effectId) {
+    if (!BG_EFFECTS[effectId]) effectId = 'waves'; // fallback
+
+    document.body.setAttribute('data-bg-effect', effectId);
+    localStorage.setItem('pandora-glass-effect', effectId);
+    AppState.currentEffect = effectId;
+
+    // Stop any physical rendering from the visualizer if we switch away from it
+    if (window.visualizer) {
+        window.visualizer.stop();
+    }
+
+    const container = document.getElementById('bg-effects');
+    if (container) {
+        container.innerHTML = ''; // Keep it clean
+
+        if (effectId === 'waves') {
+            container.innerHTML = `
+                <div class="waves-container">
+                    <svg class="waves" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 24 150 28" preserveAspectRatio="none" shape-rendering="auto">
+                    <defs><path id="gentle-wave" d="M-160 44c30 0 58-18 88-18s 58 18 88 18 58-18 88-18 58 18 88 18 v44h-352z" /></defs>
+                    <g class="parallax-waves">
+                    <use xlink:href="#gentle-wave" x="48" y="0" fill="var(--accent-glow)" />
+                    <use xlink:href="#gentle-wave" x="48" y="3" fill="var(--accent-soft)" />
+                    <use xlink:href="#gentle-wave" x="48" y="5" fill="var(--glass)" />
+                    <use xlink:href="#gentle-wave" x="48" y="7" fill="var(--accent)" opacity="0.4" />
+                    </g></svg>
+                </div>
+            `;
+        } else if (effectId === 'orbs') {
+            container.innerHTML = `
+                <div class="orb orb-1"></div>
+                <div class="orb orb-2"></div>
+                <div class="orb orb-3"></div>
+            `;
+        } else if (effectId === 'space') {
+            container.innerHTML = `
+                <div class="star-layer"></div>
+                <div class="star-layer"></div>
+                <div class="star-layer"></div>
+            `;
+        } else if (effectId === 'grid') {
+            container.innerHTML = `<div class="synth-grid"></div>`;
+        } else if (effectId === 'particles') {
+            let parts = '';
+            for (let i = 0; i < 30; i++) {
+                parts += `<div class="particle" style="left: ${Math.random() * 100}%; animation-delay: ${Math.random() * 5}s; animation-duration: ${4 + Math.random() * 4}s;"></div>`;
+            }
+            container.innerHTML = parts;
+        } else if (effectId === 'rings') {
+            container.innerHTML = `
+                <div class="ring-container">
+                    <div class="ring ring-1"></div>
+                    <div class="ring ring-2"></div>
+                    <div class="ring ring-3"></div>
+                    <div class="ring ring-4"></div>
+                </div>
+            `;
+        } else if (effectId.startsWith('reactive-')) {
+            container.innerHTML = `<canvas id="reactive-canvas" style="width: 100%; height: 100%; position: absolute; top:0; left:0; pointer-events: none; opacity: 0.6; mix-blend-mode: screen;"></canvas>`;
+            const canvas = document.getElementById('reactive-canvas');
+            const styleName = effectId.replace('reactive-', '');
+
+            // Note: window.visualizer.init(audioElement) must be called first 
+            // after user interaction (like clicking play).
+            const activeAudioEl = document.querySelector('audio');
+            if (window.visualizer && activeAudioEl) {
+                window.visualizer.init(activeAudioEl);
+                window.visualizer.start(canvas, styleName);
+            }
+        }
+    }
+
+    console.log(`[UI] Background effect applied: ${effectId}`);
 }
 
 function renderSettingsPage() {
     const currentTheme = AppState.currentTheme || localStorage.getItem('pandora-glass-theme') || 'midnight';
+    const currentEffect = AppState.currentEffect || localStorage.getItem('pandora-glass-effect') || 'aurora';
 
     let themeSwatches = '';
     Object.entries(THEMES).forEach(([id, theme]) => {
@@ -583,20 +809,46 @@ function renderSettingsPage() {
             </button>`;
     });
 
+    let effectButtons = '';
+    Object.entries(BG_EFFECTS).forEach(([id, effect]) => {
+        const isActive = id === currentEffect;
+        effectButtons += `
+            <button class="theme-swatch ${isActive ? 'active' : ''}" data-effect="${id}" title="${effect.desc}" style="height: auto; padding: 16px;">
+                <span class="swatch-label" style="font-size: 14px; font-weight: 600; text-transform: capitalize; margin-bottom: 4px;">${effect.name}</span>
+                <span style="font-size: 12px; color: var(--text-2); display: block; text-align: center;">${effect.desc}</span>
+                ${isActive ? '<span class="swatch-check">\u2713</span>' : ''}
+            </button>`;
+    });
+
     DOM.pageContent.innerHTML = `
-    <div class="fade-in">
+    <div class="fade-in" style="display: flex; flex-direction: column; gap: 32px;">
       <section class="settings-section">
-        <h2 class="section-title">Appearance</h2>
-        <p class="settings-description">Choose a theme to personalize your experience.</p>
+        <h2 class="section-title">Color Theme</h2>
+        <p class="settings-description">Choose a color palette to personalize your experience.</p>
         <div class="theme-grid">${themeSwatches}</div>
+      </section>
+
+      <section class="settings-section">
+        <h2 class="section-title">Background Effects</h2>
+        <p class="settings-description">Make the background feel alive with animated effects.</p>
+        <div class="theme-grid" style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));">${effectButtons}</div>
       </section>
     </div>`;
 
-    // Attach click handlers
-    document.querySelectorAll('.theme-swatch').forEach(btn => {
+    // Attach click handlers for themes
+    document.querySelectorAll('.theme-swatch[data-theme]').forEach(btn => {
         btn.addEventListener('click', () => {
             const themeId = btn.dataset.theme;
             applyTheme(themeId);
+            renderSettingsPage();
+        });
+    });
+
+    // Attach click handlers for effects
+    document.querySelectorAll('.theme-swatch[data-effect]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const effectId = btn.dataset.effect;
+            applyBgEffect(effectId);
             renderSettingsPage();
         });
     });
@@ -651,6 +903,12 @@ function renderNowPlayingPage() {
     <div class="now-playing-page fade-in">
         <button class="back-btn" id="np-back-btn">← Back</button>
         
+        <div class="lyrics-overlay" id="lyrics-overlay">
+            <div class="lyrics-content" id="lyrics-content">
+                <div class="lyrics-loading">Loading lyrics...</div>
+            </div>
+        </div>
+
         <div class="np-content">
             <div class="np-left">
                 <div class="np-artwork">
@@ -745,6 +1003,151 @@ function renderNowPlayingPage() {
     });
 }
 
+// Variables for lyrics state
+let isLyricsMode = false;
+
+async function fetchLyrics(artist, title) {
+    if (!artist || !title) return 'Lyrics not available.';
+
+    // Clean up title (remove "Remastered", "feat.", etc.) to improve API hit rate
+    let cleanTitle = title.split(' (')[0].split(' - ')[0].split(' feat.')[0];
+
+    try {
+        console.log(`[UI] Requesting lyrics via IPC for: ${artist} - ${cleanTitle}`);
+        const result = await window.api.content.fetchLyrics(artist, cleanTitle);
+
+        if (result && result.success) {
+            return result.lyrics;
+        } else {
+            console.warn('[UI] Lyrics fetch returned error:', result?.error);
+            return result?.error || 'Lyrics not found for this track.';
+        }
+    } catch (e) {
+        console.error('[UI] Lyrics IPC fetch error:', e);
+        return 'Internal error while requesting lyrics. Please try again.';
+    }
+}
+
+async function toggleLyrics() {
+    isLyricsMode = !isLyricsMode;
+    const btn = document.getElementById('lyrics-btn');
+    const overlay = document.getElementById('lyrics-overlay');
+    const content = document.getElementById('lyrics-content');
+
+    if (btn) btn.classList.toggle('active', isLyricsMode);
+
+    // If not on Now Playing page, navigate there first
+    if (AppState.currentPage !== 'nowplaying' && isLyricsMode) {
+        renderPage('nowplaying');
+        // Let the DOM update
+        setTimeout(() => toggleLyricsLogic(), 100);
+    } else {
+        toggleLyricsLogic();
+    }
+}
+
+async function toggleLyricsLogic() {
+    const overlay = document.getElementById('lyrics-overlay');
+    const content = document.getElementById('lyrics-content');
+
+    if (!overlay || !content) return;
+
+    if (isLyricsMode) {
+        overlay.classList.add('visible');
+        content.innerHTML = '<div class="lyrics-loading">Loading lyrics...</div>';
+
+        const lyricsText = await fetchLyrics(AppState.playerState.artist, AppState.playerState.track);
+
+        if (lyricsText && !lyricsText.startsWith('Lyrics not')) {
+            renderLyricsHTML(content, lyricsText);
+        } else {
+            content.innerHTML = `<div class="lyrics-error">${escapeHtml(lyricsText)}</div>`;
+        }
+    } else {
+        overlay.classList.remove('visible');
+    }
+}
+
+function renderLyricsHTML(contentElement, lyricsText) {
+    const isLrc = /\[\d{2}:\d{2}\.\d{2,3}\]/.test(lyricsText);
+    const linesHtml = lyricsText.split('\n').map(line => {
+        const text = line.trim();
+        if (!text) return '<br>';
+
+        if (isLrc) {
+            const timeRegex = /\[(\d{2}):(\d{2})\.(\d{2,3})\]/;
+            const match = text.match(timeRegex);
+            if (match) {
+                const mins = parseInt(match[1], 10);
+                const secs = parseInt(match[2], 10);
+                const ms = parseInt(match[3], 10);
+                const timeInSeconds = (mins * 60) + secs + (ms / (match[3].length === 3 ? 1000 : 100));
+                const cleanLyricText = text.replace(timeRegex, '').replace(/\[\d{2}:\d{2}\.\d{2,3}\]/g, '').trim();
+                // Even empty lines should be synced blocks so the timing flows natively
+                const display = cleanLyricText || '♪';
+                return `<div class="lyrics-line" data-time="${timeInSeconds.toFixed(3)}">${escapeHtml(display)}</div>`;
+            }
+        }
+
+        // Fallback for plain text
+        const plainText = text.replace(/\[\d{2}:\d{2}\.\d{2,3}\]/g, '').trim();
+        return plainText ? `<div class="lyrics-line">${escapeHtml(plainText)}</div>` : '<br>';
+    }).join('');
+    contentElement.innerHTML = linesHtml || '<div class="lyrics-error">Lyrics format unsupported.</div>';
+
+    console.log(`[UI] Lyrics parsed. LRC Mode: ${isLrc}`);
+    if (isLrc) {
+        console.log(`[UI] Found ${contentElement.querySelectorAll('.lyrics-line[data-time]').length} synced lines.`);
+    }
+
+    // Re-sync immediately just in case audio is already playing
+    const audioEl = document.querySelector('audio');
+    if (audioEl) syncLyrics(audioEl.currentTime);
+}
+
+function syncLyrics(currentTime) {
+    if (!isLyricsMode) return;
+    const overlay = document.getElementById('lyrics-overlay');
+    const content = document.getElementById('lyrics-content');
+    if (!overlay || !content || !overlay.classList.contains('visible')) return;
+
+    const lines = Array.from(content.querySelectorAll('.lyrics-line[data-time]'));
+    if (lines.length === 0) return;
+
+    const offset = 0.5; // Slight positive offset to preemptively highlight
+    let activeIndex = -1;
+    for (let i = 0; i < lines.length; i++) {
+        // If current time plus offset is past this line's start time, it MIGHT be the active one.
+        // We keep looping to find the LATEST line we've passed.
+        if (parseFloat(lines[i].dataset.time) <= currentTime + offset) {
+            activeIndex = i;
+        } else {
+            break; // Since lines are sequential, once we hit a future line, we stop.
+        }
+    }
+
+    if (activeIndex !== -1) {
+        let changed = false;
+        lines.forEach((line, index) => {
+            const isActive = index === activeIndex;
+            if (line.classList.contains('active') !== isActive) {
+                line.classList.toggle('active', isActive);
+                changed = true;
+            }
+        });
+
+        if (changed) {
+            const activeLine = lines[activeIndex];
+            // Use native scrollIntoView bounded to the center of the scroll container
+            // This is much more reliable than calculating offsetTop manually
+            activeLine.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center'
+            });
+        }
+    }
+}
+
 // ============================================================================
 // Sidebar Station List
 // ============================================================================
@@ -806,6 +1209,25 @@ function renderStationsList() {
 // Player State Updates
 // ============================================================================
 
+// Checks if text overflows its parent and applies marquee scrolling animation
+function checkMarquee(el) {
+    if (!el || !el.parentElement) return;
+    // Reset to measure true width
+    el.classList.remove('marquee');
+    el.style.removeProperty('--marquee-offset');
+    el.style.removeProperty('--marquee-duration');
+
+    const parentWidth = el.parentElement.clientWidth;
+    const textWidth = el.scrollWidth;
+
+    if (textWidth > parentWidth + 2) {
+        const overflow = textWidth - parentWidth;
+        const duration = Math.max(5, overflow / 15); // ~15px/s scroll speed
+        el.style.setProperty('--marquee-offset', `-${overflow + 16}px`);
+        el.style.setProperty('--marquee-duration', `${duration}s`);
+        el.classList.add('marquee');
+    }
+}
 function updatePlayerUI(state) {
     AppState.playerState = { ...AppState.playerState, ...state };
 
@@ -818,6 +1240,27 @@ function updatePlayerUI(state) {
     }
     if (state.coverArt) {
         DOM.nowPlayingArt.src = state.coverArt;
+    }
+
+    // Marquee scroll for overflowing text in mini mode
+    if (state.track || state.artist) {
+        requestAnimationFrame(() => {
+            checkMarquee(DOM.nowPlayingTitle);
+            checkMarquee(DOM.nowPlayingArtist);
+        });
+    }
+
+    // Sync mini thumb button visuals with track feedback state
+    if (state.track !== undefined || AppState.playerState.trackToken) {
+        const miniThumbUp = document.getElementById('mini-thumb-up');
+        const miniThumbDown = document.getElementById('mini-thumb-down');
+        // Check the merged AppState.playerState.feedback so partial updates don't clear the thumbs!
+        if (miniThumbUp) miniThumbUp.classList.toggle('liked', AppState.playerState.feedback === 'thumbUp');
+        if (miniThumbDown) miniThumbDown.classList.toggle('disliked', AppState.playerState.feedback === 'thumbDown');
+
+        // Also sync the main player heart
+        const heartBtn = document.getElementById('heart-btn');
+        if (heartBtn) heartBtn.classList.toggle('liked', AppState.playerState.feedback === 'thumbUp');
     }
 
     // Update play/pause button
@@ -988,6 +1431,14 @@ function initEventListeners() {
         window.api.player.thumbUp();
     });
 
+    // Handle window resizes (like toggling mini player mode) to recalculate scrolling text limits
+    window.addEventListener('resize', debounce(() => {
+        if (AppState.playerState.track || AppState.playerState.artist) {
+            checkMarquee(DOM.nowPlayingTitle);
+            checkMarquee(DOM.nowPlayingArtist);
+        }
+    }, 100));
+
     // Click on now playing section to open Now Playing page
     if (DOM.nowPlayingArt) {
         DOM.nowPlayingArt.addEventListener('click', () => renderPage('nowplaying'));
@@ -1023,10 +1474,78 @@ function initEventListeners() {
     DOM.volumeSlider.addEventListener('input', (e) => {
         const vol = parseInt(e.target.value) / 100;
         window.api.player.setVolume(parseInt(e.target.value));
-        // Also set volume directly on the audio element
+
+        // Let the WebAudio visualizer handle volume so bars stay full height, otherwise fallback to audio element
         const audioEl = document.querySelector('audio');
-        if (audioEl) audioEl.volume = vol;
+        if (window.visualizer && window.visualizer.audioContext) {
+            window.visualizer.setVolume(vol);
+            if (audioEl) audioEl.volume = 1.0; // Ensure node signal isn't attenuated
+        } else {
+            if (audioEl) audioEl.volume = vol;
+        }
     });
+
+    const lyricsBtn = document.getElementById('lyrics-btn');
+    if (lyricsBtn) {
+        lyricsBtn.addEventListener('click', toggleLyrics);
+    }
+
+    const miniPlayerBtn = document.getElementById('mini-player-btn');
+    if (miniPlayerBtn) {
+        miniPlayerBtn.addEventListener('click', () => {
+            window.api.window.toggleMini();
+        });
+    }
+
+    // Custom title bar controls
+    const titleMinBtn = document.getElementById('titlebar-minimize');
+    const titleMaxBtn = document.getElementById('titlebar-maximize');
+    const titleCloseBtn = document.getElementById('titlebar-close');
+    if (titleMinBtn) titleMinBtn.addEventListener('click', () => window.api.window.minimize());
+    if (titleMaxBtn) titleMaxBtn.addEventListener('click', () => window.api.window.maximize());
+    if (titleCloseBtn) titleCloseBtn.addEventListener('click', () => window.api.window.close());
+
+    // Mini player thumb up/down buttons
+    const miniThumbUp = document.getElementById('mini-thumb-up');
+    const miniThumbDown = document.getElementById('mini-thumb-down');
+    if (miniThumbUp) {
+        miniThumbUp.addEventListener('click', async () => {
+            const state = AppState.playerState;
+            if (state.feedback === 'thumbUp' && state.trackToken) {
+                // Already liked — undo it
+                const result = await window.api.player.undoFeedback(state.trackToken);
+                if (result && result.success) {
+                    miniThumbUp.classList.remove('liked');
+                    state.feedback = null;
+                }
+            } else {
+                // Not liked — send thumb up
+                await window.api.player.thumbUp();
+                miniThumbUp.classList.add('liked');
+                miniThumbDown?.classList.remove('disliked');
+                state.feedback = 'thumbUp';
+            }
+        });
+    }
+    if (miniThumbDown) {
+        miniThumbDown.addEventListener('click', async () => {
+            const state = AppState.playerState;
+            if (state.feedback === 'thumbDown' && state.trackToken) {
+                // Already disliked — undo it
+                const result = await window.api.player.undoFeedback(state.trackToken);
+                if (result && result.success) {
+                    miniThumbDown.classList.remove('disliked');
+                    state.feedback = null;
+                }
+            } else {
+                // Not disliked — send thumb down
+                await window.api.player.thumbDown();
+                miniThumbDown.classList.add('disliked');
+                miniThumbUp?.classList.remove('liked');
+                state.feedback = 'thumbDown';
+            }
+        });
+    }
 
     // Progress bar seeking
     DOM.progressBar.addEventListener('click', (e) => {
@@ -1072,6 +1591,9 @@ function initAPIListeners() {
                     DOM.progressFill.style.width = `${progress}%`;
                     DOM.currentTime.textContent = formatTime(currentAudio.currentTime);
                     DOM.totalTime.textContent = formatTime(currentAudio.duration || 0);
+
+                    // Sync lyrics
+                    syncLyrics(currentAudio.currentTime);
                 });
 
                 // Prevent rapid skipping by notifying main process only once per natural end
@@ -1104,6 +1626,17 @@ function initAPIListeners() {
                 currentAudio.src = state.audioURL;
                 currentAudio.play().then(() => {
                     console.log('[UI] Audio play() succeeded!');
+
+                    // Web Audio API requires a user gesture. This is a safe place to init.
+                    if (window.visualizer) {
+                        window.visualizer.init(currentAudio);
+                        // If they have the reactive theme already selected, start it up!
+                        if (AppState.currentEffect && AppState.currentEffect.startsWith('reactive-')) {
+                            const cvs = document.getElementById('reactive-canvas');
+                            const styleName = AppState.currentEffect.replace('reactive-', '');
+                            if (cvs) window.visualizer.start(cvs, styleName);
+                        }
+                    }
                 }).catch(e => console.error('[UI] Play error:', e));
 
                 // Reset feedback buttons on the Now Playing page
@@ -1129,6 +1662,28 @@ function initAPIListeners() {
             largeArt.src = state.coverArt;
         }
 
+        // Handle Adaptive Theme Color Extraction (only trigger once per new cover art)
+        if (AppState.currentTheme === 'adaptive' && state.coverArt && window._lastExtractedArt !== state.coverArt) {
+            window._lastExtractedArt = state.coverArt;
+
+            // we want to use the highest res art for color extraction
+            let highResArt = state.coverArt;
+            if (highResArt.includes('W_500')) {
+                highResArt = highResArt.replace('W_500', 'W_1080').replace('H_500', 'H_1080');
+            }
+
+            extractDominantColor(highResArt).then(domColor => {
+                const root = document.documentElement;
+                root.style.setProperty('--accent', domColor);
+
+                // create a raw RGB version from the domColor rgb(r, g, b) string for rgba injection
+                const rawRgb = domColor.replace('rgb(', '').replace(')', '');
+                root.style.setProperty('--accent-glow', `rgba(${rawRgb}, 0.5)`);
+                root.style.setProperty('--accent-grad', `linear-gradient(135deg, ${domColor}, #000000)`);
+                console.log(`[UI] Adaptive Theme extracted color: ${domColor}`);
+            });
+        }
+
         // Update large text if on Now Playing page
         const largeTitle = document.getElementById('np-large-title');
         if (largeTitle && state.track) largeTitle.textContent = state.track;
@@ -1138,6 +1693,25 @@ function initAPIListeners() {
 
         const largeAlbum = document.getElementById('np-large-album');
         if (largeAlbum && state.album) largeAlbum.textContent = state.album;
+
+        // Auto-refresh lyrics if overlay is open and track changes
+        if (isLyricsMode && state.track && state.artist) {
+            // we debounce this slightly to avoid double-firing during rapid track skips
+            clearTimeout(window._lyricsFetchTimer);
+            window._lyricsFetchTimer = setTimeout(async () => {
+                const overlay = document.getElementById('lyrics-overlay');
+                const content = document.getElementById('lyrics-content');
+                if (overlay && content && overlay.classList.contains('visible')) {
+                    content.innerHTML = '<div class="lyrics-loading">Loading new lyrics...</div>';
+                    const text = await fetchLyrics(state.artist, state.track);
+                    if (text && !text.startsWith('Lyrics not')) {
+                        renderLyricsHTML(content, text);
+                    } else {
+                        content.innerHTML = `<div class="lyrics-error">${escapeHtml(text)}</div>`;
+                    }
+                }
+            }, 800);
+        }
     });
 
     // Collection/stations data
@@ -1205,6 +1779,12 @@ function initAPIListeners() {
             renderPage('home');
         }
     });
+
+    // Mini player mode toggle
+    window.api.onMiniMode((data) => {
+        console.log('[UI] Mini mode changed:', data.isMini);
+        document.body.classList.toggle('mini-mode', data.isMini);
+    });
 }
 
 // ============================================================================
@@ -1214,8 +1794,9 @@ function initAPIListeners() {
 async function init() {
     console.log('[UI] Initializing Pandora Glass...');
 
-    // Restore saved theme before rendering
+    // Restore saved theme and effect before rendering
     loadSavedTheme();
+    loadSavedEffect();
 
     initEventListeners();
     initAPIListeners();

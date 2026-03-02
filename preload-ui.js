@@ -49,7 +49,18 @@ contextBridge.exposeInMainWorld('api', {
         getStations: () => ipcRenderer.invoke('APP:INIT'),
         playItem: (item) => ipcRenderer.invoke('NAV:PLAY_URI', { uri: `${item.type}:${item.id}`, ...item }),
         search: (query) => ipcRenderer.invoke('CONTENT:SEARCH', query),
-        removeStation: (id) => ipcRenderer.invoke('CONTENT:REMOVE_STATION', id)
+        removeStation: (id) => ipcRenderer.invoke('CONTENT:REMOVE_STATION', id),
+        fetchLyrics: (artist, title) => ipcRenderer.invoke('CONTENT:FETCH_LYRICS', artist, title)
+    },
+
+    // ========================================
+    // Window Controls
+    // ========================================
+    window: {
+        toggleMini: () => ipcRenderer.invoke('WINDOW:TOGGLE_MINI'),
+        minimize: () => ipcRenderer.invoke('WINDOW:MINIMIZE'),
+        maximize: () => ipcRenderer.invoke('WINDOW:MAXIMIZE'),
+        close: () => ipcRenderer.invoke('WINDOW:CLOSE')
     },
 
     // ========================================
@@ -83,5 +94,11 @@ contextBridge.exposeInMainWorld('api', {
         const handler = (event, status) => callback(status);
         ipcRenderer.on('UI:LOGIN_STATUS', handler);
         return () => ipcRenderer.removeListener('UI:LOGIN_STATUS', handler);
+    },
+
+    onMiniMode: (callback) => {
+        const handler = (event, data) => callback(data);
+        ipcRenderer.on('UI:MINI_MODE', handler);
+        return () => ipcRenderer.removeListener('UI:MINI_MODE', handler);
     }
 });

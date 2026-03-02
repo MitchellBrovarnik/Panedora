@@ -8,6 +8,16 @@ Pandora Glass is a personal, educational, and experimental project created purel
 
 A premium, immersive Pandora desktop client built with Electron. Pandora Glass features a modern Glassmorphism design system, persistent session management, and an enhanced playback experience that gives you deep control over your music library and station curation.
 
+## Recent Updates
+
+*   **Mini Player Transparency & Contrast:** Rewrote the Mini Player window logic to achieve true OS-level transparency. Introduced localized frosted glass "pill" containers and soft radial gradients behind text and controls to guarantee high contrast against bright desktop backgrounds without losing overall window translucency.
+*   **Always-on-Top Mini Player:** Built a compact, floating Mini Player mode that stays on top of other Windows (even borderless fullscreen games), providing instant access to playback controls, thumbs up/down, and high-res album art without interrupting your workflow.
+*   **Live Lyrics:** Added a comprehensive lyrics fetching system that seamlessly presents synchronized, time-coded lyrics overlaid on the Now Playing screen, complete with scrolling and highlighted active lines.
+*   **Visualizer Overhaul:** Completely reprogrammed the CSS and Canvas audio visualizers (specifically the Reactive Wave and Reactive Circle). Applied heavy math smoothing (25-point rolling averages) and frequency dampening to transform chaotic oscilloscope noise into fluid, breathing visualizers.
+*   **State & Feedback Fixes:** Fixed complex UI bugs where the "Thumb Up" button would randomly clear its state during volume changes, and where the Adaptive Theme color extractor would aggressively flash the screen by re-downloading album art on every partial state update.
+*   **Persistent Preferences:** The application now actively saves and restores your preferred Color Theme and Background Visualizer Effect across launches.
+*   **Startup Stability:** Resolved deep Electron "Access is denied" GPU cache disk errors by configuring specific Chromium command-line switches on boot.
+
 ## Overview
 
 Pandora Glass is designed to provide the absolute best desktop listening experience for Pandora users. By requesting high-quality audio streams (HE-AAC / aacplus) and providing real-time feedback synchronization with your Pandora account, it operates as a fully native, lightweight alternative to browser-based listening.
