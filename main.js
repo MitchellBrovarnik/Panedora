@@ -276,7 +276,7 @@ async function skipTrack() {
         try {
             const result = await api.getPlaylist(currentStation.stationId, false);
             currentPlaylist.push(...(result.tracks || []));
-            if (result.error) sendToUI('UI:ERROR', { message: result.error });
+            // Prefetch errors are silent — tracks may still be buffered ahead
         } finally {
             isLoadingMoreTracks = false;
         }
@@ -644,7 +644,7 @@ ipcMain.handle('PLAYER:GET_MORE_TRACKS', async () => {
     const result = await api.getPlaylist(currentStation.stationId, false);
     const moreTracks = result.tracks || [];
     currentPlaylist.push(...moreTracks);
-    if (result.error) sendToUI('UI:ERROR', { message: result.error });
+    // Background prefetch — errors are silent unless no tracks remain
 
     return {
         tracks: moreTracks.map(t => ({
