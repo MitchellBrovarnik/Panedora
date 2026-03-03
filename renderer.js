@@ -109,8 +109,10 @@ function renderHomePage() {
         <h1 class="welcome-title">Sign in to Pandora</h1>
         <p class="welcome-subtitle">Enter your Pandora credentials to continue.</p>
         <form id="login-form" style="display: flex; flex-direction: column; gap: 12px; max-width: 320px; margin: 24px auto 0;">
+            <label for="login-email" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Email</label>
             <input type="email" id="login-email" placeholder="Email" required
                 style="padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: #fff; font-size: 14px; outline: none;">
+            <label for="login-password" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Password</label>
             <input type="password" id="login-password" placeholder="Password" required
                 style="padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: #fff; font-size: 14px; outline: none;">
             <button type="submit" id="login-submit-btn"
@@ -1785,6 +1787,24 @@ function initAPIListeners() {
         console.log('[UI] Mini mode changed:', data.isMini);
         document.body.classList.toggle('mini-mode', data.isMini);
     });
+
+    window.api.onError((data) => {
+        console.error('[UI] Error from main:', data.message);
+        showErrorToast(data.message);
+    });
+}
+
+function showErrorToast(message) {
+    const toast = document.createElement('div');
+    toast.className = 'error-toast';
+    toast.textContent = message;
+    toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(239,68,68,0.9);color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;z-index:10000;pointer-events:none;opacity:0;transition:opacity 0.3s;';
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => { toast.style.opacity = '1'; });
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
 }
 
 // ============================================================================

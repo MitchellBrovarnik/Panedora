@@ -100,5 +100,11 @@ contextBridge.exposeInMainWorld('api', {
         const handler = (event, data) => callback(data);
         ipcRenderer.on('UI:MINI_MODE', handler);
         return () => ipcRenderer.removeListener('UI:MINI_MODE', handler);
+    },
+
+    onError: (callback) => {
+        const handler = (event, data) => callback(data);
+        ipcRenderer.on('UI:ERROR', handler);
+        return () => ipcRenderer.removeListener('UI:ERROR', handler);
     }
 });

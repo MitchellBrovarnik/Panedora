@@ -94,6 +94,9 @@ class PandoraAPI {
             });
 
             req.on('error', reject);
+            req.setTimeout(30000, () => {
+                req.destroy(new Error('Request timed out'));
+            });
             req.write(postData);
             req.end();
         });
@@ -285,17 +288,20 @@ class PandoraAPI {
                 response = await this._retryAfterSimStreamViolation(payload);
             }
 
-            console.log(`[API] Retrieved ${response.tracks?.length || 0} tracks`);
+            const tracks = response.tracks || [];
+            const error = response.error || null;
+
+            console.log(`[API] Retrieved ${tracks.length} tracks`);
 
             // Debug: log first track to see structure
-            if (response.tracks?.[0]) {
-                const t = response.tracks[0];
+            if (tracks[0]) {
+                const t = tracks[0];
                 console.log('[API] First track:', t.songTitle, '-', t.artistName);
                 console.log('[API] Track mode info: requestedModeId=', t.requestedModeId, 'modeId=', t.modeId);
                 console.log('[API] Audio URL:', t.audioURL ? t.audioURL.substring(0, 80) + '...' : 'MISSING');
             }
 
-            return response.tracks || [];
+            return { tracks, error };
         } catch (error) {
             // Check for SimStreamViolation in error response
             const errorStr = JSON.stringify(error);
@@ -307,14 +313,14 @@ class PandoraAPI {
                         const t = retryResponse.tracks[0];
                         console.log('[API] Retry first track:', t.songTitle, '-', t.artistName);
                     }
-                    return retryResponse.tracks || [];
+                    return { tracks: retryResponse.tracks || [], error: retryResponse.error || null };
                 } catch (retryError) {
                     console.error('[API] All retries failed:', JSON.stringify(retryError));
-                    return [];
+                    return { tracks: [], error: 'Failed to load playlist. Please try again.' };
                 }
             }
             console.error('[API] Failed to get playlist:', errorStr);
-            return [];
+            return { tracks: [], error: 'Failed to load playlist.' };
         }
     }
 
@@ -350,7 +356,7 @@ class PandoraAPI {
         }
 
         console.error('[API] SimStreamViolation persisted after 3 retries');
-        return { tracks: [] };
+        return { tracks: [], error: 'Another device is streaming. Please pause it and try again.' };
     }
 
     /**
