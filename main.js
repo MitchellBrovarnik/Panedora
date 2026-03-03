@@ -258,7 +258,7 @@ async function playStation(stationId, startingAtTrackId = null) {
                 trackToken: track.trackToken,
                 feedback: track.songRating === 1 ? 'liked' : null
             });
-            if (songHistory.length > 200) songHistory.shift();
+            if (songHistory.length > 50) songHistory.shift();
         }
     }
 
