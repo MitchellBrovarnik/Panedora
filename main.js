@@ -248,7 +248,7 @@ async function playStation(stationId, startingAtTrackId = null) {
         const track = currentPlaylist[0];
         api.trackStarted(stationId, track.trackToken);
 
-        // Record first track in history (cap at 200)
+        // Record first track in history (cap at 50)
         if (!songHistory.length || songHistory[songHistory.length - 1].trackToken !== track.trackToken) {
             songHistory.push({
                 songTitle: track.songTitle,
@@ -276,7 +276,7 @@ async function skipTrack() {
         try {
             const result = await api.getPlaylist(currentStation.stationId, false);
             currentPlaylist.push(...(result.tracks || []));
-            if (result.error) sendToUI('UI:ERROR', { message: result.error });
+            // Prefetch errors are silent — tracks may still be buffered ahead
         } finally {
             isLoadingMoreTracks = false;
         }
@@ -296,7 +296,7 @@ async function skipTrack() {
 
     sendPlayerState(getCurrentState());
 
-    // Record in history (skip duplicates, cap at 200)
+    // Record in history (skip duplicates, cap at 50)
     const nowTrack = currentPlaylist[currentTrackIndex];
     if (nowTrack && (!songHistory.length || songHistory[songHistory.length - 1].trackToken !== nowTrack.trackToken)) {
         songHistory.push({
@@ -307,7 +307,7 @@ async function skipTrack() {
             trackToken: nowTrack.trackToken,
             feedback: nowTrack.songRating === 1 ? 'liked' : null
         });
-        if (songHistory.length > 200) songHistory.shift();
+        if (songHistory.length > 50) songHistory.shift();
     }
 
     return getCurrentState();
@@ -644,7 +644,7 @@ ipcMain.handle('PLAYER:GET_MORE_TRACKS', async () => {
     const result = await api.getPlaylist(currentStation.stationId, false);
     const moreTracks = result.tracks || [];
     currentPlaylist.push(...moreTracks);
-    if (result.error) sendToUI('UI:ERROR', { message: result.error });
+    // Background prefetch — errors are silent unless no tracks remain
 
     return {
         tracks: moreTracks.map(t => ({

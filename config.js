@@ -88,10 +88,22 @@ module.exports = {
     getCredentials: () => {
         const creds = getConfig().credentials;
         if (!creds) return null;
-        return {
-            email: creds.email,
-            password: creds.passwordEncrypted ? decryptString(creds.passwordEncrypted) : creds.password || ''
-        };
+
+        if (creds.passwordEncrypted) {
+            return { email: creds.email, password: decryptString(creds.passwordEncrypted) };
+        }
+
+        // Migrate old plain-text "password" field to encrypted format
+        if (creds.password) {
+            const plainPassword = creds.password;
+            setConfig('credentials', {
+                email: creds.email,
+                passwordEncrypted: encryptString(plainPassword)
+            });
+            return { email: creds.email, password: plainPassword };
+        }
+
+        return { email: creds.email, password: '' };
     },
     setCredentials: (email, password) => {
         setConfig('credentials', {
