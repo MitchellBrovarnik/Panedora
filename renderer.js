@@ -4,6 +4,26 @@
  */
 
 // ============================================================================
+// Rate Limiting — prevents spamming Pandora's API with rapid button clicks
+// ============================================================================
+
+const COOLDOWN_MS = 1500;
+const _cooldowns = {};
+
+/**
+ * Returns true if the action is allowed (not on cooldown).
+ * Starts the cooldown timer on first allowed call.
+ */
+function rateLimitOk(action) {
+    const now = Date.now();
+    if (_cooldowns[action] && now - _cooldowns[action] < COOLDOWN_MS) {
+        return false;
+    }
+    _cooldowns[action] = now;
+    return true;
+}
+
+// ============================================================================
 // Application State
 // ============================================================================
 
@@ -949,6 +969,7 @@ function renderNowPlayingPage() {
 
     // Thumb up — toggle liked state & call API or Undo
     document.getElementById('np-thumbup')?.addEventListener('click', function () {
+        if (!rateLimitOk('thumb')) return;
         const isCurrentlyLiked = this.classList.contains('liked');
         const token = AppState.playerState.trackToken;
 
@@ -968,6 +989,7 @@ function renderNowPlayingPage() {
 
     // Thumb down — toggle disliked state & call API or Undo
     document.getElementById('np-thumbdown')?.addEventListener('click', function () {
+        if (!rateLimitOk('thumb')) return;
         const isCurrentlyDisliked = this.classList.contains('disliked');
         const token = AppState.playerState.trackToken;
 
@@ -1427,8 +1449,9 @@ function initEventListeners() {
         }
     });
     // DOM.prevBtn event listener moved down
-    DOM.nextBtn.addEventListener('click', () => window.api.player.next());
+    DOM.nextBtn.addEventListener('click', () => { if (rateLimitOk('skip')) window.api.player.next(); });
     DOM.heartBtn.addEventListener('click', () => {
+        if (!rateLimitOk('thumb')) return;
         DOM.heartBtn.classList.toggle('liked');
         window.api.player.thumbUp();
     });
@@ -1457,6 +1480,7 @@ function initEventListeners() {
 
     // Previous track button logic (Reset audio to 0, or skip to previous track)
     DOM.prevBtn.addEventListener('click', () => {
+        if (!rateLimitOk('prev')) return;
         const audioEl = document.querySelector('audio');
         if (audioEl && audioEl.currentTime > 3) {
             // If more than 3 sec in, restart current track
@@ -1512,6 +1536,7 @@ function initEventListeners() {
     const miniThumbDown = document.getElementById('mini-thumb-down');
     if (miniThumbUp) {
         miniThumbUp.addEventListener('click', async () => {
+            if (!rateLimitOk('thumb')) return;
             const state = AppState.playerState;
             if (state.feedback === 'thumbUp' && state.trackToken) {
                 // Already liked — undo it
@@ -1531,6 +1556,7 @@ function initEventListeners() {
     }
     if (miniThumbDown) {
         miniThumbDown.addEventListener('click', async () => {
+            if (!rateLimitOk('thumb')) return;
             const state = AppState.playerState;
             if (state.feedback === 'thumbDown' && state.trackToken) {
                 // Already disliked — undo it

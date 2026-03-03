@@ -117,6 +117,32 @@ class PandoraAPI {
             });
 
             if (response.authToken) {
+                // Check subscription tier — free-tier users see ads that this client
+                // cannot play, which flags the account. Block them with a clear message.
+                const isFree = response.hasInteractiveAds === true
+                    || response.subscriptionType === 'FREE'
+                    || response.branding === 'pandoraFree';
+                const isPaid = response.isPremiumSubscriber === true
+                    || response.canListen === true
+                    || (response.subscriptionType && response.subscriptionType !== 'FREE');
+
+                console.log('[API] Subscription info:', {
+                    subscriptionType: response.subscriptionType,
+                    hasInteractiveAds: response.hasInteractiveAds,
+                    isPremiumSubscriber: response.isPremiumSubscriber,
+                    branding: response.branding,
+                    canListen: response.canListen
+                });
+
+                if (isFree && !isPaid) {
+                    console.log('[API] Free-tier account detected — blocking login');
+                    this.authToken = null;
+                    return {
+                        success: false,
+                        error: 'Pandora Glass requires a Pandora Premium or Plus subscription. Free-tier accounts are not supported.'
+                    };
+                }
+
                 this.authToken = response.authToken;
                 config.setAuthToken(response.authToken);
                 config.setCredentials(username, password);
@@ -125,7 +151,6 @@ class PandoraAPI {
                     config.setListenerId(response.listenerId);
                 }
 
-                // Log CSRF token status
                 console.log('[API] Login successful');
                 console.log('[API] CSRF token after login:', this.csrfToken ? 'captured' : 'MISSING');
 
@@ -453,6 +478,34 @@ class PandoraAPI {
      */
     isAuthenticated() {
         return this.authToken !== null && this.authToken !== undefined;
+    }
+
+    /**
+     * Verify the current session has a paid subscription.
+     * Returns true if paid, false if free/unknown.
+     */
+    async verifySubscription() {
+        try {
+            const response = await this.request('/v1/user/getSettings', {});
+            console.log('[API] User settings for subscription check:', {
+                subscriptionType: response.subscriptionType,
+                hasInteractiveAds: response.hasInteractiveAds,
+                isPremiumSubscriber: response.isPremiumSubscriber,
+                branding: response.branding
+            });
+
+            const isFree = response.hasInteractiveAds === true
+                || response.subscriptionType === 'FREE'
+                || response.branding === 'pandoraFree';
+            const isPaid = response.isPremiumSubscriber === true
+                || (response.subscriptionType && response.subscriptionType !== 'FREE');
+
+            return !(isFree && !isPaid);
+        } catch (e) {
+            console.error('[API] Subscription check failed:', e?.message || '');
+            // If we can't verify, allow login — better than locking out paying users
+            return true;
+        }
     }
 
     /**

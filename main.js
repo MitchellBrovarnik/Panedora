@@ -359,7 +359,17 @@ ipcMain.handle('APP:INIT', async () => {
 
     // Check if already logged in
     if (api.restoreAuth()) {
-        console.log('[Main] Restored auth, loading stations...');
+        console.log('[Main] Restored auth, verifying subscription...');
+
+        const isPaid = await api.verifySubscription();
+        if (!isPaid) {
+            console.log('[Main] Free-tier account detected on restore — forcing logout');
+            api.logout();
+            sendLoginStatus(false);
+            sendToUI('UI:ERROR', { message: 'Pandora Glass requires a Pandora Premium or Plus subscription.' });
+            return { status: 'needsLogin' };
+        }
+
         sendLoginStatus(true);
         await loadStations();
         return { status: 'authenticated' };
