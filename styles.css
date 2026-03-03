@@ -1457,15 +1457,19 @@ body::before {
 }
 
 .lyrics-line {
-    opacity: 0.5;
-    transition: opacity 0.3s ease, transform 0.3s ease;
+    opacity: 0.4;
+    transition: opacity 0.3s ease, transform 0.3s ease, background 0.3s ease;
     margin-bottom: 12px;
+    padding: 4px 10px;
+    border-radius: 6px;
 }
 
 .lyrics-line.active {
     opacity: 1;
-    color: var(--accent);
+    color: #fff;
+    font-weight: 600;
     transform: scale(1.05);
+    background: var(--accent-soft, rgba(124, 91, 245, 0.12));
     text-shadow: 0 0 12px var(--accent-glow);
 }
 

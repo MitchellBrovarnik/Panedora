@@ -629,6 +629,7 @@ function applyTheme(themeId) {
             r.style.setProperty('--accent', domColor);
             const rawRgb = domColor.replace('rgb(', '').replace(')', '');
             r.style.setProperty('--accent-glow', `rgba(${rawRgb}, 0.5)`);
+            r.style.setProperty('--accent-soft', `rgba(${rawRgb}, 0.15)`);
             r.style.setProperty('--accent-grad', `linear-gradient(135deg, ${domColor}, #000000)`);
             console.log(`[UI] Adaptive color applied to current track: ${domColor}`);
         });
@@ -1728,6 +1729,7 @@ function initAPIListeners() {
                 // create a raw RGB version from the domColor rgb(r, g, b) string for rgba injection
                 const rawRgb = domColor.replace('rgb(', '').replace(')', '');
                 root.style.setProperty('--accent-glow', `rgba(${rawRgb}, 0.5)`);
+                root.style.setProperty('--accent-soft', `rgba(${rawRgb}, 0.15)`);
                 root.style.setProperty('--accent-grad', `linear-gradient(135deg, ${domColor}, #000000)`);
                 console.log(`[UI] Adaptive Theme extracted color: ${domColor}`);
             });
