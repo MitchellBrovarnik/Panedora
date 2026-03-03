@@ -275,15 +275,23 @@ async function skipTrack() {
         isLoadingMoreTracks = true;
         try {
             const result = await api.getPlaylist(currentStation.stationId, false);
-            currentPlaylist.push(...(result.tracks || []));
-            // Prefetch errors are silent — tracks may still be buffered ahead
+            if (result.tracks?.length > 0) {
+                currentPlaylist.push(...result.tracks);
+            } else if (result.error) {
+                // Stream was reclaimed — trim buffer to current track only
+                console.log('[Main] Prefetch failed, trimming buffer:', result.error);
+                currentPlaylist = currentPlaylist.slice(0, currentTrackIndex + 1);
+                sendToUI('UI:ERROR', { message: 'Another device is streaming. Playback will stop after this track.' });
+            }
         } finally {
             isLoadingMoreTracks = false;
         }
     }
 
-    // Bounds check to prevent index-out-of-range from rapid skips
+    // No more tracks — stream was likely reclaimed by another device
     if (currentTrackIndex >= currentPlaylist.length) {
+        console.log('[Main] No more tracks available — stopping playback');
+        sendToUI('UI:ERROR', { message: 'Another device is streaming. Playback stopped.' });
         currentTrackIndex = Math.max(0, currentPlaylist.length - 1);
     }
 
@@ -644,7 +652,10 @@ ipcMain.handle('PLAYER:GET_MORE_TRACKS', async () => {
     const result = await api.getPlaylist(currentStation.stationId, false);
     const moreTracks = result.tracks || [];
     currentPlaylist.push(...moreTracks);
-    // Background prefetch — errors are silent unless no tracks remain
+
+    if (moreTracks.length === 0 && result.error) {
+        sendToUI('UI:ERROR', { message: 'Another device is streaming. Playback will stop after this track.' });
+    }
 
     return {
         tracks: moreTracks.map(t => ({
