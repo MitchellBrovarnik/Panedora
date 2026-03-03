@@ -94,6 +94,9 @@ class PandoraAPI {
             });
 
             req.on('error', reject);
+            req.setTimeout(30000, () => {
+                req.destroy(new Error('Request timed out'));
+            });
             req.write(postData);
             req.end();
         });
@@ -114,6 +117,32 @@ class PandoraAPI {
             });
 
             if (response.authToken) {
+                // Check subscription tier — free-tier users see ads that this client
+                // cannot play, which flags the account. Block them with a clear message.
+                const isFree = response.hasInteractiveAds === true
+                    || response.subscriptionType === 'FREE'
+                    || response.branding === 'pandoraFree';
+                const isPaid = response.isPremiumSubscriber === true
+                    || response.canListen === true
+                    || (response.subscriptionType && response.subscriptionType !== 'FREE');
+
+                console.log('[API] Subscription info:', {
+                    subscriptionType: response.subscriptionType,
+                    hasInteractiveAds: response.hasInteractiveAds,
+                    isPremiumSubscriber: response.isPremiumSubscriber,
+                    branding: response.branding,
+                    canListen: response.canListen
+                });
+
+                if (isFree && !isPaid) {
+                    console.log('[API] Free-tier account detected — blocking login');
+                    this.authToken = null;
+                    return {
+                        success: false,
+                        error: 'Pandora Glass requires a Pandora Premium or Plus subscription. Free-tier accounts are not supported.'
+                    };
+                }
+
                 this.authToken = response.authToken;
                 config.setAuthToken(response.authToken);
                 config.setCredentials(username, password);
@@ -122,7 +151,6 @@ class PandoraAPI {
                     config.setListenerId(response.listenerId);
                 }
 
-                // Log CSRF token status
                 console.log('[API] Login successful');
                 console.log('[API] CSRF token after login:', this.csrfToken ? 'captured' : 'MISSING');
 
@@ -285,17 +313,20 @@ class PandoraAPI {
                 response = await this._retryAfterSimStreamViolation(payload);
             }
 
-            console.log(`[API] Retrieved ${response.tracks?.length || 0} tracks`);
+            const tracks = response.tracks || [];
+            const error = response.error || null;
+
+            console.log(`[API] Retrieved ${tracks.length} tracks`);
 
             // Debug: log first track to see structure
-            if (response.tracks?.[0]) {
-                const t = response.tracks[0];
+            if (tracks[0]) {
+                const t = tracks[0];
                 console.log('[API] First track:', t.songTitle, '-', t.artistName);
                 console.log('[API] Track mode info: requestedModeId=', t.requestedModeId, 'modeId=', t.modeId);
                 console.log('[API] Audio URL:', t.audioURL ? t.audioURL.substring(0, 80) + '...' : 'MISSING');
             }
 
-            return response.tracks || [];
+            return { tracks, error };
         } catch (error) {
             // Check for SimStreamViolation in error response
             const errorStr = JSON.stringify(error);
@@ -307,14 +338,14 @@ class PandoraAPI {
                         const t = retryResponse.tracks[0];
                         console.log('[API] Retry first track:', t.songTitle, '-', t.artistName);
                     }
-                    return retryResponse.tracks || [];
+                    return { tracks: retryResponse.tracks || [], error: retryResponse.error || null };
                 } catch (retryError) {
                     console.error('[API] All retries failed:', JSON.stringify(retryError));
-                    return [];
+                    return { tracks: [], error: 'Failed to load playlist. Please try again.' };
                 }
             }
             console.error('[API] Failed to get playlist:', errorStr);
-            return [];
+            return { tracks: [], error: 'Failed to load playlist.' };
         }
     }
 
@@ -350,7 +381,7 @@ class PandoraAPI {
         }
 
         console.error('[API] SimStreamViolation persisted after 3 retries');
-        return { tracks: [] };
+        return { tracks: [], error: 'Another device is streaming. Please pause it and try again.' };
     }
 
     /**
@@ -447,6 +478,34 @@ class PandoraAPI {
      */
     isAuthenticated() {
         return this.authToken !== null && this.authToken !== undefined;
+    }
+
+    /**
+     * Verify the current session has a paid subscription.
+     * Returns true if paid, false if free/unknown.
+     */
+    async verifySubscription() {
+        try {
+            const response = await this.request('/v1/user/getSettings', {});
+            console.log('[API] User settings for subscription check:', {
+                subscriptionType: response.subscriptionType,
+                hasInteractiveAds: response.hasInteractiveAds,
+                isPremiumSubscriber: response.isPremiumSubscriber,
+                branding: response.branding
+            });
+
+            const isFree = response.hasInteractiveAds === true
+                || response.subscriptionType === 'FREE'
+                || response.branding === 'pandoraFree';
+            const isPaid = response.isPremiumSubscriber === true
+                || (response.subscriptionType && response.subscriptionType !== 'FREE');
+
+            return !(isFree && !isPaid);
+        } catch (e) {
+            console.error('[API] Subscription check failed:', e?.message || '');
+            // If we can't verify, allow login — better than locking out paying users
+            return true;
+        }
     }
 
     /**

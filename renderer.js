@@ -4,6 +4,26 @@
  */
 
 // ============================================================================
+// Rate Limiting — prevents spamming Pandora's API with rapid button clicks
+// ============================================================================
+
+const COOLDOWN_MS = 1500;
+const _cooldowns = {};
+
+/**
+ * Returns true if the action is allowed (not on cooldown).
+ * Starts the cooldown timer on first allowed call.
+ */
+function rateLimitOk(action) {
+    const now = Date.now();
+    if (_cooldowns[action] && now - _cooldowns[action] < COOLDOWN_MS) {
+        return false;
+    }
+    _cooldowns[action] = now;
+    return true;
+}
+
+// ============================================================================
 // Application State
 // ============================================================================
 
@@ -109,8 +129,10 @@ function renderHomePage() {
         <h1 class="welcome-title">Sign in to Pandora</h1>
         <p class="welcome-subtitle">Enter your Pandora credentials to continue.</p>
         <form id="login-form" style="display: flex; flex-direction: column; gap: 12px; max-width: 320px; margin: 24px auto 0;">
+            <label for="login-email" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Email</label>
             <input type="email" id="login-email" placeholder="Email" required
                 style="padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: #fff; font-size: 14px; outline: none;">
+            <label for="login-password" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Password</label>
             <input type="password" id="login-password" placeholder="Password" required
                 style="padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: #fff; font-size: 14px; outline: none;">
             <button type="submit" id="login-submit-btn"
@@ -947,6 +969,7 @@ function renderNowPlayingPage() {
 
     // Thumb up — toggle liked state & call API or Undo
     document.getElementById('np-thumbup')?.addEventListener('click', function () {
+        if (!rateLimitOk('thumb')) return;
         const isCurrentlyLiked = this.classList.contains('liked');
         const token = AppState.playerState.trackToken;
 
@@ -966,6 +989,7 @@ function renderNowPlayingPage() {
 
     // Thumb down — toggle disliked state & call API or Undo
     document.getElementById('np-thumbdown')?.addEventListener('click', function () {
+        if (!rateLimitOk('thumb')) return;
         const isCurrentlyDisliked = this.classList.contains('disliked');
         const token = AppState.playerState.trackToken;
 
@@ -1425,8 +1449,9 @@ function initEventListeners() {
         }
     });
     // DOM.prevBtn event listener moved down
-    DOM.nextBtn.addEventListener('click', () => window.api.player.next());
+    DOM.nextBtn.addEventListener('click', () => { if (rateLimitOk('skip')) window.api.player.next(); });
     DOM.heartBtn.addEventListener('click', () => {
+        if (!rateLimitOk('thumb')) return;
         DOM.heartBtn.classList.toggle('liked');
         window.api.player.thumbUp();
     });
@@ -1455,6 +1480,7 @@ function initEventListeners() {
 
     // Previous track button logic (Reset audio to 0, or skip to previous track)
     DOM.prevBtn.addEventListener('click', () => {
+        if (!rateLimitOk('prev')) return;
         const audioEl = document.querySelector('audio');
         if (audioEl && audioEl.currentTime > 3) {
             // If more than 3 sec in, restart current track
@@ -1510,6 +1536,7 @@ function initEventListeners() {
     const miniThumbDown = document.getElementById('mini-thumb-down');
     if (miniThumbUp) {
         miniThumbUp.addEventListener('click', async () => {
+            if (!rateLimitOk('thumb')) return;
             const state = AppState.playerState;
             if (state.feedback === 'thumbUp' && state.trackToken) {
                 // Already liked — undo it
@@ -1529,6 +1556,7 @@ function initEventListeners() {
     }
     if (miniThumbDown) {
         miniThumbDown.addEventListener('click', async () => {
+            if (!rateLimitOk('thumb')) return;
             const state = AppState.playerState;
             if (state.feedback === 'thumbDown' && state.trackToken) {
                 // Already disliked — undo it
@@ -1785,6 +1813,24 @@ function initAPIListeners() {
         console.log('[UI] Mini mode changed:', data.isMini);
         document.body.classList.toggle('mini-mode', data.isMini);
     });
+
+    window.api.onError((data) => {
+        console.error('[UI] Error from main:', data.message);
+        showErrorToast(data.message);
+    });
+}
+
+function showErrorToast(message) {
+    const toast = document.createElement('div');
+    toast.className = 'error-toast';
+    toast.textContent = message;
+    toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(239,68,68,0.9);color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;z-index:10000;pointer-events:none;opacity:0;transition:opacity 0.3s;';
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => { toast.style.opacity = '1'; });
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
 }
 
 // ============================================================================

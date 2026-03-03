@@ -5,7 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { app } = require('electron');
+const { app, safeStorage } = require('electron');
 
 // Storage file path
 const getConfigPath = () => {
@@ -62,10 +62,43 @@ function setConfig(key, value) {
     writeConfig(config);
 }
 
+// Encrypt a string using Electron's safeStorage (OS keychain)
+function encryptString(str) {
+    if (safeStorage.isEncryptionAvailable()) {
+        return safeStorage.encryptString(str).toString('base64');
+    }
+    return str; // Fallback to plain text
+}
+
+// Decrypt a string using Electron's safeStorage
+function decryptString(str) {
+    if (safeStorage.isEncryptionAvailable()) {
+        try {
+            return safeStorage.decryptString(Buffer.from(str, 'base64'));
+        } catch (e) {
+            // May be plain text from before encryption was enabled
+            return str;
+        }
+    }
+    return str;
+}
+
 module.exports = {
-    // Credentials
-    getCredentials: () => getConfig().credentials,
-    setCredentials: (email, password) => setConfig('credentials', { email, password }),
+    // Credentials (encrypted at rest)
+    getCredentials: () => {
+        const creds = getConfig().credentials;
+        if (!creds) return null;
+        return {
+            email: creds.email,
+            password: creds.passwordEncrypted ? decryptString(creds.passwordEncrypted) : creds.password || ''
+        };
+    },
+    setCredentials: (email, password) => {
+        setConfig('credentials', {
+            email,
+            passwordEncrypted: encryptString(password)
+        });
+    },
     clearCredentials: () => setConfig('credentials', null),
 
     // Auth Token (from login response)

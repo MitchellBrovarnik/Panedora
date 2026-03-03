@@ -45,6 +45,7 @@ let currentTrackIndex = 0;
 let songHistory = []; // Track played songs for history display
 let isMiniPlayer = false;
 let savedBounds = null; // Save window position/size before entering mini mode
+let isLoadingMoreTracks = false;
 
 // ============================================================================
 // Window Creation
@@ -234,7 +235,11 @@ async function playStation(stationId, startingAtTrackId = null) {
     }
 
     currentStation = currentStations.find(s => s.stationId === stationId);
-    currentPlaylist = await api.getPlaylist(stationId, true, startingAtTrackId);
+    const playlistResult = await api.getPlaylist(stationId, true, startingAtTrackId);
+    currentPlaylist = playlistResult.tracks || [];
+    if (playlistResult.error) {
+        sendToUI('UI:ERROR', { message: playlistResult.error });
+    }
 
     currentTrackIndex = 0;
 
@@ -243,7 +248,7 @@ async function playStation(stationId, startingAtTrackId = null) {
         const track = currentPlaylist[0];
         api.trackStarted(stationId, track.trackToken);
 
-        // Record first track in history
+        // Record first track in history (cap at 200)
         if (!songHistory.length || songHistory[songHistory.length - 1].trackToken !== track.trackToken) {
             songHistory.push({
                 songTitle: track.songTitle,
@@ -253,6 +258,7 @@ async function playStation(stationId, startingAtTrackId = null) {
                 trackToken: track.trackToken,
                 feedback: track.songRating === 1 ? 'liked' : null
             });
+            if (songHistory.length > 50) songHistory.shift();
         }
     }
 
@@ -264,10 +270,21 @@ async function skipTrack() {
     console.log('[Main] Skipping track...');
     currentTrackIndex++;
 
-    // Need more tracks?
-    if (currentTrackIndex >= currentPlaylist.length - 1 && currentStation) {
-        const moreTracks = await api.getPlaylist(currentStation.stationId, false);
-        currentPlaylist.push(...moreTracks);
+    // Prefetch when 2 tracks remain to avoid audible gaps
+    if (currentTrackIndex >= currentPlaylist.length - 2 && currentStation && !isLoadingMoreTracks) {
+        isLoadingMoreTracks = true;
+        try {
+            const result = await api.getPlaylist(currentStation.stationId, false);
+            currentPlaylist.push(...(result.tracks || []));
+            if (result.error) sendToUI('UI:ERROR', { message: result.error });
+        } finally {
+            isLoadingMoreTracks = false;
+        }
+    }
+
+    // Bounds check to prevent index-out-of-range from rapid skips
+    if (currentTrackIndex >= currentPlaylist.length) {
+        currentTrackIndex = Math.max(0, currentPlaylist.length - 1);
     }
 
     if (currentTrackIndex < currentPlaylist.length) {
@@ -279,7 +296,7 @@ async function skipTrack() {
 
     sendPlayerState(getCurrentState());
 
-    // Record in history (skip duplicates)
+    // Record in history (skip duplicates, cap at 200)
     const nowTrack = currentPlaylist[currentTrackIndex];
     if (nowTrack && (!songHistory.length || songHistory[songHistory.length - 1].trackToken !== nowTrack.trackToken)) {
         songHistory.push({
@@ -288,8 +305,9 @@ async function skipTrack() {
             albumTitle: nowTrack.albumTitle,
             coverArt: PandoraAPI.getHighResArt(nowTrack.albumArt),
             trackToken: nowTrack.trackToken,
-            feedback: nowTrack.songRating === 1 ? 'liked' : null // Read existing Pandora thumb up
+            feedback: nowTrack.songRating === 1 ? 'liked' : null
         });
+        if (songHistory.length > 200) songHistory.shift();
     }
 
     return getCurrentState();
@@ -341,7 +359,17 @@ ipcMain.handle('APP:INIT', async () => {
 
     // Check if already logged in
     if (api.restoreAuth()) {
-        console.log('[Main] Restored auth, loading stations...');
+        console.log('[Main] Restored auth, verifying subscription...');
+
+        const isPaid = await api.verifySubscription();
+        if (!isPaid) {
+            console.log('[Main] Free-tier account detected on restore — forcing logout');
+            api.logout();
+            sendLoginStatus(false);
+            sendToUI('UI:ERROR', { message: 'Pandora Glass requires a Pandora Premium or Plus subscription.' });
+            return { status: 'needsLogin' };
+        }
+
         sendLoginStatus(true);
         await loadStations();
         return { status: 'authenticated' };
@@ -560,9 +588,14 @@ ipcMain.handle('CONTENT:FETCH_LYRICS', async (event, artist, title) => {
         const getUrl = `https://lrclib.net/api/get?artist_name=${encodeURIComponent(artist)}&track_name=${encodeURIComponent(title)}`;
         console.log(`[Main] Fetching lyrics from: ${getUrl}`);
 
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+
         let response = await fetch(getUrl, {
-            headers: { 'User-Agent': 'PandoraGlass/1.0.0 (https://github.com/mitchell/pandora-glass)' }
+            headers: { 'User-Agent': 'PandoraGlass/1.0.0 (https://github.com/mitchell/pandora-glass)' },
+            signal: controller.signal
         });
+        clearTimeout(timeout);
 
         if (response.ok) {
             const json = await response.json();
@@ -574,9 +607,14 @@ ipcMain.handle('CONTENT:FETCH_LYRICS', async (event, artist, title) => {
             const searchUrl = `https://lrclib.net/api/search?q=${encodeURIComponent(artist + ' ' + title)}`;
             console.log(`[Main] Exact match failed. Falling back to fuzzy search: ${searchUrl}`);
 
+            const searchController = new AbortController();
+            const searchTimeout = setTimeout(() => searchController.abort(), 10000);
+
             let searchResponse = await fetch(searchUrl, {
-                headers: { 'User-Agent': 'PandoraGlass/1.0.0 (https://github.com/mitchell/pandora-glass)' }
+                headers: { 'User-Agent': 'PandoraGlass/1.0.0 (https://github.com/mitchell/pandora-glass)' },
+                signal: searchController.signal
             });
+            clearTimeout(searchTimeout);
 
             if (searchResponse.ok) {
                 const results = await searchResponse.json();
@@ -603,8 +641,10 @@ ipcMain.handle('CONTENT:FETCH_LYRICS', async (event, artist, title) => {
 ipcMain.handle('PLAYER:GET_MORE_TRACKS', async () => {
     if (!currentStation) return { tracks: [] };
 
-    const moreTracks = await api.getPlaylist(currentStation.stationId, false);
+    const result = await api.getPlaylist(currentStation.stationId, false);
+    const moreTracks = result.tracks || [];
     currentPlaylist.push(...moreTracks);
+    if (result.error) sendToUI('UI:ERROR', { message: result.error });
 
     return {
         tracks: moreTracks.map(t => ({
@@ -649,8 +689,12 @@ app.on('window-all-closed', () => {
     }
 });
 
-// Handle certificate errors for development
+// Handle certificate errors for development only
 app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
-    event.preventDefault();
-    callback(true);
+    if (!app.isPackaged) {
+        event.preventDefault();
+        callback(true);
+    } else {
+        callback(false);
+    }
 });
