@@ -121,7 +121,6 @@ function sendLoginStatus(isLoggedIn) {
 }
 
 function sendPlayerState(state) {
-    console.log('[Main] sendPlayerState - track:', state.track, 'audioURL:', state.audioURL ? 'present' : 'MISSING');
     sendToUI('UI:PLAYER_STATE', state);
 }
 
@@ -143,9 +142,6 @@ function getCurrentState() {
     let currentFeedback = null;
 
     if (track) {
-        // Debug: log track data to see audio URL field
-        // console.log('[Main] Track keys:', Object.keys(track));
-
         // Find current track in history to get active feedback
         const histItem = songHistory.find(h => h.trackToken === track.trackToken);
         if (histItem) {
@@ -467,14 +463,11 @@ ipcMain.handle('PLAYER:UNDO_FEEDBACK', async (event, { trackToken }) => {
     return { success: false, error: 'No feedback to undo' };
 });
 
-// Play a station
 // Play a station or item
 ipcMain.handle('NAV:PLAY_URI', async (event, payload) => {
-    console.log('[IPC] NAV:PLAY_URI Payload:', JSON.stringify(payload, null, 2));
+    console.log(`[IPC] NAV:PLAY_URI - ${typeof payload === 'string' ? payload : payload.uri}`);
     let uri = typeof payload === 'string' ? payload : payload.uri;
     const metadata = typeof payload === 'object' ? payload : {};
-
-    console.log(`[IPC] NAV:PLAY_URI - ${uri}`);
 
     // Parse URI: "type:id" or "type:prefix:id"
     const firstColon = uri.indexOf(':');
@@ -548,7 +541,6 @@ ipcMain.handle('NAV:PLAY_URI', async (event, payload) => {
     return { error: 'Unknown URI type' };
 });
 
-// Helper for 'Tune' workaround
 // Search
 ipcMain.handle('CONTENT:SEARCH', async (event, query) => {
     console.log(`[IPC] CONTENT:SEARCH - ${query}`);

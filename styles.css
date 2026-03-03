@@ -1465,29 +1465,7 @@ body::before {
     transform-origin: center center;
 }
 
-/* Settings Menu Preview Wrapper - Small Thumbnail Image */
-.lyrics-preview-container {
-    display: inline-block;
-    margin: 0 auto 12px auto;
-    background: rgba(0, 0, 0, 0.4);
-    border-radius: 6px;
-    padding: 6px 12px;
-    font-weight: 700;
-    font-size: 14px;
-    text-align: center;
-}
 
-.lyrics-preview-container .lyrics-content {
-    padding-bottom: 0 !important;
-    font-size: 14px !important;
-}
-
-.lyrics-preview-container .lyrics-line {
-    margin: 0 !important;
-    width: auto !important;
-    line-height: 1 !important;
-    padding: 0 !important;
-}
 
 .lyrics-line .lyric-text {
     transition: background 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;

@@ -115,8 +115,6 @@ function renderPage(page) {
 }
 
 function renderHomePage() {
-    console.log('[UI] Rendering Home Page');
-    console.trace('renderHomePage called from:');
     if (AppState.isLoading) {
         DOM.pageContent.innerHTML = `
       <div class="welcome-container">
@@ -374,7 +372,7 @@ function renderSearchPage() {
         card.addEventListener('click', () => {
             if (stations[index]) {
                 const s = stations[index];
-                console.log('[UI] Station search click:', JSON.stringify(s));
+
                 // Use playItem with the best available ID for station creation
                 const stationSeed = s.stationId || s.stationFactoryPandoraId || s.pandoraId || s.id;
                 window.api.content.playItem({ ...s, type: 'station', id: stationSeed });
@@ -618,7 +616,7 @@ function applyTheme(themeId) {
 
     localStorage.setItem('pandora-glass-theme', themeId);
     AppState.currentTheme = themeId;
-    console.log(`[UI] Theme applied: ${theme.name}`);
+
 
     // If switching to adaptive while a song is already playing, extract color now
     if (themeId === 'adaptive' && AppState.playerState?.coverArt) {
@@ -635,7 +633,6 @@ function applyTheme(themeId) {
             r.style.setProperty('--accent-glow', `rgba(${rawRgb}, 0.5)`);
             r.style.setProperty('--accent-soft', `rgba(${rawRgb}, 0.15)`);
             r.style.setProperty('--accent-grad', `linear-gradient(135deg, ${domColor}, #000000)`);
-            console.log(`[UI] Adaptive color applied to current track: ${domColor}`);
         });
     }
 }
@@ -864,7 +861,7 @@ function applyBgEffect(effectId) {
         }
     }
 
-    console.log(`[UI] Background effect applied: ${effectId}`);
+
 }
 
 function renderSettingsPage() {
@@ -1126,7 +1123,7 @@ async function fetchLyrics(artist, title) {
     let cleanTitle = title.split(' (')[0].split(' - ')[0].split(' feat.')[0];
 
     try {
-        console.log(`[UI] Requesting lyrics via IPC for: ${artist} - ${cleanTitle}`);
+
         const result = await window.api.content.fetchLyrics(artist, cleanTitle);
 
         if (result && result.success) {
@@ -1693,7 +1690,7 @@ function initAPIListeners() {
         // Audio Playback override
         if (state.audioURL) {
             if (!currentAudio) {
-                console.log('[UI] Creating new Audio instance');
+
                 currentAudio = document.createElement('audio');
                 document.body.appendChild(currentAudio);
 
@@ -1733,12 +1730,10 @@ function initAPIListeners() {
 
             // Only update source and play if the URL actually changed
             if (currentAudio.src !== state.audioURL) {
-                console.log('[UI] Loading new audioURL into existing Audio instance');
-                console.log('[UI] audioURL:', state.audioURL.substring(0, 80) + '...');
-                console.log('[UI] isPlaying:', AppState.playerState.isPlaying);
+                console.log('[UI] Loading new audio source');
                 currentAudio.src = state.audioURL;
                 currentAudio.play().then(() => {
-                    console.log('[UI] Audio play() succeeded!');
+
 
                     // Web Audio API requires a user gesture. This is a safe place to init.
                     if (window.visualizer) {
@@ -1794,7 +1789,7 @@ function initAPIListeners() {
                 root.style.setProperty('--accent-glow', `rgba(${rawRgb}, 0.5)`);
                 root.style.setProperty('--accent-soft', `rgba(${rawRgb}, 0.15)`);
                 root.style.setProperty('--accent-grad', `linear-gradient(135deg, ${domColor}, #000000)`);
-                console.log(`[UI] Adaptive Theme extracted color: ${domColor}`);
+
             });
         }
 
@@ -1848,7 +1843,7 @@ function initAPIListeners() {
 
     // Search results
     window.api.onSearchResults((data) => {
-        console.log('[UI] Received search results:', data);
+
         AppState.searchResults = data;
         if (AppState.currentPage === 'search') {
             renderSearchPage();
@@ -1857,17 +1852,17 @@ function initAPIListeners() {
 
     // Login status updates
     window.api.onLoginStatus((status) => {
-        console.log('[UI] Login status received:', status.isLoggedIn, '(was:', AppState.isLoggedIn, ')');
+
         AppState.isLoggedIn = status.isLoggedIn;
 
         if (status.isLoggedIn) {
             // Successfully logged in — backend will soon send UI:COLLECTION
-            console.log('[UI] User logged in, waiting for collection...');
+
             AppState.isLoading = false;
             renderPage('home');
         } else {
             // Logged out — clear data, pause audio, and show login form
-            console.log('[UI] User logged out, showing login form...');
+
             AppState.isLoading = false;
             AppState.stations = [];
             AppState.playerState = { volume: 50 };
@@ -1896,7 +1891,7 @@ function initAPIListeners() {
 
     // Mini player mode toggle
     window.api.onMiniMode((data) => {
-        console.log('[UI] Mini mode changed:', data.isMini);
+
         document.body.classList.toggle('mini-mode', data.isMini);
     });
 

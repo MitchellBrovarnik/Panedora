@@ -19,7 +19,6 @@ class PandoraAPI {
         if (!this.csrfToken) {
             this.csrfToken = this.generateCsrfToken();
             config.setCsrfToken(this.csrfToken);
-            console.log('[API] Generated new CSRF token');
         }
     }
 
@@ -107,7 +106,6 @@ class PandoraAPI {
                 if (csrfMatch) {
                     this.csrfToken = csrfMatch[1];
                     config.setCsrfToken(this.csrfToken);
-                    console.log('[API] Captured CSRF token');
                 }
             }
 
@@ -161,13 +159,7 @@ class PandoraAPI {
                     || response.canListen === true
                     || (response.subscriptionType && response.subscriptionType !== 'FREE');
 
-                console.log('[API] Subscription info:', {
-                    subscriptionType: response.subscriptionType,
-                    hasInteractiveAds: response.hasInteractiveAds,
-                    isPremiumSubscriber: response.isPremiumSubscriber,
-                    branding: response.branding,
-                    canListen: response.canListen
-                });
+
 
                 if (isFree && !isPaid) {
                     console.log('[API] Free-tier account detected — blocking login');
@@ -187,7 +179,6 @@ class PandoraAPI {
                 }
 
                 console.log('[API] Login successful');
-                console.log('[API] CSRF token after login:', this.csrfToken ? 'captured' : 'MISSING');
 
                 return { success: true, ...response };
             }
@@ -214,8 +205,6 @@ class PandoraAPI {
      */
     async getStations() {
         console.log('[API] Fetching stations...');
-        console.log('[API] Using auth token:', this.authToken ? 'present' : 'missing');
-        console.log('[API] Using CSRF token:', this.csrfToken ? 'present' : 'missing');
 
         try {
             const response = await this.request('/v1/station/getStations', {
@@ -223,11 +212,6 @@ class PandoraAPI {
                 startIndex: 0
             });
 
-            console.log('[API] Stations response:', JSON.stringify(response).substring(0, 500));
-            // Log full details to find modes
-            if (response.stations && response.stations[0]) {
-                console.log('[API] First station details:', JSON.stringify(response.stations[0], null, 2));
-            }
             console.log(`[API] Retrieved ${response.stations?.length || 0} stations`);
             return response.stations || [];
         } catch (error) {
@@ -249,7 +233,7 @@ class PandoraAPI {
         try {
             const response = await this.request('/v1/station/createStation', {
                 musicToken,
-                pandoraId: musicToken // Error suggested this might be needed
+                pandoraId: musicToken
             });
 
             console.log('[API] Station created:', response.stationId);
@@ -260,17 +244,7 @@ class PandoraAPI {
         }
     }
 
-    /**
-     * Signal playback paused - releases the active stream on Pandora's side
-     */
-    async playbackPaused() {
-        try {
-            await this.request('/v1/station/playbackPaused', { sync: false });
-            console.log('[API] Sent playbackPaused signal');
-        } catch (e) {
-            console.log('[API] playbackPaused failed (non-critical):', e?.message || '');
-        }
-    }
+
 
     /**
      * Get available interactive radio modes for a station
@@ -278,7 +252,7 @@ class PandoraAPI {
     async getInteractiveRadioModes(stationId) {
         try {
             const response = await this.request('/v1/station/getInteractiveRadioModes', { stationId });
-            console.log('[API] Interactive radio modes:', JSON.stringify(response));
+
             return response;
         } catch (e) {
             console.log('[API] getInteractiveRadioModes failed:', e?.message || JSON.stringify(e));
@@ -308,17 +282,14 @@ class PandoraAPI {
             previousModeId
         };
 
-        console.log('[API] setInteractiveRadioMode PAYLOAD:', JSON.stringify(payload));
+
 
         try {
             const response = await this.request('/v1/station/setInteractiveRadioMode', payload);
-            console.log('[API] setInteractiveRadioMode SUCCESS:', JSON.stringify(response));
+
             return response;
         } catch (e) {
-            console.error('[API] setInteractiveRadioMode FAILED:', JSON.stringify(e, null, 2));
-            console.error('[API] setInteractiveRadioMode error message:', e?.message);
-            console.error('[API] setInteractiveRadioMode error status:', e?.status);
-            console.error('[API] setInteractiveRadioMode error code:', e?.errorCode);
+            console.error('[API] setInteractiveRadioMode failed:', e?.message || '');
             return null;
         }
     }
@@ -357,13 +328,7 @@ class PandoraAPI {
 
             console.log(`[API] Retrieved ${tracks.length} tracks`);
 
-            // Debug: log first track to see structure
-            if (tracks[0]) {
-                const t = tracks[0];
-                console.log('[API] First track:', t.songTitle, '-', t.artistName);
-                console.log('[API] Track mode info: requestedModeId=', t.requestedModeId, 'modeId=', t.modeId);
-                console.log('[API] Audio URL:', t.audioURL ? t.audioURL.substring(0, 80) + '...' : 'MISSING');
-            }
+
 
             return { tracks, error };
         } catch (error) {
@@ -530,12 +495,7 @@ class PandoraAPI {
     async verifySubscription() {
         try {
             const response = await this.request('/v1/user/getSettings', {});
-            console.log('[API] User settings for subscription check:', {
-                subscriptionType: response.subscriptionType,
-                hasInteractiveAds: response.hasInteractiveAds,
-                isPremiumSubscriber: response.isPremiumSubscriber,
-                branding: response.branding
-            });
+
 
             const isFree = response.hasInteractiveAds === true
                 || response.subscriptionType === 'FREE'
@@ -599,14 +559,13 @@ class PandoraAPI {
                 count: 50  // Request more results to match web
             });
 
-            console.log('[API] Search results keys:', Object.keys(response).join(', '));
-            console.log('[API] Search response sample:', JSON.stringify(response).substring(0, 500));
+
 
             // Parse results into consistent format
             // Check if response has 'items' array (common in some endpoints)
             let items = [];
             if (response.items) {
-                console.log('[API] Search has items array, length:', response.items.length);
+
                 items = response.items;
             } else if (response.tracks || response.artists) {
                 // Fallback to old structure if present
@@ -617,10 +576,7 @@ class PandoraAPI {
                 ];
             }
 
-            if (items.length > 0) {
-                const types = [...new Set(items.map(i => i.type))];
-                console.log('[API] Search item types found:', types);
-            }
+
 
             const results = {
                 songs: items.filter(i => i.type === 'song' || i.type === 'TR' || i.type === 'track').map(t => ({
@@ -652,10 +608,7 @@ class PandoraAPI {
                 }))
             };
 
-            // Log full details for the first station to find modes
-            if (response.stations && response.stations[0]) {
-                console.log('[API] First station details:', JSON.stringify(response.stations[0], null, 2));
-            }
+
 
             console.log(`[API] Found ${results.songs.length} songs, ${results.artists.length} artists, ${results.stations.length} stations`);
             return results;
