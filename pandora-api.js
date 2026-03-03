@@ -39,67 +39,107 @@ class PandoraAPI {
      * Make an API request
      */
     async request(endpoint, data = {}) {
-        return new Promise((resolve, reject) => {
-            const postData = JSON.stringify(data);
+        const { net } = require('electron');
+        const url = `https://${this.baseUrl}${this.apiPath}${endpoint}`;
 
-            const options = {
-                hostname: this.baseUrl,
-                port: 443,
-                path: `${this.apiPath}${endpoint}`,
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Content-Length': Buffer.byteLength(postData),
-                    'X-AuthToken': this.authToken || '',
-                    'X-CsrfToken': this.csrfToken || '',
-                    'Cookie': this.csrfToken ? `csrftoken=${this.csrfToken}` : '',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                }
-            };
+        const headers = {
+            'Content-Type': 'application/json',
+            'X-AuthToken': this.authToken || '',
+            'X-CsrfToken': this.csrfToken || '',
+            'User-Agent': `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${process.versions.chrome} Safari/537.36`,
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Origin': 'https://www.pandora.com',
+            'Referer': 'https://www.pandora.com/',
+            'sec-ch-ua': `"Not_A Brand";v="8", "Chromium";v="${process.versions.chrome.split('.')[0]}", "Google Chrome";v="${process.versions.chrome.split('.')[0]}"`,
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin'
+        };
 
-            const req = https.request(options, (res) => {
-                let body = '';
+        const { session } = require('electron');
+        const cookieSession = session.defaultSession;
 
-                // Capture CSRF token from cookies
-                const cookies = res.headers['set-cookie'];
-                if (cookies) {
-                    console.log('[API] Received cookies:', cookies.map(c => c.substring(0, 50)));
-                    for (const cookie of cookies) {
-                        const csrfMatch = cookie.match(/csrftoken=([^;]+)/);
-                        if (csrfMatch) {
-                            this.csrfToken = csrfMatch[1];
-                            config.setCsrfToken(this.csrfToken);
-                            console.log('[API] Captured CSRF token');
-                        }
-                    }
-                }
-
-                res.on('data', (chunk) => body += chunk);
-                res.on('end', () => {
-                    try {
-                        const json = JSON.parse(body);
-                        if (res.statusCode >= 200 && res.statusCode < 300) {
-                            resolve(json);
-                        } else {
-                            if (res.statusCode === 401 || json.errorCode === 1000) {
-                                console.log('[API] Session expired (401 or Code 1000)');
-                                if (this.onSessionExpired) this.onSessionExpired();
-                            }
-                            reject({ status: res.statusCode, ...json });
-                        }
-                    } catch (e) {
-                        reject({ error: 'Invalid JSON', body, status: res.statusCode });
-                    }
+        // Ensure our CSRF token is in the Chromium cookie jar natively
+        // This prevents duplicate Cookie header collisions and allows Chromium to natively manage
+        // the PerimeterX `_pxhd` cookie without us stripping it.
+        if (this.csrfToken) {
+            try {
+                await cookieSession.cookies.set({
+                    url: 'https://www.pandora.com',
+                    name: 'csrftoken',
+                    value: this.csrfToken,
+                    domain: '.pandora.com',
+                    path: '/',
+                    secure: true
                 });
+            } catch (e) {
+                console.error('[API] Failed to set cookie natively:', e);
+            }
+        }
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000);
+
+        try {
+            // net.fetch routes the request through Chromium's native network stack, 
+            // bypassing WAF blocks that trigger on Node's raw TLS fingerprint.
+            // By omitting the manual "Cookie" header above, we let Chromium seamlessly pass both
+            // our injected csrftoken AND the PerimeterX _pxhd cookie!
+            const response = await net.fetch(url, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(data),
+                signal: controller.signal,
+                credentials: 'include'
             });
 
-            req.on('error', reject);
-            req.setTimeout(30000, () => {
-                req.destroy(new Error('Request timed out'));
-            });
-            req.write(postData);
-            req.end();
-        });
+            clearTimeout(timeout);
+
+            // Capture CSRF token
+            let cookies = [];
+            if (typeof response.headers.getSetCookie === 'function') {
+                cookies = response.headers.getSetCookie();
+            } else {
+                const cookieStr = response.headers.get('set-cookie');
+                if (cookieStr) cookies = [cookieStr];
+            }
+
+            for (const cookie of cookies) {
+                const csrfMatch = cookie.match(/csrftoken=([^;]+)/);
+                if (csrfMatch) {
+                    this.csrfToken = csrfMatch[1];
+                    config.setCsrfToken(this.csrfToken);
+                    console.log('[API] Captured CSRF token');
+                }
+            }
+
+            const bodyText = await response.text();
+            let json;
+            try {
+                json = JSON.parse(bodyText);
+            } catch (e) {
+                throw { error: 'Invalid JSON', body: bodyText, status: response.status };
+            }
+
+            if (response.ok) {
+                return json;
+            } else {
+                if (response.status === 401 || json.errorCode === 1000) {
+                    console.log('[API] Session expired (401 or Code 1000)');
+                    if (this.onSessionExpired) this.onSessionExpired();
+                }
+                throw { status: response.status, ...json };
+            }
+        } catch (error) {
+            clearTimeout(timeout);
+            if (error.name === 'AbortError') {
+                throw { error: 'Request timed out' };
+            }
+            throw error;
+        }
     }
 
     /**

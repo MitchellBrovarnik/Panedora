@@ -86,6 +86,10 @@ function renderPage(page) {
         item.classList.toggle('active', item.dataset.page === page);
     });
 
+    // Reset scroll position to top when navigating to a new view
+    const mainScroll = document.getElementById('main-scroll');
+    if (mainScroll) mainScroll.scrollTop = 0;
+
     // Show/hide search bar
     DOM.searchContainer.style.display = page === 'search' ? 'block' : 'none';
 
@@ -644,7 +648,6 @@ function loadSavedTheme() {
         applyTheme('midnight'); // Default fallback
     }
 }
-
 function loadSavedEffect() {
     const savedEffect = localStorage.getItem('pandora-glass-effect');
     // Ensure the effect still exists in the registry
@@ -652,6 +655,36 @@ function loadSavedEffect() {
         applyBgEffect(savedEffect);
     } else {
         applyBgEffect('aurora'); // Default fallback
+    }
+}
+
+const LYRICS_STYLES = {
+    glow: { name: 'Text Glow', desc: 'Glowing text with no background container' },
+    pill: { name: 'Pill Box', desc: 'Highlight is a tightly padded wrapper' },
+    bar: { name: 'Full Line', desc: 'Highlight spans the entire width of the screen' }
+};
+
+function applyLyricsStyle(styleId) {
+    const style = LYRICS_STYLES[styleId];
+    if (!style) return;
+
+    localStorage.setItem('pandora-glass-lyrics-style', styleId);
+    AppState.currentLyricsStyle = styleId;
+
+    const content = document.getElementById('lyrics-content');
+    if (content) {
+        content.classList.remove('style-glow', 'style-pill', 'style-bar');
+        content.classList.add(`style-${styleId}`);
+    }
+    console.log(`[UI] Lyrics style applied: ${style.name}`);
+}
+
+function loadSavedLyricsStyle() {
+    const savedStyle = localStorage.getItem('pandora-glass-lyrics-style');
+    if (savedStyle && LYRICS_STYLES[savedStyle]) {
+        applyLyricsStyle(savedStyle);
+    } else {
+        applyLyricsStyle('glow'); // Default
     }
 }
 
@@ -864,6 +897,25 @@ function renderSettingsPage() {
             </button>`;
     });
 
+    const currentLyricsStyle = AppState.currentLyricsStyle || localStorage.getItem('pandora-glass-lyrics-style') || 'glow';
+    let lyricsStyleButtons = '';
+    Object.entries(LYRICS_STYLES).forEach(([id, style]) => {
+        const isActive = id === currentLyricsStyle;
+        lyricsStyleButtons += `
+            <button class="theme-swatch ${isActive ? 'active' : ''}" data-lyrics-style="${id}" title="${style.desc}">
+                <div class="swatch-preview" style="background: var(--glass-hover); justify-content: center; align-items: center; border-bottom: 1px solid var(--glass-border);">
+                    <div class="lyrics-content style-${id}" style="width: 100%; height: 100%; padding: 0; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                        <div class="lyrics-line active" style="margin: 0; width: 100%; font-size: 15px; transform: scale(1); opacity: 1; display: flex; justify-content: center;">
+                            <span class="lyric-text" style="display: inline-block;">Sample</span>
+                        </div>
+                    </div>
+                </div>
+                <span class="swatch-label">${style.name}</span>
+                <span style="font-size: 12px; color: var(--text-2); display: block; text-align: left; padding: 0 14px 14px 14px; line-height: 1.4; white-space: normal;">${style.desc}</span>
+                ${isActive ? '<span class="swatch-check">\u2713</span>' : ''}
+            </button>`;
+    });
+
     DOM.pageContent.innerHTML = `
     <div class="fade-in" style="display: flex; flex-direction: column; gap: 32px;">
       <section class="settings-section">
@@ -876,6 +928,12 @@ function renderSettingsPage() {
         <h2 class="section-title">Background Effects</h2>
         <p class="settings-description">Make the background feel alive with animated effects.</p>
         <div class="theme-grid" style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));">${effectButtons}</div>
+      </section>
+
+      <section class="settings-section">
+        <h2 class="section-title">Lyrics Highlight Style</h2>
+        <p class="settings-description">Choose how the currently playing line is highlighted.</p>
+        <div class="theme-grid" style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));">${lyricsStyleButtons}</div>
       </section>
     </div>`;
 
@@ -893,6 +951,15 @@ function renderSettingsPage() {
         btn.addEventListener('click', () => {
             const effectId = btn.dataset.effect;
             applyBgEffect(effectId);
+            renderSettingsPage();
+        });
+    });
+
+    // Attach click handlers for lyrics styles
+    document.querySelectorAll('.theme-swatch[data-lyrics-style]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const styleId = btn.dataset.lyricsStyle;
+            applyLyricsStyle(styleId);
             renderSettingsPage();
         });
     });
@@ -1109,6 +1176,9 @@ async function toggleLyricsLogic() {
         } else {
             content.innerHTML = `<div class="lyrics-error">${escapeHtml(lyricsText)}</div>`;
         }
+
+        // Apply chosen style
+        applyLyricsStyle(AppState.currentLyricsStyle || 'glow');
     } else {
         overlay.classList.remove('visible');
     }
@@ -1131,13 +1201,13 @@ function renderLyricsHTML(contentElement, lyricsText) {
                 const cleanLyricText = text.replace(timeRegex, '').replace(/\[\d{2}:\d{2}\.\d{2,3}\]/g, '').trim();
                 // Even empty lines should be synced blocks so the timing flows natively
                 const display = cleanLyricText || '♪';
-                return `<div class="lyrics-line" data-time="${timeInSeconds.toFixed(3)}">${escapeHtml(display)}</div>`;
+                return `<div class="lyrics-line" data-time="${timeInSeconds.toFixed(3)}"><span class="lyric-text">${escapeHtml(display)}</span></div>`;
             }
         }
 
         // Fallback for plain text
         const plainText = text.replace(/\[\d{2}:\d{2}\.\d{2,3}\]/g, '').trim();
-        return plainText ? `<div class="lyrics-line">${escapeHtml(plainText)}</div>` : '<br>';
+        return plainText ? `<div class="lyrics-line"><span class="lyric-text">${escapeHtml(plainText)}</span></div>` : '<br>';
     }).join('');
     contentElement.innerHTML = linesHtml || '<div class="lyrics-error">Lyrics format unsupported.</div>';
 

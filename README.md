@@ -17,6 +17,8 @@ A premium, immersive Pandora desktop client built with Electron. Pandora Glass f
 *   **State & Feedback Fixes:** Fixed complex UI bugs where the "Thumb Up" button would randomly clear its state during volume changes, and where the Adaptive Theme color extractor would aggressively flash the screen by re-downloading album art on every partial state update.
 *   **Persistent Preferences:** The application now actively saves and restores your preferred Color Theme and Background Visualizer Effect across launches.
 *   **Startup Stability:** Resolved deep Electron "Access is denied" GPU cache disk errors by configuring specific Chromium command-line switches on boot.
+*   **Dynamic WAF Evasion:** Replaced static Chromium strings in API headers with dynamically injected `process.versions.chrome` arguments to reliably bypass PerimeterX and other WAF fingerprinting updates.
+*   **UI Polish:** Hardened CSS layout dimensions for Lyrics Settings previews, rebuilt DOM inheritance to fix width overflowing, tightened highlight box borders, and resolved a global scrolling bug between application views.
 
 ## Overview
 
