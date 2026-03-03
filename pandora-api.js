@@ -291,7 +291,7 @@ class PandoraAPI {
     /**
      * Get playlist tracks for a station
      */
-    async getPlaylist(stationId, isStationStart = false, startingAtTrackId = null) {
+    async getPlaylist(stationId, isStationStart = false, startingAtTrackId = null, { skipRetry = false } = {}) {
         console.log(`[API] Fetching playlist for station ${stationId} (StartTrack: ${startingAtTrackId || 'none'})...`);
 
         try {
@@ -309,6 +309,10 @@ class PandoraAPI {
 
             // Check for SimStreamViolation (another device is streaming) - success path
             if (response.tracks?.length > 0 && response.tracks[0].trackType === 'SimStreamViolation') {
+                if (skipRetry) {
+                    console.log('[API] SimStreamViolation detected (fast-fail, no retry)');
+                    return { tracks: [], error: 'Another device is streaming.' };
+                }
                 console.log('[API] SimStreamViolation detected - another stream active, retrying...');
                 response = await this._retryAfterSimStreamViolation(payload);
             }
@@ -331,6 +335,10 @@ class PandoraAPI {
             // Check for SimStreamViolation in error response
             const errorStr = JSON.stringify(error);
             if (errorStr.includes('SimStreamViolation')) {
+                if (skipRetry) {
+                    console.log('[API] SimStreamViolation in error (fast-fail, no retry)');
+                    return { tracks: [], error: 'Another device is streaming.' };
+                }
                 console.log('[API] SimStreamViolation in error - retrying...');
                 try {
                     const retryResponse = await this._retryAfterSimStreamViolation(payload);
