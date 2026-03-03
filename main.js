@@ -46,6 +46,7 @@ let songHistory = []; // Track played songs for history display
 let isMiniPlayer = false;
 let savedBounds = null; // Save window position/size before entering mini mode
 let isLoadingMoreTracks = false;
+let streamReclaimed = false;
 
 // ============================================================================
 // Window Creation
@@ -235,6 +236,7 @@ async function playStation(stationId, startingAtTrackId = null) {
     }
 
     currentStation = currentStations.find(s => s.stationId === stationId);
+    streamReclaimed = false;
     const playlistResult = await api.getPlaylist(stationId, true, startingAtTrackId);
     currentPlaylist = playlistResult.tracks || [];
     if (playlistResult.error) {
@@ -268,29 +270,38 @@ async function playStation(stationId, startingAtTrackId = null) {
 
 async function skipTrack() {
     console.log('[Main] Skipping track...');
+
+    // If stream was already reclaimed, block the skip immediately
+    if (streamReclaimed) {
+        console.log('[Main] Skip blocked — stream reclaimed by another device');
+        sendToUI('UI:ERROR', { message: 'Another device is streaming. Playback stopped.' });
+        return getCurrentState();
+    }
+
     currentTrackIndex++;
 
-    // Prefetch when 2 tracks remain to avoid audible gaps
+    // Prefetch when 2 tracks remain (fast-fail — no 12s retry for background fetches)
     if (currentTrackIndex >= currentPlaylist.length - 2 && currentStation && !isLoadingMoreTracks) {
         isLoadingMoreTracks = true;
         try {
-            const result = await api.getPlaylist(currentStation.stationId, false);
+            const result = await api.getPlaylist(currentStation.stationId, false, null, { skipRetry: true });
             if (result.tracks?.length > 0) {
                 currentPlaylist.push(...result.tracks);
             } else if (result.error) {
-                // Stream was reclaimed — trim buffer to current track only
-                console.log('[Main] Prefetch failed, trimming buffer:', result.error);
+                // Stream was reclaimed — trim buffer and flag it
+                console.log('[Main] Stream reclaimed, trimming buffer:', result.error);
+                streamReclaimed = true;
                 currentPlaylist = currentPlaylist.slice(0, currentTrackIndex + 1);
-                sendToUI('UI:ERROR', { message: 'Another device is streaming. Playback will stop after this track.' });
             }
         } finally {
             isLoadingMoreTracks = false;
         }
     }
 
-    // No more tracks — stream was likely reclaimed by another device
+    // No more tracks left
     if (currentTrackIndex >= currentPlaylist.length) {
         console.log('[Main] No more tracks available — stopping playback');
+        streamReclaimed = true;
         sendToUI('UI:ERROR', { message: 'Another device is streaming. Playback stopped.' });
         currentTrackIndex = Math.max(0, currentPlaylist.length - 1);
     }
@@ -649,12 +660,12 @@ ipcMain.handle('CONTENT:FETCH_LYRICS', async (event, artist, title) => {
 ipcMain.handle('PLAYER:GET_MORE_TRACKS', async () => {
     if (!currentStation) return { tracks: [] };
 
-    const result = await api.getPlaylist(currentStation.stationId, false);
+    const result = await api.getPlaylist(currentStation.stationId, false, null, { skipRetry: true });
     const moreTracks = result.tracks || [];
     currentPlaylist.push(...moreTracks);
 
     if (moreTracks.length === 0 && result.error) {
-        sendToUI('UI:ERROR', { message: 'Another device is streaming. Playback will stop after this track.' });
+        streamReclaimed = true;
     }
 
     return {
