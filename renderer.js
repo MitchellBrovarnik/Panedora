@@ -615,6 +615,24 @@ function applyTheme(themeId) {
     localStorage.setItem('pandora-glass-theme', themeId);
     AppState.currentTheme = themeId;
     console.log(`[UI] Theme applied: ${theme.name}`);
+
+    // If switching to adaptive while a song is already playing, extract color now
+    if (themeId === 'adaptive' && AppState.playerState?.coverArt) {
+        window._lastExtractedArt = null; // reset so extraction runs
+        let highResArt = AppState.playerState.coverArt;
+        if (highResArt.includes('W_500')) {
+            highResArt = highResArt.replace('W_500', 'W_1080').replace('H_500', 'H_1080');
+        }
+        extractDominantColor(highResArt).then(domColor => {
+            window._lastExtractedArt = AppState.playerState.coverArt;
+            const r = document.documentElement;
+            r.style.setProperty('--accent', domColor);
+            const rawRgb = domColor.replace('rgb(', '').replace(')', '');
+            r.style.setProperty('--accent-glow', `rgba(${rawRgb}, 0.5)`);
+            r.style.setProperty('--accent-grad', `linear-gradient(135deg, ${domColor}, #000000)`);
+            console.log(`[UI] Adaptive color applied to current track: ${domColor}`);
+        });
+    }
 }
 
 function loadSavedTheme() {
@@ -673,11 +691,14 @@ async function extractDominantColor(imgSrc) {
                     }
                 }
 
-                // Ensure the color isn't too dark for a neon accent
+                // Ensure the color isn't too dark or too light for an accent
                 const hsl = rgbToHsl(dominant[0], dominant[1], dominant[2]);
                 if (hsl[2] < 0.4) {
-                    // Boost lightness if it's too dark
                     const rgb = hslToRgb(hsl[0], hsl[1], 0.5);
+                    dominant = [rgb[0], rgb[1], rgb[2]];
+                } else if (hsl[2] > 0.75) {
+                    // Cap lightness so accent is never washed-out white/grey
+                    const rgb = hslToRgb(hsl[0], Math.max(hsl[1], 0.5), 0.65);
                     dominant = [rgb[0], rgb[1], rgb[2]];
                 }
 

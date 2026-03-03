@@ -1466,6 +1466,7 @@ body::before {
     opacity: 1;
     color: var(--accent);
     transform: scale(1.05);
+    text-shadow: 0 0 12px var(--accent-glow);
 }
 
 .lyrics-overlay::-webkit-scrollbar {
