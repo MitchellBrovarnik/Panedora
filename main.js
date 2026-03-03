@@ -248,7 +248,7 @@ async function playStation(stationId, startingAtTrackId = null) {
         const track = currentPlaylist[0];
         api.trackStarted(stationId, track.trackToken);
 
-        // Record first track in history (cap at 200)
+        // Record first track in history (cap at 50)
         if (!songHistory.length || songHistory[songHistory.length - 1].trackToken !== track.trackToken) {
             songHistory.push({
                 songTitle: track.songTitle,
@@ -296,7 +296,7 @@ async function skipTrack() {
 
     sendPlayerState(getCurrentState());
 
-    // Record in history (skip duplicates, cap at 200)
+    // Record in history (skip duplicates, cap at 50)
     const nowTrack = currentPlaylist[currentTrackIndex];
     if (nowTrack && (!songHistory.length || songHistory[songHistory.length - 1].trackToken !== nowTrack.trackToken)) {
         songHistory.push({
@@ -307,7 +307,7 @@ async function skipTrack() {
             trackToken: nowTrack.trackToken,
             feedback: nowTrack.songRating === 1 ? 'liked' : null
         });
-        if (songHistory.length > 200) songHistory.shift();
+        if (songHistory.length > 50) songHistory.shift();
     }
 
     return getCurrentState();
