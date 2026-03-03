@@ -27,12 +27,7 @@ class PandoraAPI {
      * Generate a random CSRF token
      */
     generateCsrfToken() {
-        const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-        let token = '';
-        for (let i = 0; i < 16; i++) {
-            token += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        return token;
+        return require('crypto').randomBytes(16).toString('hex');
     }
 
     /**
@@ -563,34 +558,6 @@ class PandoraAPI {
         this.authToken = config.getAuthToken();
         this.csrfToken = config.getCsrfToken();
         return this.isAuthenticated();
-    }
-
-    /**
-     * Logout - clear stored auth
-     */
-    /**
-     * Transform station (change mode)
-     * Experimental: This is the likely endpoint for station modes
-     */
-    async transformStation(stationId, type) {
-        console.log(`[API] Transforming station ${stationId} to mode: ${type}`);
-        // Map UI modes to API types if needed
-        // Common types: "crowd_faves", "discovery", "deep_cuts", "artist_only", "newly_released"
-        // Sometimes just the string is enough
-
-        try {
-            const response = await this.request('/v1/station/transform', {
-                stationToken: stationId,
-                stationCode: stationId, // Error suggested this might be needed
-                type: type // e.g., 'crowd_faves'
-            });
-            console.log('[API] Station transform successful:', response);
-            return response;
-        } catch (error) {
-            console.error('[API] Station transform failed:', JSON.stringify(error, null, 2));
-            // Fallback: maybe just return true to proceed with reload if it's a soft failure
-            return null;
-        }
     }
 
     /**

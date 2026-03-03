@@ -5,32 +5,11 @@
 
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
-const fs = require('fs');
 
 // Disable GPU caching to prevent 'Access is denied' cache_util_win errors on Windows startup
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 app.commandLine.appendSwitch('disable-gpu-disk-cache');
 
-// Debug Logging
-const LOG_FILE = path.join(__dirname, 'debug.log');
-function logToFile(msg) {
-    try {
-        const timestamp = new Date().toISOString();
-        fs.appendFileSync(LOG_FILE, `[${timestamp}] ${msg}\n`);
-    } catch (e) {
-        // ignore
-    }
-}
-const originalLog = console.log;
-console.log = function (...args) {
-    originalLog.apply(console, args);
-    logToFile(args.join(' '));
-};
-const originalError = console.error;
-console.error = function (...args) {
-    originalError.apply(console, args);
-    logToFile('[ERROR] ' + args.join(' '));
-};
 const PandoraAPI = require('./pandora-api');
 const config = require('./config');
 
@@ -302,8 +281,13 @@ async function skipTrack() {
     if (currentTrackIndex >= currentPlaylist.length) {
         console.log('[Main] No more tracks available — stopping playback');
         streamReclaimed = true;
+        if (currentPlaylist.length === 0) {
+            currentTrackIndex = 0;
+            sendToUI('UI:ERROR', { message: 'No tracks available.' });
+            return getCurrentState();
+        }
         sendToUI('UI:ERROR', { message: 'Another device is streaming. Playback stopped.' });
-        currentTrackIndex = Math.max(0, currentPlaylist.length - 1);
+        currentTrackIndex = currentPlaylist.length - 1;
     }
 
     if (currentTrackIndex < currentPlaylist.length) {
@@ -375,24 +359,29 @@ async function thumbDown() {
 // Initialize app
 ipcMain.handle('APP:INIT', async () => {
     console.log('[IPC] APP:INIT');
+    try {
+        // Check if already logged in
+        if (api.restoreAuth()) {
+            console.log('[Main] Restored auth, verifying subscription...');
 
-    // Check if already logged in
-    if (api.restoreAuth()) {
-        console.log('[Main] Restored auth, verifying subscription...');
+            const isPaid = await api.verifySubscription();
+            if (!isPaid) {
+                console.log('[Main] Free-tier account detected on restore — forcing logout');
+                api.logout();
+                sendLoginStatus(false);
+                sendToUI('UI:ERROR', { message: 'Pandora Glass requires a Pandora Premium or Plus subscription.' });
+                return { status: 'needsLogin' };
+            }
 
-        const isPaid = await api.verifySubscription();
-        if (!isPaid) {
-            console.log('[Main] Free-tier account detected on restore — forcing logout');
-            api.logout();
+            sendLoginStatus(true);
+            await loadStations();
+            return { status: 'authenticated' };
+        } else {
             sendLoginStatus(false);
-            sendToUI('UI:ERROR', { message: 'Pandora Glass requires a Pandora Premium or Plus subscription.' });
             return { status: 'needsLogin' };
         }
-
-        sendLoginStatus(true);
-        await loadStations();
-        return { status: 'authenticated' };
-    } else {
+    } catch (err) {
+        console.error('[Main] APP:INIT error:', err);
         sendLoginStatus(false);
         return { status: 'needsLogin' };
     }
@@ -401,20 +390,28 @@ ipcMain.handle('APP:INIT', async () => {
 // Login
 ipcMain.handle('AUTH:LOGIN', async (event, { username, password }) => {
     console.log('[IPC] AUTH:LOGIN');
-    return await login(username, password);
+    try {
+        return await login(username, password);
+    } catch (err) {
+        console.error('[Main] AUTH:LOGIN error:', err);
+        return { error: 'Login failed. Please try again.' };
+    }
 });
 
 // Logout
 ipcMain.handle('AUTH:LOGOUT', async () => {
     console.log('[IPC] AUTH:LOGOUT');
+    try {
+        // Tell Pandora to stop the stream for this session so it doesn't hang
+        const track = currentPlaylist[currentTrackIndex];
+        if (currentStation && track && track.trackToken) {
+            await api.playbackPaused(currentStation.stationId, track.trackToken);
+        }
 
-    // Tell Pandora to stop the stream for this session so it doesn't hang
-    const track = currentPlaylist[currentTrackIndex];
-    if (currentStation && track && track.trackToken) {
-        await api.playbackPaused(currentStation.stationId, track.trackToken);
+        api.logout();
+    } catch (err) {
+        console.error('[Main] AUTH:LOGOUT error:', err);
     }
-
-    api.logout();
 
     // Clear playback state
     currentPlaylist = [];
@@ -552,36 +549,6 @@ ipcMain.handle('NAV:PLAY_URI', async (event, payload) => {
 });
 
 // Helper for 'Tune' workaround
-function filterPlaylist(playlist, modeId, station) {
-    if (!modeId || modeId === 'default' || !playlist.length) return playlist;
-
-    console.log(`[Main] Workaround: Filtering playlist for mode ${modeId}`);
-
-    if (modeId === 'artist_only') {
-        // Try to guess station artist
-        let targetArtist = null;
-        if (station.name.endsWith(' Radio')) {
-            targetArtist = station.name.replace(' Radio', '');
-        }
-
-        if (targetArtist) {
-            console.log(`[Main] Filtering for artist: "${targetArtist}"`);
-            const filtered = playlist.filter(track => {
-                // Fuzzy match artist name
-                return track.artistName && track.artistName.toLowerCase().includes(targetArtist.toLowerCase());
-            });
-
-            if (filtered.length > 0) {
-                console.log(`[Main] Filtered ${playlist.length} -> ${filtered.length} tracks`);
-                return filtered;
-            }
-            console.log('[Main] Filter returned 0 tracks, reverting to original');
-        }
-    }
-
-    return playlist;
-}
-
 // Search
 ipcMain.handle('CONTENT:SEARCH', async (event, query) => {
     console.log(`[IPC] CONTENT:SEARCH - ${query}`);

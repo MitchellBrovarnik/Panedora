@@ -654,7 +654,7 @@ function loadSavedEffect() {
     if (savedEffect && BG_EFFECTS[savedEffect]) {
         applyBgEffect(savedEffect);
     } else {
-        applyBgEffect('aurora'); // Default fallback
+        applyBgEffect('waves'); // Default fallback
     }
 }
 
@@ -1396,13 +1396,6 @@ function updatePlayerUI(state) {
         DOM.totalTime.textContent = formatTime(state.duration);
     }
 
-    // Update shuffle/repeat
-    if (state.shuffle !== undefined) {
-        DOM.shuffleBtn.classList.toggle('active', state.shuffle);
-    }
-    if (state.repeat !== undefined) {
-        DOM.repeatBtn.classList.toggle('active', state.repeat);
-    }
 
     // Live-update the history section if the Now Playing page is visible
     if (state.history && document.querySelector('.np-history') || (state.history && document.querySelector('.np-right'))) {
