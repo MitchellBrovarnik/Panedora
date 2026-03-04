@@ -93,6 +93,15 @@ function renderPage(page) {
     // Show/hide search bar
     DOM.searchContainer.style.display = page === 'search' ? 'block' : 'none';
 
+    // Hide lyrics when leaving Now Playing page
+    if (page !== 'nowplaying') {
+        isLyricsMode = false;
+        const lyricsBtn = document.getElementById('lyrics-btn');
+        const lyricsOverlay = document.getElementById('lyrics-overlay');
+        if (lyricsBtn) lyricsBtn.classList.remove('active');
+        if (lyricsOverlay) lyricsOverlay.classList.remove('visible');
+    }
+
     switch (page) {
         case 'home':
             renderHomePage();
@@ -1007,12 +1016,6 @@ function renderNowPlayingPage() {
     DOM.pageContent.innerHTML = `
     <div class="now-playing-page fade-in">
         <button class="back-btn" id="np-back-btn">← Back</button>
-        
-        <div class="lyrics-overlay" id="lyrics-overlay">
-            <div class="lyrics-content" id="lyrics-content">
-                <div class="lyrics-loading">Loading lyrics...</div>
-            </div>
-        </div>
 
         <div class="np-content">
             <div class="np-left">

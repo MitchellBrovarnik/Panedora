@@ -858,6 +858,7 @@ body::before {
     flex: 1;
     overflow-y: auto;
     padding: 24px 28px;
+    position: relative;
 }
 
 /* ============================================================================
@@ -1424,16 +1425,14 @@ body::before {
     left: 0;
     right: 0;
     bottom: 0;
-    /* Use a softer background to let the blurred album art shine through */
-    background: rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     z-index: 20;
     display: flex;
     flex-direction: column;
     align-items: center;
-    /* Use percentage padding for a responsive full-bleed feel */
-    padding: 8vh 5vw;
+    padding: 60px 40px;
     overflow-y: auto;
     opacity: 0;
     pointer-events: none;
@@ -1446,19 +1445,15 @@ body::before {
 }
 
 .lyrics-content {
-    /* Remove rigid 600px max width so text can flow freely */
-    width: 100%;
-    max-width: 1600px;
-    font-size: 28px;
-    /* Slightly larger for the bigger canvas */
+    max-width: 600px;
+    font-size: 24px;
     font-weight: 700;
     line-height: 1.6;
     letter-spacing: -0.02em;
     text-align: center;
     color: rgba(255, 255, 255, 0.9);
     white-space: pre-wrap;
-    /* Giant bottom padding ensures the last lyric line can scroll to the absolute top of the screen */
-    padding-bottom: 70vh;
+    padding-bottom: 200px;
     transition: transform 0.3s ease;
 }
 
@@ -1511,11 +1506,9 @@ body::before {
 .lyrics-content.style-pill .lyrics-line.active {
     color: #fff;
     transform: scale(1.05);
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid var(--accent-glow);
+    text-shadow: 0 0 12px var(--accent-glow);
 }
 
 .lyrics-content.style-pill .lyrics-line .lyric-text {
@@ -1524,12 +1517,15 @@ body::before {
 
 /* STYLE 3: FULL BOX
    Highlight draws a solid, wide, softly rounded rectangle behind the text. */
+.lyrics-content.style-bar {
+    width: 100%;
+}
+
 .lyrics-content.style-bar .lyrics-line {
     width: 100%;
-    /* Let the bar extend much wider than 600px */
-    max-width: 1200px;
+    max-width: 600px;
     margin: 0 auto 12px auto;
-    padding: 4px 40px;
+    padding: 2px 24px;
     line-height: 1.1;
     border-radius: 8px;
     transition: all 0.3s ease;
