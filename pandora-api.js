@@ -149,18 +149,13 @@ class PandoraAPI {
             });
 
             if (response.authToken) {
-                // Check subscription tier — free-tier users see ads that this client
-                // cannot play, which flags the account. Block them with a clear message.
-                const isFree = response.hasInteractiveAds === true
-                    || response.subscriptionType === 'FREE'
-                    || response.branding === 'pandoraFree';
-                const isPaid = response.isPremiumSubscriber === true
-                    || response.canListen === true
-                    || (response.subscriptionType && response.subscriptionType !== 'FREE');
+                // Dump ALL response keys for subscription diagnostics
+                console.log('[API] Login response keys:', Object.keys(response).join(', '));
 
-                if (isFree && !isPaid) {
+                // Check subscription: require positive proof of paid status
+                const isPaid = this._checkLoginSubscription(response);
+                if (!isPaid) {
                     console.log('[API] Free-tier account detected — blocking login');
-                    this.authToken = null;
                     return {
                         success: false,
                         error: 'Pandora Glass requires a Pandora Premium or Plus subscription. Free-tier accounts are not supported.'
@@ -176,7 +171,6 @@ class PandoraAPI {
                 }
 
                 console.log('[API] Login successful');
-
                 return { success: true, ...response };
             }
 
@@ -185,6 +179,66 @@ class PandoraAPI {
             console.error('[API] Login failed:', error);
             return { success: false, error: error.message || 'Login failed' };
         }
+    }
+
+    /**
+     * Check subscription status from login response fields.
+     * The v1 REST API embeds subscription info in config.branding, config.flags,
+     * highQualityStreamingEnabled, adkv.iat, and smartConversionDisabled.
+     * Returns true if the account is a paid subscriber (Premium or Plus).
+     */
+    _checkLoginSubscription(response) {
+        const freeSignals = [];
+        const paidSignals = [];
+        const cfg = response.config || {};
+        const flags = cfg.flags || [];
+        const adkv = response.adkv || {};
+
+        // --- config.branding: "Pandora" = free, anything else (PandoraPremium, PandoraPlus, etc.) = paid ---
+        if (cfg.branding && cfg.branding !== 'Pandora') {
+            paidSignals.push('branding=' + cfg.branding);
+        } else if (cfg.branding === 'Pandora') {
+            freeSignals.push('branding=Pandora');
+        }
+
+        // --- config.flags: ad-free flags = paid, ad-supported flags = free ---
+        if (flags.includes('onDemand')) paidSignals.push('flag:onDemand');
+        if (flags.includes('adFreeSkip')) paidSignals.push('flag:adFreeSkip');
+        if (flags.includes('adFreeReplay')) paidSignals.push('flag:adFreeReplay');
+        if (flags.includes('highQualityStreamingAvailable')) paidSignals.push('flag:highQualityStreaming');
+        if (flags.includes('adSupportedSkip')) freeSignals.push('flag:adSupportedSkip');
+        if (flags.includes('adSupportedReplay')) freeSignals.push('flag:adSupportedReplay');
+
+        // --- highQualityStreamingEnabled ---
+        if (response.highQualityStreamingEnabled === true) paidSignals.push('highQualityStreaming');
+        if (response.highQualityStreamingEnabled === false) freeSignals.push('noHighQualityStreaming');
+
+        // --- adkv.iat: "1" = has interactive ads (free), "0" = no ads (paid) ---
+        if (adkv.iat === '0') paidSignals.push('noInteractiveAds');
+        if (adkv.iat === '1') freeSignals.push('hasInteractiveAds');
+
+        // --- smartConversionDisabled: true = paid (no upsell needed), false = free ---
+        if (response.smartConversionDisabled === true) paidSignals.push('smartConversionDisabled');
+        if (response.smartConversionDisabled === false) freeSignals.push('smartConversionEnabled');
+
+        console.log('[API] Free signals:', freeSignals.length > 0 ? freeSignals.join(', ') : 'none');
+        console.log('[API] Paid signals:', paidSignals.length > 0 ? paidSignals.join(', ') : 'none');
+
+        // If we found ANY paid signals, allow (paid overrides any false positives)
+        if (paidSignals.length > 0) {
+            console.log('[API] Paid subscription confirmed');
+            return true;
+        }
+
+        // If we found free signals, block
+        if (freeSignals.length > 0) {
+            console.log('[API] Free-tier account detected');
+            return false;
+        }
+
+        // No signals at all — block to be safe
+        console.log('[API] No subscription indicators found — assuming free tier');
+        return false;
     }
 
     /**
@@ -432,22 +486,39 @@ class PandoraAPI {
 
     /**
      * Verify the current session has a paid subscription.
+     * Re-authenticates with stored credentials to check subscription fields
+     * from the login response (the v1 REST API has no standalone subscription endpoint).
      * Returns true if paid, false if free/unknown.
      */
     async verifySubscription() {
         try {
-            const response = await this.request('/v1/user/getSettings', {});
+            const creds = config.getCredentials();
+            if (!creds?.username || !creds?.password) {
+                console.log('[API] No stored credentials for subscription re-check');
+                return true; // Can't verify without credentials, allow to avoid lock-out
+            }
 
-            const isFree = response.hasInteractiveAds === true
-                || response.subscriptionType === 'FREE'
-                || response.branding === 'pandoraFree';
-            const isPaid = response.isPremiumSubscriber === true
-                || (response.subscriptionType && response.subscriptionType !== 'FREE');
+            console.log('[API] Re-authenticating to verify subscription...');
+            const response = await this.request('/v1/auth/login', {
+                username: creds.username,
+                password: creds.password,
+                existingAuthToken: null,
+                keepLoggedIn: true
+            });
 
-            return !(isFree && !isPaid);
+            if (!response.authToken) {
+                console.log('[API] Re-auth failed — no authToken');
+                return false;
+            }
+
+            // Update the auth token (it may have changed)
+            this.authToken = response.authToken;
+            config.setAuthToken(response.authToken);
+
+            return this._checkLoginSubscription(response);
         } catch (e) {
-            console.error('[API] Subscription check failed:', e?.message || '');
-            // If we can't verify, allow login — better than locking out paying users
+            console.error('[API] Subscription re-check failed:', e?.message || '');
+            // If we can't verify, allow — better than locking out paying users
             return true;
         }
     }

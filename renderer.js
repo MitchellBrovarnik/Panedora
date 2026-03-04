@@ -173,7 +173,7 @@ function renderHomePage() {
                     if (result && result.success) {
                         console.log('[UI] Login successful!');
                     } else {
-                        errorEl.textContent = 'Incorrect email or password.';
+                        errorEl.textContent = (result && result.error) || 'Incorrect email or password.';
                         errorEl.style.display = 'block';
                         submitBtn.textContent = 'Sign In';
                         submitBtn.disabled = false;
