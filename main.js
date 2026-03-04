@@ -528,7 +528,7 @@ ipcMain.handle('NAV:PLAY_URI', async (event, payload) => {
 
             // For songs, pass the pandoraId as startingAtTrackId so Pandora plays this exact track first
             const startTrackId = (type === 'song' || type === 'TR' || type === 'track') ? (metadata.pandoraId || id) : null;
-            const result = await playStation(station.stationId, null, startTrackId);
+            const result = await playStation(station.stationId, startTrackId);
             sendToUI('UI:LOADING', { isLoading: false });
             return result;
         }

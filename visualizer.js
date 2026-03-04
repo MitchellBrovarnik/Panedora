@@ -71,7 +71,8 @@ class AudioVisualizer {
 
         // Handle resizing
         this.resize();
-        window.addEventListener('resize', () => this.resize());
+        this._resizeHandler = () => this.resize();
+        window.addEventListener('resize', this._resizeHandler);
 
         // Resume context if suspended (browser autoplay policy)
         if (this.audioContext.state === 'suspended') {
@@ -108,7 +109,7 @@ class AudioVisualizer {
             this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         }
 
-        window.removeEventListener('resize', this.resize);
+        window.removeEventListener('resize', this._resizeHandler);
         console.log("[Visualizer] Stopped rendering.");
     }
 

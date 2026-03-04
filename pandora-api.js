@@ -246,53 +246,6 @@ class PandoraAPI {
 
 
 
-    /**
-     * Get available interactive radio modes for a station
-     */
-    async getInteractiveRadioModes(stationId) {
-        try {
-            const response = await this.request('/v1/station/getInteractiveRadioModes', { stationId });
-
-            return response;
-        } catch (e) {
-            console.log('[API] getInteractiveRadioModes failed:', e?.message || JSON.stringify(e));
-            return null;
-        }
-    }
-
-    /**
-     * Set the interactive radio mode for a station (e.g., artist_only, deep_cuts)
-     */
-    async setInteractiveRadioMode(stationId, modeId, previousModeId = 0) {
-        // Map string mode names to numeric IDs
-        const modeMap = {
-            'crowd_faves': 1, 'crowd_fave': 1,
-            'discovery': 2,
-            'deep_cuts': 3,
-            'newly_released': 4,
-            'artist_only': 6,
-            'energy_boost': 7,
-            'relax': 8
-        };
-        const numericMode = modeMap[modeId] !== undefined ? modeMap[modeId] : modeId;
-
-        const payload = {
-            stationId,
-            modeId: numericMode,
-            previousModeId
-        };
-
-
-
-        try {
-            const response = await this.request('/v1/station/setInteractiveRadioMode', payload);
-
-            return response;
-        } catch (e) {
-            console.error('[API] setInteractiveRadioMode failed:', e?.message || '');
-            return null;
-        }
-    }
 
     /**
      * Get playlist tracks for a station
