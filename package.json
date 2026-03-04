@@ -5,7 +5,9 @@
     "main": "main.js",
     "scripts": {
         "start": "electron .",
-        "dev": "electron . --dev"
+        "dev": "electron . --dev",
+        "obfuscate": "node build.js",
+        "build": "npm run obfuscate && npx electron-packager ./dist PandoraGlass --platform=win32 --arch=x64 --out=release --overwrite"
     },
     "keywords": [
         "pandora",
@@ -14,8 +16,9 @@
         "streaming"
     ],
     "author": "",
-    "license": "CC-BY-NC-4.0",
+    "license": "CC-BY-NC-ND-4.0",
     "devDependencies": {
-        "electron": "^28.0.0"
+        "electron": "^28.0.0",
+        "javascript-obfuscator": "^4.1.1"
     }
 }
