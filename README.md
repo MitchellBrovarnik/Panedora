@@ -78,7 +78,7 @@ Your selected effect is saved and restored automatically on next launch.
 Pandora Glass is built using a modern Electron stack, emphasizing security and separation of concerns:
 
 *   **Main Process (`main.js`):** Acts as the orchestrator. It manages the application lifecycle, handles all API requests to Pandora from the secure Node.js context, builds playlist queues, manages the `songHistory` array, controls the Mini Player window state, and exposes functionality to the renderer via IPC handlers.
-*   **Pandora API Controller (`pandora-api.js`):** A dedicated class that handles all communication with Pandora's backend REST endpoints. It routes requests through Electron's `net.fetch` (Chromium's native network stack) to avoid WAF fingerprint blocks, and manages auth token and CSRF token lifecycle.
+*   **Pandora API Controller (`pandora-api.js`):** A dedicated class that handles all communication with Pandora's backend REST endpoints. It routes requests through Electron's `net.fetch` (Chromium's native network stack) and manages auth token and CSRF token lifecycle.
 *   **Renderer Process (`renderer.js`):** The frontend layer. Built with vanilla JavaScript, HTML5, and CSS3. Handles all DOM rendering, routing between pages (Home, Search, Library, Now Playing, Settings), audio playback via the HTML5 `<audio>` element, the full theme and background effect system, lyrics fetching and rendering, and the Adaptive theme color extraction algorithm.
 *   **Audio Visualizer (`visualizer.js`):** A standalone class powered by the Web Audio API. Initializes an `AudioContext`, taps into the HTML5 audio element via a `MediaElementSource`, and drives three Canvas-based reactive visualizer styles (Bars, Circle, Wave) with configurable FFT sizes and smoothing.
 *   **Preload Script (`preload-ui.js`):** Establishes a secure IPC bridge using Electron's `contextBridge`. Context isolation is enabled, meaning the renderer has zero direct access to Node.js or Electron APIs — all privileged calls go through the explicitly exposed `window.api` surface.
@@ -134,13 +134,13 @@ npx electron-packager . PandoraGlass --platform=win32 --arch=x64 --out=dist
 ## Privacy and Security
 
 Pandora Glass is designed with user privacy as a priority:
-*   **Direct Authentication:** Your credentials are used solely to authenticate with Pandora's official API. No credentials are stored on disk.
-*   **No Data Storage:** Authentication tokens are kept in memory for the duration of your session and wiped on sign-out.
+*   **Direct Authentication:** Your credentials are used solely to authenticate with Pandora's official API. Your password is encrypted at rest using your operating system's secure keychain (Electron safeStorage).
+*   **Local Storage Only:** Authentication tokens and encrypted credentials are stored locally on your machine in your user data directory. All auth data is cleared on sign-out.
 *   **No Third-Party Tracking:** No personal data is collected or shared with any third-party services. The application communicates exclusively with Pandora's infrastructure.
 
 ## License
 
-This project is licensed under the CC BY-NC 4.0 License. See the LICENSE file for details.
+This project is licensed under the CC BY-NC-ND 4.0 License. See the LICENSE file for details.
 
 ## Disclaimer
 

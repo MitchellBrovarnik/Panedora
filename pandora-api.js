@@ -55,9 +55,7 @@ class PandoraAPI {
         const { session } = require('electron');
         const cookieSession = session.defaultSession;
 
-        // Ensure our CSRF token is in the Chromium cookie jar natively
-        // This prevents duplicate Cookie header collisions and allows Chromium to natively manage
-        // the PerimeterX `_pxhd` cookie without us stripping it.
+        // Ensure our CSRF token is in the Chromium cookie jar
         if (this.csrfToken) {
             try {
                 await cookieSession.cookies.set({
@@ -77,10 +75,7 @@ class PandoraAPI {
         const timeout = setTimeout(() => controller.abort(), 30000);
 
         try {
-            // net.fetch routes the request through Chromium's native network stack,
-            // bypassing WAF blocks that trigger on Node's raw TLS fingerprint.
-            // By omitting the manual "Cookie" header above, we let Chromium seamlessly pass both
-            // our injected csrftoken AND the PerimeterX _pxhd cookie!
+            // Use Chromium's native network stack for cookie management
             const response = await net.fetch(url, {
                 method: 'POST',
                 headers: headers,
@@ -448,12 +443,12 @@ class PandoraAPI {
     async verifySubscription() {
         try {
             const creds = config.getCredentials();
-            if (!creds?.username || !creds?.password) {
+            if (!creds?.email || !creds?.password) {
                 return true; // Can't verify without credentials, allow to avoid lock-out
             }
 
             const response = await this.request('/v1/auth/login', {
-                username: creds.username,
+                username: creds.email,
                 password: creds.password,
                 existingAuthToken: null,
                 keepLoggedIn: true
