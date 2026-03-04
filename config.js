@@ -39,7 +39,7 @@ function readConfig() {
 function writeConfig(config) {
     try {
         const configPath = getConfigPath();
-        fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 2), { encoding: 'utf8', mode: 0o600 });
     } catch (e) {
         console.error('[Config] Error writing config:', e);
     }

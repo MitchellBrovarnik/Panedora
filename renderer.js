@@ -111,8 +111,6 @@ function renderPage(page) {
 }
 
 function renderHomePage() {
-    console.log('[UI] Rendering Home Page');
-    console.trace('renderHomePage called from:');
     if (AppState.isLoading) {
         DOM.pageContent.innerHTML = `
       <div class="welcome-container">

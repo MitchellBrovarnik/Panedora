@@ -19,7 +19,6 @@ class PandoraAPI {
         if (!this.csrfToken) {
             this.csrfToken = this.generateCsrfToken();
             config.setCsrfToken(this.csrfToken);
-            console.log('[API] Generated new CSRF token');
         }
     }
 
@@ -58,13 +57,11 @@ class PandoraAPI {
                 // Capture CSRF token from cookies
                 const cookies = res.headers['set-cookie'];
                 if (cookies) {
-                    console.log('[API] Received cookies:', cookies.map(c => c.substring(0, 50)));
                     for (const cookie of cookies) {
                         const csrfMatch = cookie.match(/csrftoken=([^;]+)/);
                         if (csrfMatch) {
                             this.csrfToken = csrfMatch[1];
                             config.setCsrfToken(this.csrfToken);
-                            console.log('[API] Captured CSRF token');
                         }
                     }
                 }
@@ -77,7 +74,6 @@ class PandoraAPI {
                             resolve(json);
                         } else {
                             if (res.statusCode === 401 || json.errorCode === 1000) {
-                                console.log('[API] Session expired (401 or Code 1000)');
                                 if (this.onSessionExpired) this.onSessionExpired();
                             }
                             reject({ status: res.statusCode, ...json });
@@ -101,8 +97,6 @@ class PandoraAPI {
      * Login with username/password
      */
     async login(username, password) {
-        console.log('[API] Logging in...');
-
         try {
             const response = await this.request('/v1/auth/login', {
                 username,
@@ -121,16 +115,7 @@ class PandoraAPI {
                     || response.canListen === true
                     || (response.subscriptionType && response.subscriptionType !== 'FREE');
 
-                console.log('[API] Subscription info:', {
-                    subscriptionType: response.subscriptionType,
-                    hasInteractiveAds: response.hasInteractiveAds,
-                    isPremiumSubscriber: response.isPremiumSubscriber,
-                    branding: response.branding,
-                    canListen: response.canListen
-                });
-
                 if (isFree && !isPaid) {
-                    console.log('[API] Free-tier account detected — blocking login');
                     this.authToken = null;
                     return {
                         success: false,
@@ -146,9 +131,6 @@ class PandoraAPI {
                     config.setListenerId(response.listenerId);
                 }
 
-                console.log('[API] Login successful');
-                console.log('[API] CSRF token after login:', this.csrfToken ? 'captured' : 'MISSING');
-
                 return { success: true, ...response };
             }
 
@@ -163,7 +145,6 @@ class PandoraAPI {
      * Clear local auth state and logout
      */
     logout() {
-        console.log('[API] Logging out...');
         this.authToken = null;
         this.csrfToken = this.generateCsrfToken();
         config.clearAll();
@@ -173,22 +154,12 @@ class PandoraAPI {
      * Get user's stations
      */
     async getStations() {
-        console.log('[API] Fetching stations...');
-        console.log('[API] Using auth token:', this.authToken ? 'present' : 'missing');
-        console.log('[API] Using CSRF token:', this.csrfToken ? 'present' : 'missing');
-
         try {
             const response = await this.request('/v1/station/getStations', {
                 pageSize: 250,
                 startIndex: 0
             });
 
-            console.log('[API] Stations response:', JSON.stringify(response).substring(0, 500));
-            // Log full details to find modes
-            if (response.stations && response.stations[0]) {
-                console.log('[API] First station details:', JSON.stringify(response.stations[0], null, 2));
-            }
-            console.log(`[API] Retrieved ${response.stations?.length || 0} stations`);
             return response.stations || [];
         } catch (error) {
             console.error('[API] Failed to get stations:', error);
@@ -204,15 +175,12 @@ class PandoraAPI {
      * Create a new station from a seed (artist or track)
      */
     async createStation(musicToken) {
-        console.log(`[API] Creating station from seed: ${musicToken}`);
-
         try {
             const response = await this.request('/v1/station/createStation', {
                 musicToken,
-                pandoraId: musicToken // Error suggested this might be needed
+                pandoraId: musicToken
             });
 
-            console.log('[API] Station created:', response.stationId);
             return response;
         } catch (error) {
             console.error('[API] Failed to create station:', error);
@@ -221,74 +189,9 @@ class PandoraAPI {
     }
 
     /**
-     * Signal playback paused - releases the active stream on Pandora's side
-     */
-    async playbackPaused() {
-        try {
-            await this.request('/v1/station/playbackPaused', { sync: false });
-            console.log('[API] Sent playbackPaused signal');
-        } catch (e) {
-            console.log('[API] playbackPaused failed (non-critical):', e?.message || '');
-        }
-    }
-
-    /**
-     * Get available interactive radio modes for a station
-     */
-    async getInteractiveRadioModes(stationId) {
-        try {
-            const response = await this.request('/v1/station/getInteractiveRadioModes', { stationId });
-            console.log('[API] Interactive radio modes:', JSON.stringify(response));
-            return response;
-        } catch (e) {
-            console.log('[API] getInteractiveRadioModes failed:', e?.message || JSON.stringify(e));
-            return null;
-        }
-    }
-
-    /**
-     * Set the interactive radio mode for a station (e.g., artist_only, deep_cuts)
-     */
-    async setInteractiveRadioMode(stationId, modeId, previousModeId = 0) {
-        // Map string mode names to numeric IDs
-        const modeMap = {
-            'crowd_faves': 1, 'crowd_fave': 1,
-            'discovery': 2,
-            'deep_cuts': 3,
-            'newly_released': 4,
-            'artist_only': 6,
-            'energy_boost': 7,
-            'relax': 8
-        };
-        const numericMode = modeMap[modeId] !== undefined ? modeMap[modeId] : modeId;
-
-        const payload = {
-            stationId,
-            modeId: numericMode,
-            previousModeId
-        };
-
-        console.log('[API] setInteractiveRadioMode PAYLOAD:', JSON.stringify(payload));
-
-        try {
-            const response = await this.request('/v1/station/setInteractiveRadioMode', payload);
-            console.log('[API] setInteractiveRadioMode SUCCESS:', JSON.stringify(response));
-            return response;
-        } catch (e) {
-            console.error('[API] setInteractiveRadioMode FAILED:', JSON.stringify(e, null, 2));
-            console.error('[API] setInteractiveRadioMode error message:', e?.message);
-            console.error('[API] setInteractiveRadioMode error status:', e?.status);
-            console.error('[API] setInteractiveRadioMode error code:', e?.errorCode);
-            return null;
-        }
-    }
-
-    /**
      * Get playlist tracks for a station
      */
     async getPlaylist(stationId, isStationStart = false, startingAtTrackId = null, { skipRetry = false } = {}) {
-        console.log(`[API] Fetching playlist for station ${stationId} (StartTrack: ${startingAtTrackId || 'none'})...`);
-
         try {
             const payload = {
                 stationId,
@@ -305,45 +208,23 @@ class PandoraAPI {
             // Check for SimStreamViolation (another device is streaming) - success path
             if (response.tracks?.length > 0 && response.tracks[0].trackType === 'SimStreamViolation') {
                 if (skipRetry) {
-                    console.log('[API] SimStreamViolation detected (fast-fail, no retry)');
                     return { tracks: [], error: 'Another device is streaming.' };
                 }
-                console.log('[API] SimStreamViolation detected - another stream active, retrying...');
                 response = await this._retryAfterSimStreamViolation(payload);
             }
 
-            const tracks = response.tracks || [];
-            const error = response.error || null;
-
-            console.log(`[API] Retrieved ${tracks.length} tracks`);
-
-            // Debug: log first track to see structure
-            if (tracks[0]) {
-                const t = tracks[0];
-                console.log('[API] First track:', t.songTitle, '-', t.artistName);
-                console.log('[API] Track mode info: requestedModeId=', t.requestedModeId, 'modeId=', t.modeId);
-                console.log('[API] Audio URL:', t.audioURL ? t.audioURL.substring(0, 80) + '...' : 'MISSING');
-            }
-
-            return { tracks, error };
+            return { tracks: response.tracks || [], error: response.error || null };
         } catch (error) {
             // Check for SimStreamViolation in error response
             const errorStr = JSON.stringify(error);
             if (errorStr.includes('SimStreamViolation')) {
                 if (skipRetry) {
-                    console.log('[API] SimStreamViolation in error (fast-fail, no retry)');
                     return { tracks: [], error: 'Another device is streaming.' };
                 }
-                console.log('[API] SimStreamViolation in error - retrying...');
                 try {
                     const retryResponse = await this._retryAfterSimStreamViolation(payload);
-                    if (retryResponse.tracks?.[0]) {
-                        const t = retryResponse.tracks[0];
-                        console.log('[API] Retry first track:', t.songTitle, '-', t.artistName);
-                    }
                     return { tracks: retryResponse.tracks || [], error: retryResponse.error || null };
                 } catch (retryError) {
-                    console.error('[API] All retries failed:', JSON.stringify(retryError));
                     return { tracks: [], error: 'Failed to load playlist. Please try again.' };
                 }
             }
@@ -359,7 +240,6 @@ class PandoraAPI {
         const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
         for (let attempt = 1; attempt <= 3; attempt++) {
-            console.log(`[API] SimStream retry ${attempt}/3 - waiting ${attempt * 2}s...`);
             await delay(attempt * 2000);  // 2s, 4s, 6s
 
             try {
@@ -367,23 +247,19 @@ class PandoraAPI {
 
                 // Check if still SimStreamViolation
                 if (response.tracks?.length > 0 && response.tracks[0].trackType === 'SimStreamViolation') {
-                    console.log(`[API] Still SimStreamViolation on attempt ${attempt}`);
                     continue;
                 }
 
-                console.log(`[API] SimStream resolved on attempt ${attempt}: ${response.tracks?.length || 0} tracks`);
                 return response;
             } catch (e) {
                 const eStr = JSON.stringify(e);
                 if (eStr.includes('SimStreamViolation')) {
-                    console.log(`[API] Still SimStreamViolation error on attempt ${attempt}`);
                     continue;
                 }
                 throw e;  // Different error, don't retry
             }
         }
 
-        console.error('[API] SimStreamViolation persisted after 3 retries');
         return { tracks: [], error: 'Another device is streaming. Please pause it and try again.' };
     }
 
@@ -391,15 +267,12 @@ class PandoraAPI {
      * Add feedback (thumbs up/down)
      */
     async addFeedback(trackToken, isPositive) {
-        console.log(`[API] Adding ${isPositive ? 'positive' : 'negative'} feedback...`);
-
         try {
             const response = await this.request('/v1/station/addFeedback', {
                 trackToken,
                 isPositive
             });
 
-            console.log('[API] Feedback added successfully, feedbackId:', response?.feedbackId);
             return { success: true, feedbackId: response?.feedbackId, ...response };
         } catch (error) {
             console.error('[API] Failed to add feedback:', error);
@@ -411,14 +284,11 @@ class PandoraAPI {
      * Delete feedback (undo thumbs up/down)
      */
     async deleteFeedback(feedbackId) {
-        console.log(`[API] Deleting feedback ${feedbackId}...`);
-
         try {
             const response = await this.request('/v1/station/deleteFeedback', {
                 feedbackId
             });
 
-            console.log('[API] Feedback deleted successfully');
             return { success: true, ...response };
         } catch (error) {
             console.error('[API] Failed to delete feedback:', error);
@@ -490,12 +360,6 @@ class PandoraAPI {
     async verifySubscription() {
         try {
             const response = await this.request('/v1/user/getSettings', {});
-            console.log('[API] User settings for subscription check:', {
-                subscriptionType: response.subscriptionType,
-                hasInteractiveAds: response.hasInteractiveAds,
-                isPremiumSubscriber: response.isPremiumSubscriber,
-                branding: response.branding
-            });
 
             const isFree = response.hasInteractiveAds === true
                 || response.subscriptionType === 'FREE'
@@ -524,13 +388,10 @@ class PandoraAPI {
      * Remove a station
      */
     async removeStation(stationId) {
-        console.log(`[API] Removing station: ${stationId}`);
         try {
-            // Try removeStation first
-            const response = await this.request('/v1/station/removeStation', {
+            await this.request('/v1/station/removeStation', {
                 stationId
             });
-            console.log('[API] Station removed:', response);
             return true;
         } catch (error) {
             console.error('[API] Failed to remove station:', error);
@@ -544,8 +405,6 @@ class PandoraAPI {
      * Search for songs, artists, and stations
      */
     async search(query) {
-        console.log(`[API] Searching for: ${query}`);
-
         if (!query || query.length < 2) {
             return { songs: [], artists: [], stations: [] };
         }
@@ -559,14 +418,9 @@ class PandoraAPI {
                 count: 50  // Request more results to match web
             });
 
-            console.log('[API] Search results keys:', Object.keys(response).join(', '));
-            console.log('[API] Search response sample:', JSON.stringify(response).substring(0, 500));
-
             // Parse results into consistent format
-            // Check if response has 'items' array (common in some endpoints)
             let items = [];
             if (response.items) {
-                console.log('[API] Search has items array, length:', response.items.length);
                 items = response.items;
             } else if (response.tracks || response.artists) {
                 // Fallback to old structure if present
@@ -575,11 +429,6 @@ class PandoraAPI {
                     ...(response.artists || []).map(a => ({ ...a, type: 'artist' })),
                     ...(response.stations || []).map(s => ({ ...s, type: 'station' }))
                 ];
-            }
-
-            if (items.length > 0) {
-                const types = [...new Set(items.map(i => i.type))];
-                console.log('[API] Search item types found:', types);
             }
 
             const results = {
@@ -612,12 +461,6 @@ class PandoraAPI {
                 }))
             };
 
-            // Log full details for the first station to find modes
-            if (response.stations && response.stations[0]) {
-                console.log('[API] First station details:', JSON.stringify(response.stations[0], null, 2));
-            }
-
-            console.log(`[API] Found ${results.songs.length} songs, ${results.artists.length} artists, ${results.stations.length} stations`);
             return results;
         } catch (error) {
             console.error('[API] Search failed:', error);
