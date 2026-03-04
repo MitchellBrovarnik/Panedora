@@ -443,7 +443,6 @@ ipcMain.handle('PLAYER:UNDO_FEEDBACK', async (event, { trackToken }) => {
     return { success: false, error: 'No feedback to undo' };
 });
 
-// Play a station
 // Play a station or item
 ipcMain.handle('NAV:PLAY_URI', async (event, payload) => {
     let uri = typeof payload === 'string' ? payload : payload.uri;
@@ -515,7 +514,6 @@ ipcMain.handle('NAV:PLAY_URI', async (event, payload) => {
     return { error: 'Unknown URI type' };
 });
 
-// Helper for 'Tune' workaround
 // Search
 ipcMain.handle('CONTENT:SEARCH', async (event, query) => {
     const results = await api.search(query);

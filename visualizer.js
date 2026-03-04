@@ -113,7 +113,6 @@ class AudioVisualizer {
             window.removeEventListener('resize', this._resizeHandler);
             this._resizeHandler = null;
         }
-        console.log("[Visualizer] Stopped rendering.");
     }
 
     setVolume(volume) {

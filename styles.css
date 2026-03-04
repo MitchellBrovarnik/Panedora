@@ -18,7 +18,7 @@
     --glass-active: rgba(255, 255, 255, 0.12);
     --glass-border: rgba(255, 255, 255, 0.07);
     --glass-border-hover: rgba(255, 255, 255, 0.14);
-    --blur: 28px;
+    --blur: 16px;
     --r: 18px;
     --r-sm: 12px;
     --r-lg: 24px;
@@ -773,8 +773,8 @@ body::before {
     justify-content: space-between;
     padding: 12px 20px;
     background: rgba(8, 8, 16, 0.4);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     border-bottom: 1px solid var(--glass-border);
     flex-shrink: 0;
 }
@@ -858,6 +858,7 @@ body::before {
     flex: 1;
     overflow-y: auto;
     padding: 24px 28px;
+    position: relative;
 }
 
 /* ============================================================================
@@ -1425,8 +1426,8 @@ body::before {
     right: 0;
     bottom: 0;
     background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     z-index: 20;
     display: flex;
     flex-direction: column;
@@ -1456,18 +1457,92 @@ body::before {
     transition: transform 0.3s ease;
 }
 
+/* Base lyrics alignment + structure shared by all styles */
 .lyrics-line {
     opacity: 0.4;
-    transition: opacity 0.3s ease, transform 0.3s ease, font-size 0.3s ease;
-    margin-bottom: 12px;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    margin: 0 auto 16px auto;
+    width: 100%;
+    transform-origin: center center;
+}
+
+.lyrics-line .lyric-text {
+    transition: background 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
+    display: inline;
 }
 
 .lyrics-line.active {
     opacity: 1;
+    font-weight: 700;
+}
+
+/* STYLE 1: TEXT GLOW (Default)
+   Highlight only the letters with a multi-layered drop shadow, no backgrounds. */
+.lyrics-content.style-glow .lyrics-line.active {
+    color: var(--accent-light, var(--accent, #fff));
+    transform: scale(1.25);
+    text-shadow:
+        0 0 16px rgba(0, 0, 0, 0.8),
+        0 0 8px var(--accent-glow),
+        2px 2px 4px rgba(0, 0, 0, 0.9);
+}
+
+.lyrics-content.style-glow .lyrics-line.active .lyric-text {
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+}
+
+/* STYLE 2: PILL BOX
+   Highlight is a solid uniform block wrapped around the exact text string. */
+.lyrics-content.style-pill .lyrics-line {
+    width: fit-content;
+    padding: 4px 20px;
+    line-height: 1.1;
+    border-radius: 6px;
+    border: 1px solid transparent;
+}
+
+.lyrics-content.style-pill .lyrics-line.active {
     color: #fff;
-    font-weight: 600;
-    font-size: 1.15em;
-    text-shadow: 0 0 10px var(--accent-glow), 0 0 30px var(--accent-glow);
+    transform: scale(1.05);
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid var(--accent-glow);
+    text-shadow: 0 0 12px var(--accent-glow);
+}
+
+.lyrics-content.style-pill .lyrics-line .lyric-text {
+    padding: 0;
+}
+
+/* STYLE 3: FULL BOX
+   Highlight draws a solid, wide, softly rounded rectangle behind the text. */
+.lyrics-content.style-bar {
+    width: 100%;
+}
+
+.lyrics-content.style-bar .lyrics-line {
+    width: 100%;
+    max-width: 600px;
+    margin: 0 auto 12px auto;
+    padding: 2px 24px;
+    line-height: 1.1;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    border: 1px solid transparent;
+}
+
+.lyrics-content.style-bar .lyrics-line.active {
+    color: #fff;
+    transform: scale(1.02);
+    /* Very subtle scale so the box doesn't blow up */
+    background: var(--accent-soft, rgba(0, 0, 0, 0.4));
+    /* Match reactive theme */
+    text-shadow: 0 0 12px var(--accent-glow);
+}
+
+.lyrics-content.style-bar .lyrics-line .lyric-text {
+    padding: 0;
 }
 
 .lyrics-overlay::-webkit-scrollbar {
@@ -1574,6 +1649,53 @@ body::before {
 .np-album {
     font-size: 12px;
     color: var(--text-3);
+}
+
+.np-feedback-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    margin-top: 12px;
+}
+
+.np-feedback-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    color: var(--text-2);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 200ms var(--ease);
+    padding: 8px;
+}
+
+.np-feedback-btn:hover {
+    background: var(--glass-hover);
+    border-color: var(--glass-border-hover);
+    color: var(--text-1);
+    transform: scale(1.1);
+}
+
+.np-feedback-btn.liked {
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-color: var(--accent);
+}
+
+.np-feedback-btn.disliked {
+    color: #e74c3c;
+    background: rgba(231, 76, 60, 0.12);
+    border-color: #e74c3c;
+}
+
+.np-feedback-btn svg {
+    width: 100%;
+    height: 100%;
 }
 
 .np-controls {

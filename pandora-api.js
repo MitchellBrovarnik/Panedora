@@ -3,7 +3,6 @@
  * Direct communication with Pandora's REST API
  */
 
-const https = require('https');
 const config = require('./config');
 
 class PandoraAPI {
@@ -33,64 +32,105 @@ class PandoraAPI {
      * Make an API request
      */
     async request(endpoint, data = {}) {
-        return new Promise((resolve, reject) => {
-            const postData = JSON.stringify(data);
+        const { net } = require('electron');
+        const url = `https://${this.baseUrl}${this.apiPath}${endpoint}`;
 
-            const options = {
-                hostname: this.baseUrl,
-                port: 443,
-                path: `${this.apiPath}${endpoint}`,
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Content-Length': Buffer.byteLength(postData),
-                    'X-AuthToken': this.authToken || '',
-                    'X-CsrfToken': this.csrfToken || '',
-                    'Cookie': this.csrfToken ? `csrftoken=${this.csrfToken}` : '',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                }
-            };
+        const headers = {
+            'Content-Type': 'application/json',
+            'X-AuthToken': this.authToken || '',
+            'X-CsrfToken': this.csrfToken || '',
+            'User-Agent': `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${process.versions.chrome} Safari/537.36`,
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Origin': 'https://www.pandora.com',
+            'Referer': 'https://www.pandora.com/',
+            'sec-ch-ua': `"Not_A Brand";v="8", "Chromium";v="${process.versions.chrome.split('.')[0]}", "Google Chrome";v="${process.versions.chrome.split('.')[0]}"`,
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin'
+        };
 
-            const req = https.request(options, (res) => {
-                let body = '';
+        const { session } = require('electron');
+        const cookieSession = session.defaultSession;
 
-                // Capture CSRF token from cookies
-                const cookies = res.headers['set-cookie'];
-                if (cookies) {
-                    for (const cookie of cookies) {
-                        const csrfMatch = cookie.match(/csrftoken=([^;]+)/);
-                        if (csrfMatch) {
-                            this.csrfToken = csrfMatch[1];
-                            config.setCsrfToken(this.csrfToken);
-                        }
-                    }
-                }
-
-                res.on('data', (chunk) => body += chunk);
-                res.on('end', () => {
-                    try {
-                        const json = JSON.parse(body);
-                        if (res.statusCode >= 200 && res.statusCode < 300) {
-                            resolve(json);
-                        } else {
-                            if (res.statusCode === 401 || json.errorCode === 1000) {
-                                if (this.onSessionExpired) this.onSessionExpired();
-                            }
-                            reject({ status: res.statusCode, ...json });
-                        }
-                    } catch (e) {
-                        reject({ error: 'Invalid JSON', body, status: res.statusCode });
-                    }
+        // Ensure our CSRF token is in the Chromium cookie jar natively
+        // This prevents duplicate Cookie header collisions and allows Chromium to natively manage
+        // the PerimeterX `_pxhd` cookie without us stripping it.
+        if (this.csrfToken) {
+            try {
+                await cookieSession.cookies.set({
+                    url: 'https://www.pandora.com',
+                    name: 'csrftoken',
+                    value: this.csrfToken,
+                    domain: '.pandora.com',
+                    path: '/',
+                    secure: true
                 });
+            } catch (e) {
+                console.error('[API] Failed to set cookie natively:', e);
+            }
+        }
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000);
+
+        try {
+            // net.fetch routes the request through Chromium's native network stack,
+            // bypassing WAF blocks that trigger on Node's raw TLS fingerprint.
+            // By omitting the manual "Cookie" header above, we let Chromium seamlessly pass both
+            // our injected csrftoken AND the PerimeterX _pxhd cookie!
+            const response = await net.fetch(url, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(data),
+                signal: controller.signal,
+                credentials: 'include'
             });
 
-            req.on('error', reject);
-            req.setTimeout(30000, () => {
-                req.destroy(new Error('Request timed out'));
-            });
-            req.write(postData);
-            req.end();
-        });
+            clearTimeout(timeout);
+
+            // Capture CSRF token
+            let cookies = [];
+            if (typeof response.headers.getSetCookie === 'function') {
+                cookies = response.headers.getSetCookie();
+            } else {
+                const cookieStr = response.headers.get('set-cookie');
+                if (cookieStr) cookies = [cookieStr];
+            }
+
+            for (const cookie of cookies) {
+                const csrfMatch = cookie.match(/csrftoken=([^;]+)/);
+                if (csrfMatch) {
+                    this.csrfToken = csrfMatch[1];
+                    config.setCsrfToken(this.csrfToken);
+                }
+            }
+
+            const bodyText = await response.text();
+            let json;
+            try {
+                json = JSON.parse(bodyText);
+            } catch (e) {
+                throw { error: 'Invalid JSON', body: bodyText, status: response.status };
+            }
+
+            if (response.ok) {
+                return json;
+            } else {
+                if (response.status === 401 || json.errorCode === 1000) {
+                    if (this.onSessionExpired) this.onSessionExpired();
+                }
+                throw { status: response.status, ...json };
+            }
+        } catch (error) {
+            clearTimeout(timeout);
+            if (error.name === 'AbortError') {
+                throw { error: 'Request timed out' };
+            }
+            throw error;
+        }
     }
 
     /**
@@ -106,17 +146,9 @@ class PandoraAPI {
             });
 
             if (response.authToken) {
-                // Check subscription tier — free-tier users see ads that this client
-                // cannot play, which flags the account. Block them with a clear message.
-                const isFree = response.hasInteractiveAds === true
-                    || response.subscriptionType === 'FREE'
-                    || response.branding === 'pandoraFree';
-                const isPaid = response.isPremiumSubscriber === true
-                    || response.canListen === true
-                    || (response.subscriptionType && response.subscriptionType !== 'FREE');
-
-                if (isFree && !isPaid) {
-                    this.authToken = null;
+                // Check subscription: require positive proof of paid status
+                const isPaid = this._checkLoginSubscription(response);
+                if (!isPaid) {
                     return {
                         success: false,
                         error: 'Pandora Glass requires a Pandora Premium or Plus subscription. Free-tier accounts are not supported.'
@@ -139,6 +171,60 @@ class PandoraAPI {
             console.error('[API] Login failed:', error);
             return { success: false, error: error.message || 'Login failed' };
         }
+    }
+
+    /**
+     * Check subscription status from login response fields.
+     * The v1 REST API embeds subscription info in config.branding, config.flags,
+     * highQualityStreamingEnabled, adkv.iat, and smartConversionDisabled.
+     * Returns true if the account is a paid subscriber (Premium or Plus).
+     */
+    _checkLoginSubscription(response) {
+        const freeSignals = [];
+        const paidSignals = [];
+        const cfg = response.config || {};
+        const flags = cfg.flags || [];
+        const adkv = response.adkv || {};
+
+        // --- config.branding: "Pandora" = free, anything else (PandoraPremium, PandoraPlus, etc.) = paid ---
+        if (cfg.branding && cfg.branding !== 'Pandora') {
+            paidSignals.push('branding=' + cfg.branding);
+        } else if (cfg.branding === 'Pandora') {
+            freeSignals.push('branding=Pandora');
+        }
+
+        // --- config.flags: ad-free flags = paid, ad-supported flags = free ---
+        if (flags.includes('onDemand')) paidSignals.push('flag:onDemand');
+        if (flags.includes('adFreeSkip')) paidSignals.push('flag:adFreeSkip');
+        if (flags.includes('adFreeReplay')) paidSignals.push('flag:adFreeReplay');
+        if (flags.includes('highQualityStreamingAvailable')) paidSignals.push('flag:highQualityStreaming');
+        if (flags.includes('adSupportedSkip')) freeSignals.push('flag:adSupportedSkip');
+        if (flags.includes('adSupportedReplay')) freeSignals.push('flag:adSupportedReplay');
+
+        // --- highQualityStreamingEnabled ---
+        if (response.highQualityStreamingEnabled === true) paidSignals.push('highQualityStreaming');
+        if (response.highQualityStreamingEnabled === false) freeSignals.push('noHighQualityStreaming');
+
+        // --- adkv.iat: "1" = has interactive ads (free), "0" = no ads (paid) ---
+        if (adkv.iat === '0') paidSignals.push('noInteractiveAds');
+        if (adkv.iat === '1') freeSignals.push('hasInteractiveAds');
+
+        // --- smartConversionDisabled: true = paid (no upsell needed), false = free ---
+        if (response.smartConversionDisabled === true) paidSignals.push('smartConversionDisabled');
+        if (response.smartConversionDisabled === false) freeSignals.push('smartConversionEnabled');
+
+        // If we found ANY paid signals, allow (paid overrides any false positives)
+        if (paidSignals.length > 0) {
+            return true;
+        }
+
+        // If we found free signals, block
+        if (freeSignals.length > 0) {
+            return false;
+        }
+
+        // No signals at all — block to be safe
+        return false;
     }
 
     /**
@@ -355,22 +441,36 @@ class PandoraAPI {
 
     /**
      * Verify the current session has a paid subscription.
+     * Re-authenticates with stored credentials to check subscription fields
+     * from the login response (the v1 REST API has no standalone subscription endpoint).
      * Returns true if paid, false if free/unknown.
      */
     async verifySubscription() {
         try {
-            const response = await this.request('/v1/user/getSettings', {});
+            const creds = config.getCredentials();
+            if (!creds?.username || !creds?.password) {
+                return true; // Can't verify without credentials, allow to avoid lock-out
+            }
 
-            const isFree = response.hasInteractiveAds === true
-                || response.subscriptionType === 'FREE'
-                || response.branding === 'pandoraFree';
-            const isPaid = response.isPremiumSubscriber === true
-                || (response.subscriptionType && response.subscriptionType !== 'FREE');
+            const response = await this.request('/v1/auth/login', {
+                username: creds.username,
+                password: creds.password,
+                existingAuthToken: null,
+                keepLoggedIn: true
+            });
 
-            return !(isFree && !isPaid);
+            if (!response.authToken) {
+                return false;
+            }
+
+            // Update the auth token (it may have changed)
+            this.authToken = response.authToken;
+            config.setAuthToken(response.authToken);
+
+            return this._checkLoginSubscription(response);
         } catch (e) {
-            console.error('[API] Subscription check failed:', e?.message || '');
-            // If we can't verify, allow login — better than locking out paying users
+            console.error('[API] Subscription re-check failed:', e?.message || '');
+            // If we can't verify, allow — better than locking out paying users
             return true;
         }
     }
@@ -398,8 +498,6 @@ class PandoraAPI {
             return false;
         }
     }
-
-
 
     /**
      * Search for songs, artists, and stations
