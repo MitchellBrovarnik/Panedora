@@ -3,7 +3,6 @@
  * Direct communication with Pandora's REST API
  */
 
-const https = require('https');
 const config = require('./config');
 
 class PandoraAPI {
@@ -159,8 +158,6 @@ class PandoraAPI {
                     || response.canListen === true
                     || (response.subscriptionType && response.subscriptionType !== 'FREE');
 
-
-
                 if (isFree && !isPaid) {
                     console.log('[API] Free-tier account detected — blocking login');
                     this.authToken = null;
@@ -245,8 +242,6 @@ class PandoraAPI {
     }
 
 
-
-
     /**
      * Get playlist tracks for a station
      */
@@ -281,8 +276,6 @@ class PandoraAPI {
 
             console.log(`[API] Retrieved ${tracks.length} tracks`);
 
-
-
             return { tracks, error };
         } catch (error) {
             // Check for SimStreamViolation in error response
@@ -295,10 +288,6 @@ class PandoraAPI {
                 console.log('[API] SimStreamViolation in error - retrying...');
                 try {
                     const retryResponse = await this._retryAfterSimStreamViolation(payload);
-                    if (retryResponse.tracks?.[0]) {
-                        const t = retryResponse.tracks[0];
-                        console.log('[API] Retry first track:', t.songTitle, '-', t.artistName);
-                    }
                     return { tracks: retryResponse.tracks || [], error: retryResponse.error || null };
                 } catch (retryError) {
                     console.error('[API] All retries failed:', JSON.stringify(retryError));
@@ -449,7 +438,6 @@ class PandoraAPI {
         try {
             const response = await this.request('/v1/user/getSettings', {});
 
-
             const isFree = response.hasInteractiveAds === true
                 || response.subscriptionType === 'FREE'
                 || response.branding === 'pandoraFree';
@@ -479,7 +467,6 @@ class PandoraAPI {
     async removeStation(stationId) {
         console.log(`[API] Removing station: ${stationId}`);
         try {
-            // Try removeStation first
             const response = await this.request('/v1/station/removeStation', {
                 stationId
             });
@@ -490,8 +477,6 @@ class PandoraAPI {
             return false;
         }
     }
-
-
 
     /**
      * Search for songs, artists, and stations
@@ -512,13 +497,9 @@ class PandoraAPI {
                 count: 50  // Request more results to match web
             });
 
-
-
             // Parse results into consistent format
-            // Check if response has 'items' array (common in some endpoints)
             let items = [];
             if (response.items) {
-
                 items = response.items;
             } else if (response.tracks || response.artists) {
                 // Fallback to old structure if present
@@ -528,8 +509,6 @@ class PandoraAPI {
                     ...(response.stations || []).map(s => ({ ...s, type: 'station' }))
                 ];
             }
-
-
 
             const results = {
                 songs: items.filter(i => i.type === 'song' || i.type === 'TR' || i.type === 'track').map(t => ({
@@ -560,8 +539,6 @@ class PandoraAPI {
                     type: 'station'
                 }))
             };
-
-
 
             console.log(`[API] Found ${results.songs.length} songs, ${results.artists.length} artists, ${results.stations.length} stations`);
             return results;

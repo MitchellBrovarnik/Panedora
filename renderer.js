@@ -617,7 +617,6 @@ function applyTheme(themeId) {
     localStorage.setItem('pandora-glass-theme', themeId);
     AppState.currentTheme = themeId;
 
-
     // If switching to adaptive while a song is already playing, extract color now
     if (themeId === 'adaptive' && AppState.playerState?.coverArt) {
         window._lastExtractedArt = null; // reset so extraction runs
@@ -861,7 +860,6 @@ function applyBgEffect(effectId) {
         }
     }
 
-
 }
 
 function renderSettingsPage() {
@@ -964,7 +962,6 @@ function renderSettingsPage() {
 
 function renderNowPlayingPage() {
     const { track, artist, album, coverArt, time, duration, isPlaying } = AppState.playerState;
-
 
     // Build history section
     let pastSongs = [...(AppState.playerState.history || [])];
@@ -1091,7 +1088,6 @@ function renderNowPlayingPage() {
             window.api.player.thumbDown();
         }
     });
-
 
     // History undo-dislike handlers
     document.querySelectorAll('.history-undo-btn').forEach(btn => {
@@ -1393,7 +1389,6 @@ function updatePlayerUI(state) {
         DOM.totalTime.textContent = formatTime(state.duration);
     }
 
-
     // Live-update the history section if the Now Playing page is visible
     if (state.history && document.querySelector('.np-history') || (state.history && document.querySelector('.np-right'))) {
         const histContainer = document.querySelector('.np-right');
@@ -1476,7 +1471,6 @@ function playStation(station) {
     if (match) {
         match.lastUpdated = new Date().toISOString();
     }
-
 
     window.api.content.playItem(station);
 }
@@ -1733,7 +1727,6 @@ function initAPIListeners() {
                 console.log('[UI] Loading new audio source');
                 currentAudio.src = state.audioURL;
                 currentAudio.play().then(() => {
-
 
                     // Web Audio API requires a user gesture. This is a safe place to init.
                     if (window.visualizer) {
