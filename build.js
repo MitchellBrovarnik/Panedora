@@ -33,7 +33,7 @@ const obfuscationOptions = {
     deadCodeInjection: false,
     stringArray: false,
     renameGlobals: false,
-    identifierNamesGenerator: 'hexadecimal'
+    identifierNamesGenerator: 'mangled'
 };
 
 // Clean and create dist
