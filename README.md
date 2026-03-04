@@ -147,7 +147,7 @@ This project is licensed under the CC BY-NC 4.0 License. See the LICENSE file fo
 
 ## Disclaimer
 
-This application is an unofficial, third-party client created for personal, non-commercial use and educational purposes. It is not affiliated with, endorsed by, or sponsored by Pandora Media, LLC. No proprietary Pandora assets or code are included in this repository.
+This application is an unofficial, third-party client created for personal, non-commercial use and educational purposes. It is not affiliated with, endorsed by, or sponsored by Pandora Media, LLC, or its parent company, Sirius XM Holdings Inc. 'Pandora' is a registered trademark of Pandora Media, LLC. No proprietary Pandora assets or code are included in this repository.
 
 > [!TIP]
 > **DISCLAIMER:** This application only works with an active Pandora Plus or Premium subscription. Using a paid account ensures full compatibility with all playback features and provides the highest audio quality available through the API.
