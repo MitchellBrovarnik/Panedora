@@ -1,7 +1,7 @@
 # Pandora Glass
 
 ## Project Purpose
-Pandora Glass is a personal, educational, and experimental project created purely for fun. It was built as a creative exercise to explore modern UI design (Glassmorphism) and Electron-based desktop application development.
+Pandora Glass is a personal, educational, and experimental project created purely for fun. It was built as a creative exercise to explore modern UI design (Glassmorphism) and Electron-based desktop application development. This project is intended for personal use only and was developed with zero intent to cause harm, bypass security, or interfere with Pandora's business operations. It is shared as a demonstration of UI/UX design and technical integration.
 
 ![App Interface](screenshot.png)
 *A preview of the Pandora Glass immersive station library.*
