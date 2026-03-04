@@ -7,7 +7,10 @@
         "start": "electron .",
         "dev": "electron . --dev",
         "obfuscate": "node build.js",
-        "build": "npm run obfuscate && npx electron-packager ./dist PandoraGlass --platform=win32 --arch=x64 --out=release --overwrite"
+        "build": "npm run obfuscate && cd dist && npm install --omit=dev && cd .. && electron-builder --config electron-builder.config.js",
+        "build:win": "npm run obfuscate && cd dist && npm install --omit=dev && cd .. && electron-builder --win --config electron-builder.config.js",
+        "build:mac": "npm run obfuscate && cd dist && npm install --omit=dev && cd .. && electron-builder --mac --config electron-builder.config.js",
+        "build:linux": "npm run obfuscate && cd dist && npm install --omit=dev && cd .. && electron-builder --linux --config electron-builder.config.js"
     },
     "keywords": [
         "pandora",
@@ -19,6 +22,7 @@
     "license": "CC-BY-NC-ND-4.0",
     "devDependencies": {
         "electron": "^28.0.0",
+        "electron-builder": "^25.1.8",
         "javascript-obfuscator": "^4.1.1"
     }
 }
