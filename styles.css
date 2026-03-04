@@ -1651,6 +1651,53 @@ body::before {
     color: var(--text-3);
 }
 
+.np-feedback-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    margin-top: 12px;
+}
+
+.np-feedback-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    color: var(--text-2);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 200ms var(--ease);
+    padding: 8px;
+}
+
+.np-feedback-btn:hover {
+    background: var(--glass-hover);
+    border-color: var(--glass-border-hover);
+    color: var(--text-1);
+    transform: scale(1.1);
+}
+
+.np-feedback-btn.liked {
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-color: var(--accent);
+}
+
+.np-feedback-btn.disliked {
+    color: #e74c3c;
+    background: rgba(231, 76, 60, 0.12);
+    border-color: #e74c3c;
+}
+
+.np-feedback-btn svg {
+    width: 100%;
+    height: 100%;
+}
+
 .np-controls {
     display: flex;
     align-items: center;

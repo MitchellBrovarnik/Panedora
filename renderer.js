@@ -1053,6 +1053,13 @@ function renderNowPlayingPage() {
     // Attach event handlers
     document.getElementById('np-back-btn')?.addEventListener('click', () => renderPage('home'));
 
+    // Sync thumb button states with current track feedback
+    if (AppState.playerState.feedback === 'thumbUp') {
+        document.getElementById('np-thumbup')?.classList.add('liked');
+    } else if (AppState.playerState.feedback === 'thumbDown') {
+        document.getElementById('np-thumbdown')?.classList.add('disliked');
+    }
+
     // Thumb up — toggle liked state & call API or Undo
     document.getElementById('np-thumbup')?.addEventListener('click', function () {
         if (!rateLimitOk('thumb')) return;
@@ -1369,6 +1376,12 @@ function updatePlayerUI(state) {
         // Check the merged AppState.playerState.feedback so partial updates don't clear the thumbs!
         if (miniThumbUp) miniThumbUp.classList.toggle('liked', AppState.playerState.feedback === 'thumbUp');
         if (miniThumbDown) miniThumbDown.classList.toggle('disliked', AppState.playerState.feedback === 'thumbDown');
+
+        // Also sync Now Playing page thumb buttons
+        const npThumbUp = document.getElementById('np-thumbup');
+        const npThumbDown = document.getElementById('np-thumbdown');
+        if (npThumbUp) npThumbUp.classList.toggle('liked', AppState.playerState.feedback === 'thumbUp');
+        if (npThumbDown) npThumbDown.classList.toggle('disliked', AppState.playerState.feedback === 'thumbDown');
 
         // Also sync the main player heart
         const heartBtn = document.getElementById('heart-btn');
