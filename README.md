@@ -8,6 +8,9 @@ Pandora Glass is a personal, educational, and experimental project created purel
 
 A premium, immersive Pandora desktop client built with Electron. Pandora Glass features a fully theme-driven Glassmorphism design system, persistent session management, and an enhanced playback experience that goes far beyond the standard Pandora web player.
 
+> ### A Note to Developers on the Backend Code
+> You are completely free to explore, learn from, and adapt the frontend Glassmorphism UI code for your own non-commercial projects. However, to prevent abuse of the legacy API and to maintain the integrity of the subscription-tier checks, the backend logic (`pandora-api.js`, etc.) has been intentionally obfuscated.
+
 ## Recent Updates
 
 *   **Mini Player Transparency & Contrast:** Rewrote the Mini Player window logic to achieve true OS-level transparency. Introduced localized frosted glass "pill" containers and soft radial gradients to ensure readability at any size.
