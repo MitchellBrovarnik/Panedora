@@ -20,7 +20,10 @@ const copyFiles = [
     'package.json',
     'index.html',
     'styles.css',
-    'screenshot.png'
+    'screenshot.png',
+    'icon.ico',
+    'icon.icns',
+    'icon.png'
 ];
 
 // Light obfuscation — renames variables/functions, zero performance cost
