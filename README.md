@@ -91,7 +91,7 @@ Pandora Glass is built using a modern Electron stack, emphasizing security and s
 
 ### Prerequisites
 *   [Node.js](https://nodejs.org/) (v16 or higher)
-*   A valid Pandora account (Pandora Plus or Premium required for full playback compatibility)
+*   A valid Pandora account (Pandora Plus or Premium required to login)
 
 ### Setup Steps
 1. Clone the repository to your local machine:
