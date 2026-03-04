@@ -100,7 +100,7 @@ npx electron-packager . PandoraGlass --platform=win32 --arch=x64 --out=dist
 ## Known Issues
 
 *   **Station Tuning Limitations:** The "Tune Your Station" feature (e.g., selecting "Discovery", "Deep Cuts", or "Artist Only") is currently not supported directly within Pandora Glass.
-    *   **Workaround:** Open the official Pandora web or mobile app, go to your station, select the desired Tune mode, and let a few songs play. When you return to Pandora Glass, the station will continue playing using that selected mode.
+    *   **Workaround:** Open the official Pandora web or mobile app, go to your station, select the desired Tune mode, and let a few songs play. When you return to Pandora Glass, that specific station should play using that selected mode.
 *   **Search Functionality:** The search tab is currently a work in progress. Searching for a specific song may not actually play that specific track.
 
 ## Privacy and Security
