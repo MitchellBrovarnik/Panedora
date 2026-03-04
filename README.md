@@ -119,4 +119,4 @@ This project is licensed under the CC BY-NC 4.0 License. See the LICENSE file fo
 This application is an unofficial, third-party client created for personal, non-commercial use and educational purposes. It is not affiliated with, endorsed by, or sponsored by Pandora Media, LLC. No trademark infringement is intended. This project is provided for educational and research purposes only; users are advised that using third-party clients may violate the service's Terms of Service, and use of this software is entirely at the user's own risk.
 
 > [!TIP]
-> **Recommendation:** This application is best experienced with an active Pandora Plus or Premium subscription. Using a paid account ensures full compatibility with all playback features, provides the highest audio quality, and directly supports the artists on the platform.
+> **DISCLAIMER:** This application only works an active Pandora Plus or Premium subscription. Using a paid account ensures full compatibility with all playback features, provides the highest audio quality, and directly supports the artists on the platform.
