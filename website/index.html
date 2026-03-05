@@ -9,8 +9,12 @@
 
         :root {
             --accent: #7c5bf5;
-            --accent-glow: rgba(124, 91, 245, 0.4);
-            --bg-dark: #0a0a14;
+            --accent-glow: rgba(124, 91, 245, 0.3);
+            --accent-soft: rgba(124, 91, 245, 0.12);
+            --glass: rgba(255, 255, 255, 0.045);
+            --grad-1: #1a0a2e;
+            --grad-3: #1e0a3a;
+            --bg-dark: #080810;
             --bg-card: rgba(255, 255, 255, 0.04);
             --border: rgba(255, 255, 255, 0.08);
             --text: #e8e6f0;
@@ -25,7 +29,16 @@
             overflow-x: hidden;
         }
 
-        /* Background canvas */
+        /* Background effects container (CSS-based effects) */
+        #bg-effects {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        /* Background canvas (reactive effects only) */
         #bg-canvas {
             position: fixed;
             inset: 0;
@@ -33,6 +46,161 @@
             width: 100%;
             height: 100%;
             pointer-events: none;
+            display: none;
+        }
+
+        /* === WAVES === */
+        .waves-container {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 50vh;
+            min-height: 350px;
+            opacity: 0.8;
+        }
+        .waves-container .waves {
+            width: 100%;
+            height: 100%;
+        }
+        .parallax-waves > use {
+            animation: move-forever 12s cubic-bezier(.55,.5,.45,.5) infinite;
+        }
+        .parallax-waves > use:nth-child(1) { animation-delay: -2s; animation-duration: 4s; }
+        .parallax-waves > use:nth-child(2) { animation-delay: -3s; animation-duration: 6s; }
+        .parallax-waves > use:nth-child(3) { animation-delay: -4s; animation-duration: 8s; }
+        .parallax-waves > use:nth-child(4) { animation-delay: -5s; animation-duration: 12s; }
+        @keyframes move-forever {
+            0%   { transform: translate3d(-90px, 0, 0); }
+            100% { transform: translate3d(85px, 0, 0); }
+        }
+
+        /* === ORBS === */
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(60px);
+            opacity: 0.7;
+        }
+        .orb-1 {
+            width: 50vw; height: 50vw;
+            background: var(--accent);
+            top: -20vh; left: -20vw;
+            animation: floatOrb1 18s infinite alternate ease-in-out;
+        }
+        .orb-2 {
+            width: 60vw; height: 60vw;
+            background: var(--grad-1);
+            bottom: -30vh; right: -20vw;
+            animation: floatOrb2 25s infinite alternate ease-in-out;
+        }
+        .orb-3 {
+            width: 45vw; height: 45vw;
+            background: var(--grad-3);
+            top: 40vh; left: 50vw;
+            animation: floatOrb3 20s infinite alternate ease-in-out;
+        }
+        @keyframes floatOrb1 {
+            0%   { transform: translate(0, 0) scale(1); }
+            50%  { transform: translate(70vw, 30vh) scale(1.2); }
+            100% { transform: translate(20vw, 80vh) scale(0.8); }
+        }
+        @keyframes floatOrb2 {
+            0%   { transform: translate(0, 0) scale(1); }
+            50%  { transform: translate(-80vw, -40vh) scale(1.1); }
+            100% { transform: translate(-30vw, -80vh) scale(1.3); }
+        }
+        @keyframes floatOrb3 {
+            0%   { transform: translate(0, 0) scale(1); }
+            50%  { transform: translate(-60vw, 20vh) scale(1.4); }
+            100% { transform: translate(40vw, -50vh) scale(0.9); }
+        }
+
+        /* === SPACE === */
+        .star-layer {
+            position: absolute;
+            inset: -100%;
+            background-image:
+                radial-gradient(2px 2px at 20px 30px, #ffffff, rgba(0,0,0,0)),
+                radial-gradient(2px 2px at 40px 70px, #e2e8f0, rgba(0,0,0,0)),
+                radial-gradient(3px 3px at 50px 160px, #f8fafc, rgba(0,0,0,0)),
+                radial-gradient(2px 2px at 90px 40px, #ffffff, rgba(0,0,0,0)),
+                radial-gradient(2px 2px at 130px 80px, #cbd5e1, rgba(0,0,0,0)),
+                radial-gradient(4px 4px at 160px 120px, #ffffff, rgba(0,0,0,0));
+            background-repeat: repeat;
+            background-size: 200px 200px;
+            opacity: 0.8;
+            animation: spacePan 40s linear infinite;
+        }
+        .star-layer:nth-child(1) { background-size: 150px 150px; animation-duration: 30s; opacity: 0.6; }
+        .star-layer:nth-child(2) { background-size: 250px 250px; animation-duration: 20s; opacity: 0.8; }
+        .star-layer:nth-child(3) { background-size: 350px 350px; animation-duration: 10s; opacity: 1; }
+        @keyframes spacePan {
+            0%   { transform: translateY(0); }
+            100% { transform: translateY(50%); }
+        }
+
+        /* === GRID === */
+        .synth-grid {
+            position: absolute;
+            width: 200%; height: 150%;
+            bottom: -40%; left: -50%;
+            background-image:
+                linear-gradient(var(--accent) 2px, transparent 2px),
+                linear-gradient(90deg, var(--accent) 2px, transparent 2px);
+            background-size: 50px 50px;
+            transform: perspective(600px) rotateX(70deg);
+            animation: gridMove 1.5s linear infinite;
+            -webkit-mask-image: linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 35%);
+            mask-image: linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 35%);
+        }
+        @keyframes gridMove {
+            0%   { background-position: 0 0; }
+            100% { background-position: 0 50px; }
+        }
+
+        /* === PARTICLES === */
+        .particle {
+            position: absolute;
+            top: -20px;
+            width: 8px; height: 8px;
+            background: var(--accent);
+            border-radius: 50%;
+            box-shadow: 0 0 15px var(--accent-glow);
+            animation: particleFall linear infinite;
+            opacity: 0;
+        }
+        @keyframes particleFall {
+            0%   { transform: translateY(0) scale(0.5); opacity: 0; }
+            10%  { opacity: 0.9; transform: translateY(10vh) scale(1); }
+            90%  { opacity: 0.9; }
+            100% { transform: translateY(120vh) scale(0.5); opacity: 0; }
+        }
+
+        /* === RINGS === */
+        .ring-container {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100vw; height: 100vw;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .ring {
+            position: absolute;
+            border-radius: 50%;
+            border: 5px solid var(--accent);
+            opacity: 0;
+            box-shadow: 0 0 30px var(--accent-glow), inset 0 0 30px var(--accent-glow);
+            animation: ringExpand 6s ease-out infinite;
+        }
+        .ring-1 { animation-delay: 0s; }
+        .ring-2 { animation-delay: 1.5s; }
+        .ring-3 { animation-delay: 3s; }
+        .ring-4 { animation-delay: 4.5s; }
+        @keyframes ringExpand {
+            0%   { width: 0; height: 0; opacity: 1; border-width: 10px; }
+            100% { width: 120vw; height: 120vw; opacity: 0; border-width: 2px; }
         }
 
         /* Layout */
@@ -395,6 +563,7 @@
     </style>
 </head>
 <body>
+    <div id="bg-effects"></div>
     <canvas id="bg-canvas"></canvas>
 
     <div class="container">
@@ -446,7 +615,7 @@
                 <button class="effect-btn" data-effect="reactive-wave">Reactive Wave</button>
                 <button class="effect-btn" data-effect="static">Static</button>
             </div>
-            <p class="effect-label" id="effect-label">Orbs — Floating gradient spheres with soft blur</p>
+            <p class="effect-label" id="effect-label">Orbs -- Floating glowing spheres</p>
         </section>
 
         <section class="features" id="features">
@@ -524,11 +693,14 @@
 
     <script>
     (function() {
+        const bgEffects = document.getElementById('bg-effects');
         const canvas = document.getElementById('bg-canvas');
         const ctx = canvas.getContext('2d');
         let w, h, animId;
         let currentEffect = 'orbs';
-        const accent = { r: 124, g: 91, b: 245 };
+        let previousWaveHeights = null;
+        const accentColor = '#7c5bf5';
+        const glowColor = 'rgba(124, 91, 245, 0.3)';
 
         function resize() {
             w = canvas.width = window.innerWidth;
@@ -538,317 +710,272 @@
         resize();
 
         // Simulated audio data for reactive effects
-        function fakeAudio(len) {
+        function fakeFrequencyData(len) {
             const t = performance.now() / 1000;
-            const arr = [];
+            const arr = new Uint8Array(len);
             for (let i = 0; i < len; i++) {
                 const freq = 0.5 + i * 0.3;
                 const val = (Math.sin(t * freq + i * 0.7) * 0.5 + 0.5)
                           * (Math.sin(t * 0.3 + i * 0.1) * 0.3 + 0.7)
                           * (1 - i / len * 0.6);
-                arr.push(val);
+                arr[i] = Math.floor(val * 255);
             }
             return arr;
         }
 
-        // --- EFFECTS ---
-
-        // Orbs
-        const orbs = [];
-        function initOrbs() {
-            orbs.length = 0;
-            for (let i = 0; i < 5; i++) {
-                orbs.push({
-                    x: Math.random() * w, y: Math.random() * h,
-                    r: 150 + Math.random() * 200,
-                    vx: (Math.random() - 0.5) * 0.5,
-                    vy: (Math.random() - 0.5) * 0.5,
-                    hue: Math.random() * 60 - 30
-                });
-            }
-        }
-        function drawOrbs() {
-            ctx.clearRect(0, 0, w, h);
-            for (const o of orbs) {
-                o.x += o.vx; o.y += o.vy;
-                if (o.x < -o.r) o.x = w + o.r;
-                if (o.x > w + o.r) o.x = -o.r;
-                if (o.y < -o.r) o.y = h + o.r;
-                if (o.y > h + o.r) o.y = -o.r;
-                const grad = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, o.r);
-                const r = Math.min(255, accent.r + o.hue);
-                const g = Math.min(255, accent.g + o.hue * 0.5);
-                grad.addColorStop(0, `rgba(${r}, ${g}, ${accent.b}, 0.3)`);
-                grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-                ctx.fillStyle = grad;
-                ctx.fillRect(o.x - o.r, o.y - o.r, o.r * 2, o.r * 2);
-            }
-        }
-
-        // Waves
-        function drawWaves() {
+        function fakeTimeDomainData(len) {
             const t = performance.now() / 1000;
-            ctx.clearRect(0, 0, w, h);
-            for (let layer = 0; layer < 4; layer++) {
-                ctx.beginPath();
-                ctx.moveTo(0, h);
-                const baseY = h * 0.5 + layer * 60;
-                const amp = 40 + layer * 15;
-                const speed = 0.8 + layer * 0.2;
-                for (let x = 0; x <= w; x += 4) {
-                    const y = baseY + Math.sin(x * 0.005 + t * speed + layer) * amp
-                            + Math.sin(x * 0.01 + t * 0.5) * amp * 0.5;
-                    ctx.lineTo(x, y);
+            const arr = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                // Center at 128 like real time-domain data
+                const wave = Math.sin(t * 2 + i * 0.05) * 30
+                           + Math.sin(t * 3.7 + i * 0.08) * 15
+                           + Math.sin(t * 0.5 + i * 0.02) * 10;
+                arr[i] = Math.max(0, Math.min(255, 128 + wave));
+            }
+            return arr;
+        }
+
+        // --- CSS-BASED EFFECTS (identical to app) ---
+
+        function applyCSSEffect(effectId) {
+            bgEffects.innerHTML = '';
+            canvas.style.display = 'none';
+            if (animId) { cancelAnimationFrame(animId); animId = null; }
+
+            if (effectId === 'waves') {
+                bgEffects.innerHTML = `
+                    <div class="waves-container">
+                        <svg class="waves" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 24 150 28" preserveAspectRatio="none" shape-rendering="auto">
+                        <defs><path id="gentle-wave" d="M-160 44c30 0 58-18 88-18s 58 18 88 18 58-18 88-18 58 18 88 18 v44h-352z" /></defs>
+                        <g class="parallax-waves">
+                        <use xlink:href="#gentle-wave" x="48" y="0" fill="var(--accent-glow)" />
+                        <use xlink:href="#gentle-wave" x="48" y="3" fill="var(--accent-soft)" />
+                        <use xlink:href="#gentle-wave" x="48" y="5" fill="var(--glass)" />
+                        <use xlink:href="#gentle-wave" x="48" y="7" fill="var(--accent)" opacity="0.4" />
+                        </g></svg>
+                    </div>`;
+            } else if (effectId === 'orbs') {
+                bgEffects.innerHTML = `
+                    <div class="orb orb-1"></div>
+                    <div class="orb orb-2"></div>
+                    <div class="orb orb-3"></div>`;
+            } else if (effectId === 'space') {
+                bgEffects.innerHTML = `
+                    <div class="star-layer"></div>
+                    <div class="star-layer"></div>
+                    <div class="star-layer"></div>`;
+            } else if (effectId === 'grid') {
+                bgEffects.innerHTML = `<div class="synth-grid"></div>`;
+            } else if (effectId === 'particles') {
+                let parts = '';
+                for (let i = 0; i < 30; i++) {
+                    parts += `<div class="particle" style="left: ${Math.random() * 100}%; animation-delay: ${Math.random() * 5}s; animation-duration: ${4 + Math.random() * 4}s;"></div>`;
                 }
-                ctx.lineTo(w, h);
-                ctx.closePath();
-                ctx.fillStyle = `rgba(${accent.r}, ${accent.g}, ${accent.b}, ${0.06 + layer * 0.03})`;
-                ctx.fill();
+                bgEffects.innerHTML = parts;
+            } else if (effectId === 'rings') {
+                bgEffects.innerHTML = `
+                    <div class="ring-container">
+                        <div class="ring ring-1"></div>
+                        <div class="ring ring-2"></div>
+                        <div class="ring ring-3"></div>
+                        <div class="ring ring-4"></div>
+                    </div>`;
+            } else if (effectId === 'static') {
+                // No effect
             }
         }
 
-        // Space (starfield)
-        const stars = [];
-        function initStars() {
-            stars.length = 0;
-            for (let i = 0; i < 300; i++) {
-                stars.push({
-                    x: Math.random() * w, y: Math.random() * h,
-                    z: Math.random() * 3 + 0.5,
-                    brightness: Math.random()
-                });
-            }
-        }
-        function drawSpace() {
-            const t = performance.now() / 1000;
-            ctx.clearRect(0, 0, w, h);
-            for (const s of stars) {
-                s.x -= s.z * 0.3;
-                if (s.x < 0) { s.x = w; s.y = Math.random() * h; }
-                const flicker = 0.5 + Math.sin(t * 2 + s.brightness * 10) * 0.3 + 0.2;
-                const size = s.z * 0.8;
-                ctx.beginPath();
-                ctx.arc(s.x, s.y, size, 0, Math.PI * 2);
-                ctx.fillStyle = `rgba(${accent.r}, ${accent.g}, ${accent.b}, ${flicker * s.z / 3})`;
-                ctx.fill();
-            }
-        }
+        // --- CANVAS-BASED REACTIVE EFFECTS (identical algorithms to visualizer.js) ---
 
-        // Grid
-        function drawGrid() {
-            const t = performance.now() / 1000;
-            ctx.clearRect(0, 0, w, h);
-            const spacing = 60;
-            ctx.strokeStyle = `rgba(${accent.r}, ${accent.g}, ${accent.b}, 0.08)`;
-            ctx.lineWidth = 1;
-            for (let x = 0; x < w; x += spacing) {
-                const offset = Math.sin(x * 0.01 + t * 0.5) * 10;
-                ctx.beginPath();
-                ctx.moveTo(x, 0);
-                ctx.lineTo(x + offset, h);
-                ctx.stroke();
-            }
-            for (let y = 0; y < h; y += spacing) {
-                const offset = Math.sin(y * 0.01 + t * 0.7) * 10;
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(w, y + offset);
-                ctx.stroke();
-            }
-            // Glow at intersections near center
-            const cx = w / 2, cy = h / 2;
-            for (let x = 0; x < w; x += spacing) {
-                for (let y = 0; y < h; y += spacing) {
-                    const dist = Math.hypot(x - cx, y - cy);
-                    if (dist < 300) {
-                        const alpha = (1 - dist / 300) * 0.15 * (Math.sin(t + x + y) * 0.5 + 0.5);
-                        ctx.beginPath();
-                        ctx.arc(x, y, 3, 0, Math.PI * 2);
-                        ctx.fillStyle = `rgba(${accent.r}, ${accent.g}, ${accent.b}, ${alpha})`;
-                        ctx.fill();
-                    }
-                }
-            }
-        }
-
-        // Particles
-        const particles = [];
-        function initParticles() {
-            particles.length = 0;
-            for (let i = 0; i < 80; i++) {
-                particles.push({
-                    x: Math.random() * w, y: Math.random() * h,
-                    vx: (Math.random() - 0.5) * 0.8,
-                    vy: (Math.random() - 0.5) * 0.8,
-                    size: Math.random() * 2 + 1
-                });
-            }
-        }
-        function drawParticles() {
-            ctx.clearRect(0, 0, w, h);
-            for (const p of particles) {
-                p.x += p.vx; p.y += p.vy;
-                if (p.x < 0) p.x = w; if (p.x > w) p.x = 0;
-                if (p.y < 0) p.y = h; if (p.y > h) p.y = 0;
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-                ctx.fillStyle = `rgba(${accent.r}, ${accent.g}, ${accent.b}, 0.4)`;
-                ctx.fill();
-            }
-            // Connect nearby particles
-            ctx.strokeStyle = `rgba(${accent.r}, ${accent.g}, ${accent.b}, 0.06)`;
-            ctx.lineWidth = 1;
-            for (let i = 0; i < particles.length; i++) {
-                for (let j = i + 1; j < particles.length; j++) {
-                    const dist = Math.hypot(particles[i].x - particles[j].x, particles[i].y - particles[j].y);
-                    if (dist < 120) {
-                        ctx.beginPath();
-                        ctx.moveTo(particles[i].x, particles[i].y);
-                        ctx.lineTo(particles[j].x, particles[j].y);
-                        ctx.stroke();
-                    }
-                }
-            }
-        }
-
-        // Rings
-        function drawRings() {
-            const t = performance.now() / 1000;
-            ctx.clearRect(0, 0, w, h);
-            const cx = w / 2, cy = h / 2;
-            for (let i = 0; i < 8; i++) {
-                const radius = 80 + i * 50 + Math.sin(t * 0.5 + i) * 20;
-                const alpha = 0.05 + Math.sin(t + i * 0.8) * 0.03;
-                ctx.beginPath();
-                ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-                ctx.strokeStyle = `rgba(${accent.r}, ${accent.g}, ${accent.b}, ${alpha})`;
-                ctx.lineWidth = 2 + Math.sin(t * 0.3 + i) * 1;
-                ctx.stroke();
-            }
-        }
-
-        // Reactive Bars
+        // Reactive Bars — matches visualizer.js drawBars()
         function drawReactiveBars() {
             ctx.clearRect(0, 0, w, h);
-            const data = fakeAudio(64);
-            const barW = w / data.length;
-            for (let i = 0; i < data.length; i++) {
-                const barH = data[i] * h * 0.5;
-                const alpha = 0.15 + data[i] * 0.3;
-                ctx.fillStyle = `rgba(${accent.r}, ${accent.g}, ${accent.b}, ${alpha})`;
-                ctx.fillRect(i * barW, h - barH, barW - 2, barH);
-                // Mirror on top
-                ctx.fillStyle = `rgba(${accent.r}, ${accent.g}, ${accent.b}, ${alpha * 0.3})`;
-                ctx.fillRect(i * barW, 0, barW - 2, barH * 0.3);
+            const bufferLength = 128; // fftSize 256 -> frequencyBinCount = 128
+            const dataArray = fakeFrequencyData(bufferLength);
+            const barWidth = (w / bufferLength) * 2.5;
+            let x = 0;
+            const heightMultiplier = 0.6;
+
+            for (let i = 0; i < bufferLength; i++) {
+                const normalized = dataArray[i] / 255;
+                const enhanced = Math.pow(normalized, 1.2);
+                const barHeight = enhanced * (h * heightMultiplier);
+
+                const gradient = ctx.createLinearGradient(0, h - barHeight, 0, h);
+                gradient.addColorStop(0, accentColor);
+                gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+                ctx.fillStyle = gradient;
+                ctx.fillRect(x, h - barHeight, barWidth - 1, barHeight);
+                x += barWidth;
             }
         }
 
-        // Reactive Circle
+        // Reactive Circle — matches visualizer.js drawCircle()
         function drawReactiveCircle() {
             ctx.clearRect(0, 0, w, h);
-            const data = fakeAudio(64);
-            const cx = w / 2, cy = h / 2;
-            const baseR = Math.min(w, h) * 0.15;
+            const bufferLength = 128;
+            const dataArray = fakeFrequencyData(bufferLength);
+            const centerX = w / 2;
+            const centerY = h / 2;
+            const baseRadius = Math.min(w, h) * 0.2;
+
+            // Bass pulsing
+            let bassSum = 0;
+            const bassCount = Math.min(10, bufferLength);
+            for (let i = 0; i < bassCount; i++) {
+                bassSum += dataArray[i];
+            }
+            const bassAvg = (bassSum / bassCount) / 255.0;
+            const dynamicRadius = baseRadius + (Math.pow(bassAvg, 1.5) * baseRadius * 0.4);
+            const maxRipple = dynamicRadius * 0.6;
+
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = accentColor;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = glowColor;
+            ctx.fillStyle = 'rgba(124, 91, 245, 0.1)';
+
             ctx.beginPath();
-            for (let i = 0; i <= data.length; i++) {
-                const idx = i % data.length;
-                const angle = (idx / data.length) * Math.PI * 2 - Math.PI / 2;
-                const r = baseR + data[idx] * baseR * 1.2;
-                const x = cx + Math.cos(angle) * r;
-                const y = cy + Math.sin(angle) * r;
+
+            const validDataLength = Math.floor(bufferLength * 0.7);
+
+            // Right half (0 to PI)
+            for (let i = 0; i < validDataLength; i++) {
+                const normalized = dataArray[i] / 255;
+                const ripple = Math.pow(normalized, 1.8) * maxRipple;
+                const r = dynamicRadius + ripple;
+                const angle = (i / (validDataLength - 1)) * Math.PI - (Math.PI / 2);
+                const x = centerX + Math.cos(angle) * r;
+                const y = centerY + Math.sin(angle) * r;
                 if (i === 0) ctx.moveTo(x, y);
                 else ctx.lineTo(x, y);
             }
+
+            // Left half (PI to 2PI) — mirrored
+            for (let i = validDataLength - 1; i >= 0; i--) {
+                const normalized = dataArray[i] / 255;
+                const ripple = Math.pow(normalized, 1.8) * maxRipple;
+                const r = dynamicRadius + ripple;
+                const angle = Math.PI + ((validDataLength - 1 - i) / (validDataLength - 1)) * Math.PI - (Math.PI / 2);
+                const x = centerX + Math.cos(angle) * r;
+                const y = centerY + Math.sin(angle) * r;
+                ctx.lineTo(x, y);
+            }
+
             ctx.closePath();
-            ctx.strokeStyle = `rgba(${accent.r}, ${accent.g}, ${accent.b}, 0.4)`;
-            ctx.lineWidth = 2;
-            ctx.stroke();
-            ctx.fillStyle = `rgba(${accent.r}, ${accent.g}, ${accent.b}, 0.05)`;
             ctx.fill();
-            // Inner circle
-            ctx.beginPath();
-            ctx.arc(cx, cy, baseR * 0.6, 0, Math.PI * 2);
-            ctx.strokeStyle = `rgba(${accent.r}, ${accent.g}, ${accent.b}, 0.1)`;
-            ctx.lineWidth = 1;
             ctx.stroke();
+            ctx.shadowBlur = 0;
         }
 
-        // Reactive Wave
+        // Reactive Wave — matches visualizer.js drawWave()
         function drawReactiveWave() {
             ctx.clearRect(0, 0, w, h);
-            const data = fakeAudio(128);
-            const midY = h / 2;
-            for (let layer = 0; layer < 3; layer++) {
-                ctx.beginPath();
-                ctx.moveTo(0, midY);
-                for (let i = 0; i < data.length; i++) {
-                    const x = (i / data.length) * w;
-                    const amp = data[i] * 120 * (1 - layer * 0.25);
-                    const y = midY + (layer % 2 === 0 ? -1 : 1) * amp;
-                    ctx.lineTo(x, y);
+            const bufferLength = 512; // fftSize for wave mode
+            const dataArray = fakeTimeDomainData(bufferLength);
+
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = accentColor;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = glowColor;
+
+            ctx.beginPath();
+
+            const sliceWidth = w / (bufferLength - 1);
+            let x = 0;
+            const maxSwing = h * 0.08;
+
+            // 25-point moving average smoothing
+            const smoothedData = new Float32Array(bufferLength);
+            const windowSize = 25;
+            for (let i = 0; i < bufferLength; i++) {
+                let sum = 0;
+                let count = 0;
+                let start = Math.max(0, i - Math.floor(windowSize / 2));
+                let end = Math.min(bufferLength - 1, i + Math.floor(windowSize / 2));
+                for (let j = start; j <= end; j++) {
+                    sum += dataArray[j];
+                    count++;
                 }
-                ctx.strokeStyle = `rgba(${accent.r}, ${accent.g}, ${accent.b}, ${0.2 - layer * 0.05})`;
-                ctx.lineWidth = 2 - layer * 0.5;
-                ctx.stroke();
+                smoothedData[i] = sum / count;
             }
+
+            // Initialize lerp state
+            if (!previousWaveHeights || previousWaveHeights.length !== bufferLength) {
+                previousWaveHeights = new Float32Array(bufferLength);
+                for (let i = 0; i < bufferLength; i++) previousWaveHeights[i] = h / 2;
+            }
+
+            for (let i = 0; i < bufferLength; i++) {
+                const rawV = (smoothedData[i] - 128) / 128.0;
+                const v = Math.sign(rawV) * Math.pow(Math.abs(rawV), 1.6);
+                const targetY = (h / 2) + (v * maxSwing);
+                const lerpedY = (previousWaveHeights[i] * 0.85) + (targetY * 0.15);
+                previousWaveHeights[i] = lerpedY;
+
+                if (i === 0) ctx.moveTo(x, lerpedY);
+                else ctx.lineTo(x, lerpedY);
+                x += sliceWidth;
+            }
+
+            ctx.stroke();
+            ctx.shadowBlur = 0;
         }
 
-        // Static (subtle grain)
-        function drawStatic() {
-            ctx.clearRect(0, 0, w, h);
-            // Just a subtle vignette
-            const grad = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.7);
-            grad.addColorStop(0, `rgba(${accent.r}, ${accent.g}, ${accent.b}, 0.03)`);
-            grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, w, h);
-        }
+        // --- EFFECT SWITCHING ---
 
         const descriptions = {
-            'orbs': 'Orbs — Floating gradient spheres with soft blur',
-            'waves': 'Waves — Layered sine waves flowing across the screen',
-            'space': 'Space — Drifting starfield with twinkling particles',
-            'grid': 'Grid — Warping line grid with glowing intersections',
-            'particles': 'Particles — Connected floating dots forming constellations',
-            'rings': 'Rings — Pulsing concentric circles from the center',
-            'reactive-bars': 'Reactive Bars — Frequency spectrum mirrored top and bottom',
-            'reactive-circle': 'Reactive Circle — Audio-driven radial waveform',
-            'reactive-wave': 'Reactive Wave — Layered waveforms reacting to sound',
-            'static': 'Static — Minimal vignette with no animation'
+            'orbs': 'Orbs -- Floating glowing spheres',
+            'waves': 'Waves -- Flowing neon lines',
+            'space': 'Space -- Parallax starfield',
+            'grid': 'Grid -- Synthwave 3D floor',
+            'particles': 'Particles -- Falling digital snow',
+            'rings': 'Rings -- Pulsing concentric circles',
+            'reactive-bars': 'Reactive Bars -- Frequency visualizer',
+            'reactive-circle': 'Reactive Circle -- Pulsing equalizer ring',
+            'reactive-wave': 'Reactive Wave -- Oscilloscope waveform',
+            'static': 'Static -- No animation'
         };
 
-        const initFns = {
-            'orbs': initOrbs,
-            'space': initStars,
-            'particles': initParticles
-        };
-
-        const drawFns = {
-            'orbs': drawOrbs,
-            'waves': drawWaves,
-            'space': drawSpace,
-            'grid': drawGrid,
-            'particles': drawParticles,
-            'rings': drawRings,
+        const reactiveDrawFns = {
             'reactive-bars': drawReactiveBars,
             'reactive-circle': drawReactiveCircle,
-            'reactive-wave': drawReactiveWave,
-            'static': drawStatic
+            'reactive-wave': drawReactiveWave
         };
 
         function setEffect(name) {
             currentEffect = name;
-            if (initFns[name]) initFns[name]();
+            previousWaveHeights = null;
+
             document.getElementById('effect-label').textContent = descriptions[name] || '';
             document.querySelectorAll('.effect-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.effect === name);
             });
+
+            if (name.startsWith('reactive-')) {
+                // Canvas mode for reactive effects
+                bgEffects.innerHTML = '';
+                canvas.style.display = 'block';
+                canvas.style.opacity = '0.6';
+                canvas.style.mixBlendMode = 'screen';
+                resize();
+                if (!animId) animate();
+            } else {
+                // CSS mode for non-reactive effects
+                applyCSSEffect(name);
+            }
         }
 
         function animate() {
-            const fn = drawFns[currentEffect];
-            if (fn) fn();
-            animId = requestAnimationFrame(animate);
+            const fn = reactiveDrawFns[currentEffect];
+            if (fn) {
+                fn();
+                animId = requestAnimationFrame(animate);
+            } else {
+                animId = null;
+            }
         }
 
         // Button listeners
@@ -856,9 +983,8 @@
             btn.addEventListener('click', () => setEffect(btn.dataset.effect));
         });
 
-        // Start
-        initOrbs();
-        animate();
+        // Start with orbs
+        setEffect('orbs');
     })();
     </script>
 </body>
