@@ -21,9 +21,9 @@ const copyFiles = [
     'index.html',
     'styles.css',
     'screenshot.png',
-    'icon.ico',
-    'icon.icns',
-    'icon.png'
+    'assets/icon.ico',
+    'assets/icon.icns',
+    'assets/icon.png'
 ];
 
 // Light obfuscation — renames variables/functions, zero performance cost
@@ -62,7 +62,7 @@ for (const file of copyFiles) {
         console.log(`  SKIP ${file} (not found)`);
         continue;
     }
-    fs.copyFileSync(filePath, path.join(DIST, file));
+    fs.copyFileSync(filePath, path.join(DIST, path.basename(file)));
     console.log(`  COPIED ${file}`);
 }
 
