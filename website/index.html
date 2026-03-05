@@ -9,8 +9,12 @@
 
         :root {
             --accent: #7c5bf5;
-            --accent-glow: rgba(124, 91, 245, 0.4);
-            --bg-dark: #0a0a14;
+            --accent-glow: rgba(124, 91, 245, 0.3);
+            --accent-soft: rgba(124, 91, 245, 0.12);
+            --glass: rgba(255, 255, 255, 0.045);
+            --grad-1: #1a0a2e;
+            --grad-3: #1e0a3a;
+            --bg-dark: #080810;
             --bg-card: rgba(255, 255, 255, 0.04);
             --border: rgba(255, 255, 255, 0.08);
             --text: #e8e6f0;
@@ -25,8 +29,8 @@
             overflow-x: hidden;
         }
 
-        /* Animated background */
-        .bg-effects {
+        /* Background effects container (CSS-based effects) */
+        #bg-effects {
             position: fixed;
             inset: 0;
             z-index: 0;
@@ -34,43 +38,169 @@
             pointer-events: none;
         }
 
-        .bg-effects .orb {
+        /* Background canvas (reactive effects only) */
+        #bg-canvas {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: none;
+        }
+
+        /* === WAVES === */
+        .waves-container {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 50vh;
+            min-height: 350px;
+            opacity: 0.8;
+        }
+        .waves-container .waves {
+            width: 100%;
+            height: 100%;
+        }
+        .parallax-waves > use {
+            animation: move-forever 12s cubic-bezier(.55,.5,.45,.5) infinite;
+        }
+        .parallax-waves > use:nth-child(1) { animation-delay: -2s; animation-duration: 4s; }
+        .parallax-waves > use:nth-child(2) { animation-delay: -3s; animation-duration: 6s; }
+        .parallax-waves > use:nth-child(3) { animation-delay: -4s; animation-duration: 8s; }
+        .parallax-waves > use:nth-child(4) { animation-delay: -5s; animation-duration: 12s; }
+        @keyframes move-forever {
+            0%   { transform: translate3d(-90px, 0, 0); }
+            100% { transform: translate3d(85px, 0, 0); }
+        }
+
+        /* === ORBS === */
+        .orb {
             position: absolute;
             border-radius: 50%;
-            filter: blur(100px);
-            opacity: 0.3;
-            animation: float 20s ease-in-out infinite;
+            filter: blur(60px);
+            opacity: 0.7;
         }
-
-        .bg-effects .orb:nth-child(1) {
-            width: 600px; height: 600px;
+        .orb-1 {
+            width: 50vw; height: 50vw;
             background: var(--accent);
-            top: -200px; left: -100px;
-            animation-delay: 0s;
+            top: -20vh; left: -20vw;
+            animation: floatOrb1 18s infinite alternate ease-in-out;
+        }
+        .orb-2 {
+            width: 60vw; height: 60vw;
+            background: var(--grad-1);
+            bottom: -30vh; right: -20vw;
+            animation: floatOrb2 25s infinite alternate ease-in-out;
+        }
+        .orb-3 {
+            width: 45vw; height: 45vw;
+            background: var(--grad-3);
+            top: 40vh; left: 50vw;
+            animation: floatOrb3 20s infinite alternate ease-in-out;
+        }
+        @keyframes floatOrb1 {
+            0%   { transform: translate(0, 0) scale(1); }
+            50%  { transform: translate(70vw, 30vh) scale(1.2); }
+            100% { transform: translate(20vw, 80vh) scale(0.8); }
+        }
+        @keyframes floatOrb2 {
+            0%   { transform: translate(0, 0) scale(1); }
+            50%  { transform: translate(-80vw, -40vh) scale(1.1); }
+            100% { transform: translate(-30vw, -80vh) scale(1.3); }
+        }
+        @keyframes floatOrb3 {
+            0%   { transform: translate(0, 0) scale(1); }
+            50%  { transform: translate(-60vw, 20vh) scale(1.4); }
+            100% { transform: translate(40vw, -50vh) scale(0.9); }
         }
 
-        .bg-effects .orb:nth-child(2) {
-            width: 500px; height: 500px;
-            background: #3b82f6;
-            bottom: -150px; right: -100px;
-            animation-delay: -7s;
-            animation-duration: 25s;
+        /* === SPACE === */
+        .star-layer {
+            position: absolute;
+            inset: -100%;
+            background-image:
+                radial-gradient(2px 2px at 20px 30px, #ffffff, rgba(0,0,0,0)),
+                radial-gradient(2px 2px at 40px 70px, #e2e8f0, rgba(0,0,0,0)),
+                radial-gradient(3px 3px at 50px 160px, #f8fafc, rgba(0,0,0,0)),
+                radial-gradient(2px 2px at 90px 40px, #ffffff, rgba(0,0,0,0)),
+                radial-gradient(2px 2px at 130px 80px, #cbd5e1, rgba(0,0,0,0)),
+                radial-gradient(4px 4px at 160px 120px, #ffffff, rgba(0,0,0,0));
+            background-repeat: repeat;
+            background-size: 200px 200px;
+            opacity: 0.8;
+            animation: spacePan 40s linear infinite;
+        }
+        .star-layer:nth-child(1) { background-size: 150px 150px; animation-duration: 30s; opacity: 0.6; }
+        .star-layer:nth-child(2) { background-size: 250px 250px; animation-duration: 20s; opacity: 0.8; }
+        .star-layer:nth-child(3) { background-size: 350px 350px; animation-duration: 10s; opacity: 1; }
+        @keyframes spacePan {
+            0%   { transform: translateY(0); }
+            100% { transform: translateY(50%); }
         }
 
-        .bg-effects .orb:nth-child(3) {
-            width: 400px; height: 400px;
-            background: #a855f7;
+        /* === GRID === */
+        .synth-grid {
+            position: absolute;
+            width: 200%; height: 150%;
+            bottom: -40%; left: -50%;
+            background-image:
+                linear-gradient(var(--accent) 2px, transparent 2px),
+                linear-gradient(90deg, var(--accent) 2px, transparent 2px);
+            background-size: 50px 50px;
+            transform: perspective(600px) rotateX(70deg);
+            animation: gridMove 1.5s linear infinite;
+            -webkit-mask-image: linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 35%);
+            mask-image: linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 35%);
+        }
+        @keyframes gridMove {
+            0%   { background-position: 0 0; }
+            100% { background-position: 0 50px; }
+        }
+
+        /* === PARTICLES === */
+        .particle {
+            position: absolute;
+            top: -20px;
+            width: 8px; height: 8px;
+            background: var(--accent);
+            border-radius: 50%;
+            box-shadow: 0 0 15px var(--accent-glow);
+            animation: particleFall linear infinite;
+            opacity: 0;
+        }
+        @keyframes particleFall {
+            0%   { transform: translateY(0) scale(0.5); opacity: 0; }
+            10%  { opacity: 0.9; transform: translateY(10vh) scale(1); }
+            90%  { opacity: 0.9; }
+            100% { transform: translateY(120vh) scale(0.5); opacity: 0; }
+        }
+
+        /* === RINGS === */
+        .ring-container {
+            position: absolute;
             top: 50%; left: 50%;
             transform: translate(-50%, -50%);
-            animation-delay: -14s;
-            animation-duration: 30s;
+            width: 100vw; height: 100vw;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-
-        @keyframes float {
-            0%, 100% { transform: translate(0, 0) scale(1); }
-            25% { transform: translate(50px, -30px) scale(1.05); }
-            50% { transform: translate(-20px, 40px) scale(0.95); }
-            75% { transform: translate(30px, 20px) scale(1.02); }
+        .ring {
+            position: absolute;
+            border-radius: 50%;
+            border: 5px solid var(--accent);
+            opacity: 0;
+            box-shadow: 0 0 30px var(--accent-glow), inset 0 0 30px var(--accent-glow);
+            animation: ringExpand 6s ease-out infinite;
+        }
+        .ring-1 { animation-delay: 0s; }
+        .ring-2 { animation-delay: 1.5s; }
+        .ring-3 { animation-delay: 3s; }
+        .ring-4 { animation-delay: 4.5s; }
+        @keyframes ringExpand {
+            0%   { width: 0; height: 0; opacity: 1; border-width: 10px; }
+            100% { width: 120vw; height: 120vw; opacity: 0; border-width: 2px; }
         }
 
         /* Layout */
@@ -88,6 +218,7 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
+            gap: 24px;
         }
 
         .logo {
@@ -97,20 +228,21 @@
             color: var(--text);
         }
 
-        .logo span {
-            color: var(--accent);
+        .logo span { color: var(--accent); }
+
+        .nav-links {
+            display: flex;
+            gap: 24px;
         }
 
-        nav a {
+        .nav-links a {
             color: var(--text-dim);
             text-decoration: none;
             font-size: 0.9rem;
             transition: color 0.2s;
         }
 
-        nav a:hover {
-            color: var(--text);
-        }
+        .nav-links a:hover { color: var(--text); }
 
         /* Hero */
         .hero {
@@ -173,6 +305,7 @@
             transition: all 0.25s ease;
             cursor: pointer;
             border: none;
+            font-family: inherit;
         }
 
         .btn-primary {
@@ -227,6 +360,66 @@
             border: 1px solid var(--border);
         }
 
+        /* Effects Demo */
+        .effects-demo {
+            padding: 80px 0;
+        }
+
+        .effects-demo h2 {
+            text-align: center;
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            letter-spacing: -0.5px;
+        }
+
+        .effects-demo .subtitle {
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 1rem;
+            margin-bottom: 40px;
+        }
+
+        .effects-grid {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 24px;
+        }
+
+        .effect-btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .effect-btn:hover {
+            color: var(--text);
+            border-color: rgba(124, 91, 245, 0.3);
+        }
+
+        .effect-btn.active {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+            box-shadow: 0 2px 12px var(--accent-glow);
+        }
+
+        .effect-label {
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            min-height: 1.2em;
+        }
+
         /* Features */
         .features {
             padding: 60px 0;
@@ -270,7 +463,12 @@
             align-items: center;
             justify-content: center;
             margin-bottom: 16px;
-            font-size: 1.3rem;
+        }
+
+        .feature-icon svg {
+            width: 22px;
+            height: 22px;
+            fill: #fff;
         }
 
         .feature-card h3 {
@@ -297,7 +495,7 @@
             margin-bottom: 16px;
         }
 
-        .requirements p {
+        .requirements > p {
             color: var(--text-dim);
             margin-bottom: 32px;
             font-size: 1rem;
@@ -351,9 +549,7 @@
             text-decoration: none;
         }
 
-        footer a:hover {
-            text-decoration: underline;
-        }
+        footer a:hover { text-decoration: underline; }
 
         /* Responsive */
         @media (max-width: 640px) {
@@ -361,20 +557,22 @@
             .download-row { flex-direction: column; align-items: center; }
             .btn { width: 100%; max-width: 280px; justify-content: center; }
             .features-grid { grid-template-columns: 1fr; }
+            .effects-grid { gap: 6px; }
+            .effect-btn { padding: 8px 14px; font-size: 0.8rem; }
         }
     </style>
 </head>
 <body>
-    <div class="bg-effects">
-        <div class="orb"></div>
-        <div class="orb"></div>
-        <div class="orb"></div>
-    </div>
+    <div id="bg-effects"></div>
+    <canvas id="bg-canvas"></canvas>
 
     <div class="container">
         <nav>
             <div class="logo">Pane<span>dora</span></div>
-            <a href="#features">Features</a>
+            <div class="nav-links">
+                <a href="#effects">Effects</a>
+                <a href="#features">Features</a>
+            </div>
         </nav>
 
         <section class="hero">
@@ -402,37 +600,67 @@
             <img src="screenshot.png" alt="Panedora App Interface" loading="lazy">
         </div>
 
+        <section class="effects-demo" id="effects">
+            <h2>10 live background effects.</h2>
+            <p class="subtitle">Click any effect to see it on this page. Reactive effects use simulated audio data.</p>
+            <div class="effects-grid">
+                <button class="effect-btn active" data-effect="orbs">Orbs</button>
+                <button class="effect-btn" data-effect="waves">Waves</button>
+                <button class="effect-btn" data-effect="space">Space</button>
+                <button class="effect-btn" data-effect="grid">Grid</button>
+                <button class="effect-btn" data-effect="particles">Particles</button>
+                <button class="effect-btn" data-effect="rings">Rings</button>
+                <button class="effect-btn" data-effect="reactive-bars">Reactive Bars</button>
+                <button class="effect-btn" data-effect="reactive-circle">Reactive Circle</button>
+                <button class="effect-btn" data-effect="reactive-wave">Reactive Wave</button>
+                <button class="effect-btn" data-effect="static">Static</button>
+            </div>
+            <p class="effect-label" id="effect-label">Orbs -- Floating glowing spheres</p>
+        </section>
+
         <section class="features" id="features">
             <h2>Everything you need to listen better.</h2>
             <div class="features-grid">
                 <div class="feature-card">
-                    <div class="feature-icon">&#127912;</div>
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-1-.01-.83.67-1.49 1.5-1.49H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+                    </div>
                     <h3>9 Glassmorphism Themes</h3>
                     <p>Frosted glass panels, translucent islands, and full CSS variable theming that transforms every pixel instantly when you switch.</p>
                 </div>
                 <div class="feature-card">
-                    <div class="feature-icon">&#127925;</div>
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+                    </div>
                     <h3>Live Synced Lyrics</h3>
                     <p>Time-coded lyrics auto-scroll with the music, highlighted line by line. Choose from glow, pill, or full-line highlight styles.</p>
                 </div>
                 <div class="feature-card">
-                    <div class="feature-icon">&#127911;</div>
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+                    </div>
                     <h3>Audio Visualizers</h3>
                     <p>10 animated background effects powered by Web Audio API. Reactive bars, circles, and waves that move with your music.</p>
                 </div>
                 <div class="feature-card">
-                    <div class="feature-icon">&#128187;</div>
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-7-2h2v-4h4v-2h-4V7h-2v4H8v2h4z"/></svg>
+                    </div>
                     <h3>Always-on-Top Mini Player</h3>
                     <p>A compact floating bar that stays above all windows, even borderless fullscreen games. Controls and feedback at a glance.</p>
                 </div>
                 <div class="feature-card">
-                    <div class="feature-icon">&#127912;</div>
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zM5 15h14v3H5z"/></svg>
+                    </div>
                     <h3>Adaptive Dynamic Theme</h3>
                     <p>Samples your current album art and extracts a dominant color, repainting the entire UI in real time as songs change.</p>
                 </div>
                 <div class="feature-card">
-                    <div class="feature-icon">&#128274;</div>
-                    <h3>Private &amp; Secure</h3>
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+                    </div>
+                    <h3>Private and Secure</h3>
                     <p>Credentials encrypted with OS keychain. No third-party tracking. All data stored locally and wiped on sign-out.</p>
                 </div>
             </div>
@@ -462,5 +690,302 @@
             <p>Licensed under <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/">CC BY-NC-ND 4.0</a></p>
         </footer>
     </div>
+
+    <script>
+    (function() {
+        const bgEffects = document.getElementById('bg-effects');
+        const canvas = document.getElementById('bg-canvas');
+        const ctx = canvas.getContext('2d');
+        let w, h, animId;
+        let currentEffect = 'orbs';
+        let previousWaveHeights = null;
+        const accentColor = '#7c5bf5';
+        const glowColor = 'rgba(124, 91, 245, 0.3)';
+
+        function resize() {
+            w = canvas.width = window.innerWidth;
+            h = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Simulated audio data for reactive effects
+        function fakeFrequencyData(len) {
+            const t = performance.now() / 1000;
+            const arr = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                const freq = 0.5 + i * 0.3;
+                const val = (Math.sin(t * freq + i * 0.7) * 0.5 + 0.5)
+                          * (Math.sin(t * 0.3 + i * 0.1) * 0.3 + 0.7)
+                          * (1 - i / len * 0.6);
+                arr[i] = Math.floor(val * 255);
+            }
+            return arr;
+        }
+
+        function fakeTimeDomainData(len) {
+            const t = performance.now() / 1000;
+            const arr = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                // Center at 128 like real time-domain data
+                const wave = Math.sin(t * 2 + i * 0.05) * 30
+                           + Math.sin(t * 3.7 + i * 0.08) * 15
+                           + Math.sin(t * 0.5 + i * 0.02) * 10;
+                arr[i] = Math.max(0, Math.min(255, 128 + wave));
+            }
+            return arr;
+        }
+
+        // --- CSS-BASED EFFECTS (identical to app) ---
+
+        function applyCSSEffect(effectId) {
+            bgEffects.innerHTML = '';
+            canvas.style.display = 'none';
+            if (animId) { cancelAnimationFrame(animId); animId = null; }
+
+            if (effectId === 'waves') {
+                bgEffects.innerHTML = `
+                    <div class="waves-container">
+                        <svg class="waves" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 24 150 28" preserveAspectRatio="none" shape-rendering="auto">
+                        <defs><path id="gentle-wave" d="M-160 44c30 0 58-18 88-18s 58 18 88 18 58-18 88-18 58 18 88 18 v44h-352z" /></defs>
+                        <g class="parallax-waves">
+                        <use xlink:href="#gentle-wave" x="48" y="0" fill="var(--accent-glow)" />
+                        <use xlink:href="#gentle-wave" x="48" y="3" fill="var(--accent-soft)" />
+                        <use xlink:href="#gentle-wave" x="48" y="5" fill="var(--glass)" />
+                        <use xlink:href="#gentle-wave" x="48" y="7" fill="var(--accent)" opacity="0.4" />
+                        </g></svg>
+                    </div>`;
+            } else if (effectId === 'orbs') {
+                bgEffects.innerHTML = `
+                    <div class="orb orb-1"></div>
+                    <div class="orb orb-2"></div>
+                    <div class="orb orb-3"></div>`;
+            } else if (effectId === 'space') {
+                bgEffects.innerHTML = `
+                    <div class="star-layer"></div>
+                    <div class="star-layer"></div>
+                    <div class="star-layer"></div>`;
+            } else if (effectId === 'grid') {
+                bgEffects.innerHTML = `<div class="synth-grid"></div>`;
+            } else if (effectId === 'particles') {
+                let parts = '';
+                for (let i = 0; i < 30; i++) {
+                    parts += `<div class="particle" style="left: ${Math.random() * 100}%; animation-delay: ${Math.random() * 5}s; animation-duration: ${4 + Math.random() * 4}s;"></div>`;
+                }
+                bgEffects.innerHTML = parts;
+            } else if (effectId === 'rings') {
+                bgEffects.innerHTML = `
+                    <div class="ring-container">
+                        <div class="ring ring-1"></div>
+                        <div class="ring ring-2"></div>
+                        <div class="ring ring-3"></div>
+                        <div class="ring ring-4"></div>
+                    </div>`;
+            } else if (effectId === 'static') {
+                // No effect
+            }
+        }
+
+        // --- CANVAS-BASED REACTIVE EFFECTS (identical algorithms to visualizer.js) ---
+
+        // Reactive Bars — matches visualizer.js drawBars()
+        function drawReactiveBars() {
+            ctx.clearRect(0, 0, w, h);
+            const bufferLength = 128; // fftSize 256 -> frequencyBinCount = 128
+            const dataArray = fakeFrequencyData(bufferLength);
+            const barWidth = (w / bufferLength) * 2.5;
+            let x = 0;
+            const heightMultiplier = 0.6;
+
+            for (let i = 0; i < bufferLength; i++) {
+                const normalized = dataArray[i] / 255;
+                const enhanced = Math.pow(normalized, 1.2);
+                const barHeight = enhanced * (h * heightMultiplier);
+
+                const gradient = ctx.createLinearGradient(0, h - barHeight, 0, h);
+                gradient.addColorStop(0, accentColor);
+                gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+                ctx.fillStyle = gradient;
+                ctx.fillRect(x, h - barHeight, barWidth - 1, barHeight);
+                x += barWidth;
+            }
+        }
+
+        // Reactive Circle — matches visualizer.js drawCircle()
+        function drawReactiveCircle() {
+            ctx.clearRect(0, 0, w, h);
+            const bufferLength = 128;
+            const dataArray = fakeFrequencyData(bufferLength);
+            const centerX = w / 2;
+            const centerY = h / 2;
+            const baseRadius = Math.min(w, h) * 0.2;
+
+            // Bass pulsing
+            let bassSum = 0;
+            const bassCount = Math.min(10, bufferLength);
+            for (let i = 0; i < bassCount; i++) {
+                bassSum += dataArray[i];
+            }
+            const bassAvg = (bassSum / bassCount) / 255.0;
+            const dynamicRadius = baseRadius + (Math.pow(bassAvg, 1.5) * baseRadius * 0.4);
+            const maxRipple = dynamicRadius * 0.6;
+
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = accentColor;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = glowColor;
+            ctx.fillStyle = 'rgba(124, 91, 245, 0.1)';
+
+            ctx.beginPath();
+
+            const validDataLength = Math.floor(bufferLength * 0.7);
+
+            // Right half (0 to PI)
+            for (let i = 0; i < validDataLength; i++) {
+                const normalized = dataArray[i] / 255;
+                const ripple = Math.pow(normalized, 1.8) * maxRipple;
+                const r = dynamicRadius + ripple;
+                const angle = (i / (validDataLength - 1)) * Math.PI - (Math.PI / 2);
+                const x = centerX + Math.cos(angle) * r;
+                const y = centerY + Math.sin(angle) * r;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+
+            // Left half (PI to 2PI) — mirrored
+            for (let i = validDataLength - 1; i >= 0; i--) {
+                const normalized = dataArray[i] / 255;
+                const ripple = Math.pow(normalized, 1.8) * maxRipple;
+                const r = dynamicRadius + ripple;
+                const angle = Math.PI + ((validDataLength - 1 - i) / (validDataLength - 1)) * Math.PI - (Math.PI / 2);
+                const x = centerX + Math.cos(angle) * r;
+                const y = centerY + Math.sin(angle) * r;
+                ctx.lineTo(x, y);
+            }
+
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+        }
+
+        // Reactive Wave — matches visualizer.js drawWave()
+        function drawReactiveWave() {
+            ctx.clearRect(0, 0, w, h);
+            const bufferLength = 512; // fftSize for wave mode
+            const dataArray = fakeTimeDomainData(bufferLength);
+
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = accentColor;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = glowColor;
+
+            ctx.beginPath();
+
+            const sliceWidth = w / (bufferLength - 1);
+            let x = 0;
+            const maxSwing = h * 0.08;
+
+            // 25-point moving average smoothing
+            const smoothedData = new Float32Array(bufferLength);
+            const windowSize = 25;
+            for (let i = 0; i < bufferLength; i++) {
+                let sum = 0;
+                let count = 0;
+                let start = Math.max(0, i - Math.floor(windowSize / 2));
+                let end = Math.min(bufferLength - 1, i + Math.floor(windowSize / 2));
+                for (let j = start; j <= end; j++) {
+                    sum += dataArray[j];
+                    count++;
+                }
+                smoothedData[i] = sum / count;
+            }
+
+            // Initialize lerp state
+            if (!previousWaveHeights || previousWaveHeights.length !== bufferLength) {
+                previousWaveHeights = new Float32Array(bufferLength);
+                for (let i = 0; i < bufferLength; i++) previousWaveHeights[i] = h / 2;
+            }
+
+            for (let i = 0; i < bufferLength; i++) {
+                const rawV = (smoothedData[i] - 128) / 128.0;
+                const v = Math.sign(rawV) * Math.pow(Math.abs(rawV), 1.6);
+                const targetY = (h / 2) + (v * maxSwing);
+                const lerpedY = (previousWaveHeights[i] * 0.85) + (targetY * 0.15);
+                previousWaveHeights[i] = lerpedY;
+
+                if (i === 0) ctx.moveTo(x, lerpedY);
+                else ctx.lineTo(x, lerpedY);
+                x += sliceWidth;
+            }
+
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+        }
+
+        // --- EFFECT SWITCHING ---
+
+        const descriptions = {
+            'orbs': 'Orbs -- Floating glowing spheres',
+            'waves': 'Waves -- Flowing neon lines',
+            'space': 'Space -- Parallax starfield',
+            'grid': 'Grid -- Synthwave 3D floor',
+            'particles': 'Particles -- Falling digital snow',
+            'rings': 'Rings -- Pulsing concentric circles',
+            'reactive-bars': 'Reactive Bars -- Frequency visualizer',
+            'reactive-circle': 'Reactive Circle -- Pulsing equalizer ring',
+            'reactive-wave': 'Reactive Wave -- Oscilloscope waveform',
+            'static': 'Static -- No animation'
+        };
+
+        const reactiveDrawFns = {
+            'reactive-bars': drawReactiveBars,
+            'reactive-circle': drawReactiveCircle,
+            'reactive-wave': drawReactiveWave
+        };
+
+        function setEffect(name) {
+            currentEffect = name;
+            previousWaveHeights = null;
+
+            document.getElementById('effect-label').textContent = descriptions[name] || '';
+            document.querySelectorAll('.effect-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.effect === name);
+            });
+
+            if (name.startsWith('reactive-')) {
+                // Canvas mode for reactive effects
+                bgEffects.innerHTML = '';
+                canvas.style.display = 'block';
+                canvas.style.opacity = '0.6';
+                canvas.style.mixBlendMode = 'screen';
+                resize();
+                if (!animId) animate();
+            } else {
+                // CSS mode for non-reactive effects
+                applyCSSEffect(name);
+            }
+        }
+
+        function animate() {
+            const fn = reactiveDrawFns[currentEffect];
+            if (fn) {
+                fn();
+                animId = requestAnimationFrame(animate);
+            } else {
+                animId = null;
+            }
+        }
+
+        // Button listeners
+        document.querySelectorAll('.effect-btn').forEach(btn => {
+            btn.addEventListener('click', () => setEffect(btn.dataset.effect));
+        });
+
+        // Start with orbs
+        setEffect('orbs');
+    })();
+    </script>
 </body>
 </html>
