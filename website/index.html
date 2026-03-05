@@ -703,6 +703,110 @@
             line-height: 1.6;
         }
 
+        /* About Section */
+        .about-section {
+            padding: 80px 0 40px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .about-section h2 {
+            text-align: center;
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 24px;
+            letter-spacing: -0.5px;
+        }
+
+        .about-content {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 32px;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            font-size: 1.05rem;
+            line-height: 1.7;
+            color: var(--text-dim);
+        }
+
+        .note-box {
+            margin-top: 24px;
+            padding: 20px;
+            background: rgba(124, 91, 245, 0.08);
+            border-left: 4px solid var(--accent);
+            border-radius: 0 8px 8px 0;
+            font-size: 0.95rem;
+        }
+
+        .note-box strong {
+            display: block;
+            color: var(--accent);
+            margin-bottom: 8px;
+            font-size: 1rem;
+        }
+
+        /* Architecture Section */
+        .architecture-section {
+            padding: 60px 0;
+        }
+
+        .architecture-section h2 {
+            text-align: center;
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 48px;
+            letter-spacing: -0.5px;
+        }
+
+        .arch-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .arch-card {
+            padding: 28px;
+            border-radius: 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .arch-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(124, 91, 245, 0.3);
+        }
+
+        .arch-card h4 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .arch-card h4::before {
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 10px var(--accent-glow);
+        }
+
+        .arch-card p {
+            font-size: 0.9rem;
+            color: var(--text-dim);
+            line-height: 1.6;
+            margin: 0;
+        }
+
         /* Requirements */
         .requirements {
             padding: 60px 0;
@@ -814,11 +918,12 @@
         <nav>
             <div class="logo">Pane<span>dora</span></div>
             <div class="nav-links">
-                <div class="nav-links">
-                    <a href="#themes">Themes</a>
-                    <a href="#effects">Effects</a>
-                    <a href="#features">Features</a>
-                </div>
+                <a href="#about">About</a>
+                <a href="#architecture">Architecture</a>
+                <a href="#themes">Themes</a>
+                <a href="#effects">Effects</a>
+                <a href="#features">Features</a>
+            </div>
         </nav>
 
         <section class="hero">
@@ -855,6 +960,61 @@
         <div class="screenshot-wrap">
             <img src="screenshot.png" alt="Panedora App Interface" loading="lazy">
         </div>
+
+        <section class="about-section" id="about">
+            <h2>About this Project</h2>
+            <div class="about-content">
+                <p>Panedora is a personal, educational, and experimental project created purely for fun. It was built as
+                    a creative exercise to explore modern UI design (Glassmorphism) and Electron-based desktop
+                    application development. This project is intended for personal use only and was developed with zero
+                    intent to cause harm, bypass security, or interfere with Pandora's business operations. It is shared
+                    as a demonstration of UI/UX design and technical integration.</p>
+
+                <div class="note-box">
+                    <strong>A Note to Developers on the Backend Code:</strong>
+                    <p>You are completely free to explore, learn from, and adapt the frontend Glassmorphism UI code for
+                        your own non-commercial projects. However, to prevent abuse of the legacy API and to maintain
+                        the integrity of the subscription-tier checks, the backend logic (`pandora-api.js`, etc.) has
+                        been intentionally obfuscated in public releases.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="architecture-section" id="architecture">
+            <h2>Technical Architecture</h2>
+            <div class="arch-grid">
+                <div class="arch-card">
+                    <h4>Main Process</h4>
+                    <p>Acts as the orchestrator. Manages application lifecycle, handles secure API requests to Pandora
+                        from a Node.js context, and controls window state via IPC handlers.</p>
+                </div>
+                <div class="arch-card">
+                    <h4>API Controller</h4>
+                    <p>A dedicated class that handles all communication with Pandora's backend REST endpoints, managing
+                        auth token and CSRF token lifecycles.</p>
+                </div>
+                <div class="arch-card">
+                    <h4>Renderer Process</h4>
+                    <p>The vanilla JavaScript, HTML5, and CSS3 frontend. Handles DOM rendering, routing, audio playback,
+                        the theme system, and the Adaptive Color extraction algorithm.</p>
+                </div>
+                <div class="arch-card">
+                    <h4>Web Audio Visualizer</h4>
+                    <p>A standalone class powered by the Web Audio API that drives three Canvas-based reactive
+                        visualizer styles (Bars, Circle, Wave) with heavy math smoothing.</p>
+                </div>
+                <div class="arch-card">
+                    <h4>Context Bridge</h4>
+                    <p>Establishes a secure IPC bridge using Electron's `contextBridge` with full context isolation —
+                        the renderer has zero direct access to Node.js or Electron APIs.</p>
+                </div>
+                <div class="arch-card">
+                    <h4>Dynamic CSS</h4>
+                    <p>Built entirely on CSS custom properties (variables). Employs CSS Grid, Flexbox,
+                        `backdrop-filter`, and a transparent frameless window setup.</p>
+                </div>
+            </div>
+        </section>
 
         <section class="themes-demo" id="themes">
             <h2>9 Glassmorphism themes.</h2>
