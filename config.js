@@ -132,11 +132,11 @@ module.exports = {
         return token !== null && token !== undefined;
     },
 
-    // Clear all auth data (logout)
+    // Clear all data (logout) — full wipe
     clearAll: () => {
+        setConfig('credentials', null);
         setConfig('authToken', null);
         setConfig('csrfToken', null);
         setConfig('listenerId', null);
-        // Keep credentials for re-login convenience
     }
 };

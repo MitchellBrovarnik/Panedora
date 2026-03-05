@@ -55,9 +55,7 @@ class PandoraAPI {
         const { session } = require('electron');
         const cookieSession = session.defaultSession;
 
-        // Ensure our CSRF token is in the Chromium cookie jar natively
-        // This prevents duplicate Cookie header collisions and allows Chromium to natively manage
-        // the PerimeterX `_pxhd` cookie without us stripping it.
+        // Ensure our CSRF token is in the Chromium cookie jar
         if (this.csrfToken) {
             try {
                 await cookieSession.cookies.set({
@@ -77,10 +75,7 @@ class PandoraAPI {
         const timeout = setTimeout(() => controller.abort(), 30000);
 
         try {
-            // net.fetch routes the request through Chromium's native network stack, 
-            // bypassing WAF blocks that trigger on Node's raw TLS fingerprint.
-            // By omitting the manual "Cookie" header above, we let Chromium seamlessly pass both
-            // our injected csrftoken AND the PerimeterX _pxhd cookie!
+            // Use Chromium's native network stack for cookie management
             const response = await net.fetch(url, {
                 method: 'POST',
                 headers: headers,
@@ -120,7 +115,6 @@ class PandoraAPI {
                 return json;
             } else {
                 if (response.status === 401 || json.errorCode === 1000) {
-                    console.log('[API] Session expired (401 or Code 1000)');
                     if (this.onSessionExpired) this.onSessionExpired();
                 }
                 throw { status: response.status, ...json };
@@ -138,8 +132,6 @@ class PandoraAPI {
      * Login with username/password
      */
     async login(username, password) {
-        console.log('[API] Logging in...');
-
         try {
             const response = await this.request('/v1/auth/login', {
                 username,
@@ -149,13 +141,9 @@ class PandoraAPI {
             });
 
             if (response.authToken) {
-                // Dump ALL response keys for subscription diagnostics
-                console.log('[API] Login response keys:', Object.keys(response).join(', '));
-
                 // Check subscription: require positive proof of paid status
                 const isPaid = this._checkLoginSubscription(response);
                 if (!isPaid) {
-                    console.log('[API] Free-tier account detected — blocking login');
                     return {
                         success: false,
                         error: 'Pandora Glass requires a Pandora Premium or Plus subscription. Free-tier accounts are not supported.'
@@ -170,7 +158,6 @@ class PandoraAPI {
                     config.setListenerId(response.listenerId);
                 }
 
-                console.log('[API] Login successful');
                 return { success: true, ...response };
             }
 
@@ -221,23 +208,17 @@ class PandoraAPI {
         if (response.smartConversionDisabled === true) paidSignals.push('smartConversionDisabled');
         if (response.smartConversionDisabled === false) freeSignals.push('smartConversionEnabled');
 
-        console.log('[API] Free signals:', freeSignals.length > 0 ? freeSignals.join(', ') : 'none');
-        console.log('[API] Paid signals:', paidSignals.length > 0 ? paidSignals.join(', ') : 'none');
-
         // If we found ANY paid signals, allow (paid overrides any false positives)
         if (paidSignals.length > 0) {
-            console.log('[API] Paid subscription confirmed');
             return true;
         }
 
         // If we found free signals, block
         if (freeSignals.length > 0) {
-            console.log('[API] Free-tier account detected');
             return false;
         }
 
         // No signals at all — block to be safe
-        console.log('[API] No subscription indicators found — assuming free tier');
         return false;
     }
 
@@ -245,7 +226,6 @@ class PandoraAPI {
      * Clear local auth state and logout
      */
     logout() {
-        console.log('[API] Logging out...');
         this.authToken = null;
         this.csrfToken = this.generateCsrfToken();
         config.clearAll();
@@ -255,15 +235,12 @@ class PandoraAPI {
      * Get user's stations
      */
     async getStations() {
-        console.log('[API] Fetching stations...');
-
         try {
             const response = await this.request('/v1/station/getStations', {
                 pageSize: 250,
                 startIndex: 0
             });
 
-            console.log(`[API] Retrieved ${response.stations?.length || 0} stations`);
             return response.stations || [];
         } catch (error) {
             console.error('[API] Failed to get stations:', error);
@@ -279,15 +256,12 @@ class PandoraAPI {
      * Create a new station from a seed (artist or track)
      */
     async createStation(musicToken) {
-        console.log(`[API] Creating station from seed: ${musicToken}`);
-
         try {
             const response = await this.request('/v1/station/createStation', {
                 musicToken,
                 pandoraId: musicToken
             });
 
-            console.log('[API] Station created:', response.stationId);
             return response;
         } catch (error) {
             console.error('[API] Failed to create station:', error);
@@ -295,13 +269,10 @@ class PandoraAPI {
         }
     }
 
-
     /**
      * Get playlist tracks for a station
      */
     async getPlaylist(stationId, isStationStart = false, startingAtTrackId = null, { skipRetry = false } = {}) {
-        console.log(`[API] Fetching playlist for station ${stationId} (StartTrack: ${startingAtTrackId || 'none'})...`);
-
         try {
             const payload = {
                 stationId,
@@ -318,33 +289,23 @@ class PandoraAPI {
             // Check for SimStreamViolation (another device is streaming) - success path
             if (response.tracks?.length > 0 && response.tracks[0].trackType === 'SimStreamViolation') {
                 if (skipRetry) {
-                    console.log('[API] SimStreamViolation detected (fast-fail, no retry)');
                     return { tracks: [], error: 'Another device is streaming.' };
                 }
-                console.log('[API] SimStreamViolation detected - another stream active, retrying...');
                 response = await this._retryAfterSimStreamViolation(payload);
             }
 
-            const tracks = response.tracks || [];
-            const error = response.error || null;
-
-            console.log(`[API] Retrieved ${tracks.length} tracks`);
-
-            return { tracks, error };
+            return { tracks: response.tracks || [], error: response.error || null };
         } catch (error) {
             // Check for SimStreamViolation in error response
             const errorStr = JSON.stringify(error);
             if (errorStr.includes('SimStreamViolation')) {
                 if (skipRetry) {
-                    console.log('[API] SimStreamViolation in error (fast-fail, no retry)');
                     return { tracks: [], error: 'Another device is streaming.' };
                 }
-                console.log('[API] SimStreamViolation in error - retrying...');
                 try {
                     const retryResponse = await this._retryAfterSimStreamViolation(payload);
                     return { tracks: retryResponse.tracks || [], error: retryResponse.error || null };
                 } catch (retryError) {
-                    console.error('[API] All retries failed:', JSON.stringify(retryError));
                     return { tracks: [], error: 'Failed to load playlist. Please try again.' };
                 }
             }
@@ -360,7 +321,6 @@ class PandoraAPI {
         const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
         for (let attempt = 1; attempt <= 3; attempt++) {
-            console.log(`[API] SimStream retry ${attempt}/3 - waiting ${attempt * 2}s...`);
             await delay(attempt * 2000);  // 2s, 4s, 6s
 
             try {
@@ -368,23 +328,19 @@ class PandoraAPI {
 
                 // Check if still SimStreamViolation
                 if (response.tracks?.length > 0 && response.tracks[0].trackType === 'SimStreamViolation') {
-                    console.log(`[API] Still SimStreamViolation on attempt ${attempt}`);
                     continue;
                 }
 
-                console.log(`[API] SimStream resolved on attempt ${attempt}: ${response.tracks?.length || 0} tracks`);
                 return response;
             } catch (e) {
                 const eStr = JSON.stringify(e);
                 if (eStr.includes('SimStreamViolation')) {
-                    console.log(`[API] Still SimStreamViolation error on attempt ${attempt}`);
                     continue;
                 }
                 throw e;  // Different error, don't retry
             }
         }
 
-        console.error('[API] SimStreamViolation persisted after 3 retries');
         return { tracks: [], error: 'Another device is streaming. Please pause it and try again.' };
     }
 
@@ -392,15 +348,12 @@ class PandoraAPI {
      * Add feedback (thumbs up/down)
      */
     async addFeedback(trackToken, isPositive) {
-        console.log(`[API] Adding ${isPositive ? 'positive' : 'negative'} feedback...`);
-
         try {
             const response = await this.request('/v1/station/addFeedback', {
                 trackToken,
                 isPositive
             });
 
-            console.log('[API] Feedback added successfully, feedbackId:', response?.feedbackId);
             return { success: true, feedbackId: response?.feedbackId, ...response };
         } catch (error) {
             console.error('[API] Failed to add feedback:', error);
@@ -412,14 +365,11 @@ class PandoraAPI {
      * Delete feedback (undo thumbs up/down)
      */
     async deleteFeedback(feedbackId) {
-        console.log(`[API] Deleting feedback ${feedbackId}...`);
-
         try {
             const response = await this.request('/v1/station/deleteFeedback', {
                 feedbackId
             });
 
-            console.log('[API] Feedback deleted successfully');
             return { success: true, ...response };
         } catch (error) {
             console.error('[API] Failed to delete feedback:', error);
@@ -493,21 +443,18 @@ class PandoraAPI {
     async verifySubscription() {
         try {
             const creds = config.getCredentials();
-            if (!creds?.username || !creds?.password) {
-                console.log('[API] No stored credentials for subscription re-check');
+            if (!creds?.email || !creds?.password) {
                 return true; // Can't verify without credentials, allow to avoid lock-out
             }
 
-            console.log('[API] Re-authenticating to verify subscription...');
             const response = await this.request('/v1/auth/login', {
-                username: creds.username,
+                username: creds.email,
                 password: creds.password,
                 existingAuthToken: null,
                 keepLoggedIn: true
             });
 
             if (!response.authToken) {
-                console.log('[API] Re-auth failed — no authToken');
                 return false;
             }
 
@@ -536,12 +483,10 @@ class PandoraAPI {
      * Remove a station
      */
     async removeStation(stationId) {
-        console.log(`[API] Removing station: ${stationId}`);
         try {
-            const response = await this.request('/v1/station/removeStation', {
+            await this.request('/v1/station/removeStation', {
                 stationId
             });
-            console.log('[API] Station removed:', response);
             return true;
         } catch (error) {
             console.error('[API] Failed to remove station:', error);
@@ -553,8 +498,6 @@ class PandoraAPI {
      * Search for songs, artists, and stations
      */
     async search(query) {
-        console.log(`[API] Searching for: ${query}`);
-
         if (!query || query.length < 2) {
             return { songs: [], artists: [], stations: [] };
         }
@@ -611,7 +554,6 @@ class PandoraAPI {
                 }))
             };
 
-            console.log(`[API] Found ${results.songs.length} songs, ${results.artists.length} artists, ${results.stations.length} stations`);
             return results;
         } catch (error) {
             console.error('[API] Search failed:', error);

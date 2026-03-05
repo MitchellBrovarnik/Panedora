@@ -116,7 +116,6 @@ function sendToUI(channel, data) {
 }
 
 function sendLoginStatus(isLoggedIn) {
-    console.log('[Main] Sending login status to UI:', isLoggedIn);
     sendToUI('UI:LOGIN_STATUS', { isLoggedIn });
 }
 
@@ -174,7 +173,6 @@ function getCurrentState() {
 // ============================================================================
 
 async function login(username, password) {
-    console.log('[Main] Attempting login...');
     const result = await api.login(username, password);
 
     if (result.success) {
@@ -188,10 +186,8 @@ async function login(username, password) {
 }
 
 async function loadStations() {
-    console.log('[Main] Loading stations...');
     const stations = await api.getStations();
     if (stations === null) {
-        console.log('[Main] Station load failed (Auth error). Aborting list update.');
         return null;
     }
     currentStations = stations;
@@ -200,8 +196,6 @@ async function loadStations() {
 }
 
 async function playStation(stationId, startingAtTrackId = null) {
-    console.log(`[Main] Playing station: ${stationId} ${startingAtTrackId ? '(StartTrack: ' + startingAtTrackId + ')' : ''}`);
-
     if (currentStation) {
         // Pause the existing stream cleanly before fetching a new one
         const track = currentPlaylist[currentTrackIndex];
@@ -244,11 +238,8 @@ async function playStation(stationId, startingAtTrackId = null) {
 }
 
 async function skipTrack() {
-    console.log('[Main] Skipping track...');
-
     // If stream was already reclaimed, block the skip immediately
     if (streamReclaimed) {
-        console.log('[Main] Skip blocked — stream reclaimed by another device');
         sendToUI('UI:ERROR', { message: 'Another device is streaming. Playback stopped.' });
         return getCurrentState();
     }
@@ -264,7 +255,6 @@ async function skipTrack() {
                 currentPlaylist.push(...result.tracks);
             } else if (result.error) {
                 // Stream was reclaimed — trim buffer and flag it
-                console.log('[Main] Stream reclaimed, trimming buffer:', result.error);
                 streamReclaimed = true;
                 currentPlaylist = currentPlaylist.slice(0, currentTrackIndex + 1);
             }
@@ -275,7 +265,6 @@ async function skipTrack() {
 
     // No more tracks left
     if (currentTrackIndex >= currentPlaylist.length) {
-        console.log('[Main] No more tracks available — stopping playback');
         streamReclaimed = true;
         if (currentPlaylist.length === 0) {
             currentTrackIndex = 0;
@@ -354,15 +343,11 @@ async function thumbDown() {
 
 // Initialize app
 ipcMain.handle('APP:INIT', async () => {
-    console.log('[IPC] APP:INIT');
     try {
         // Check if already logged in
         if (api.restoreAuth()) {
-            console.log('[Main] Restored auth, verifying subscription...');
-
             const isPaid = await api.verifySubscription();
             if (!isPaid) {
-                console.log('[Main] Free-tier account detected on restore — forcing logout');
                 api.logout();
                 sendLoginStatus(false);
                 sendToUI('UI:ERROR', { message: 'Pandora Glass requires a Pandora Premium or Plus subscription.' });
@@ -385,7 +370,6 @@ ipcMain.handle('APP:INIT', async () => {
 
 // Login
 ipcMain.handle('AUTH:LOGIN', async (event, { username, password }) => {
-    console.log('[IPC] AUTH:LOGIN');
     try {
         return await login(username, password);
     } catch (err) {
@@ -396,7 +380,6 @@ ipcMain.handle('AUTH:LOGIN', async (event, { username, password }) => {
 
 // Logout
 ipcMain.handle('AUTH:LOGOUT', async () => {
-    console.log('[IPC] AUTH:LOGOUT');
     try {
         // Tell Pandora to stop the stream for this session so it doesn't hang
         const track = currentPlaylist[currentTrackIndex];
@@ -420,8 +403,6 @@ ipcMain.handle('AUTH:LOGOUT', async () => {
 
 // Player commands
 ipcMain.handle('PLAYER:CMD', async (event, { action, value }) => {
-    console.log(`[IPC] PLAYER:CMD - Action: ${action}`);
-
     switch (action) {
         case 'next':
             return await skipTrack();
@@ -449,7 +430,6 @@ ipcMain.handle('PLAYER:CMD', async (event, { action, value }) => {
 
 // Undo feedback
 ipcMain.handle('PLAYER:UNDO_FEEDBACK', async (event, { trackToken }) => {
-    console.log('[IPC] PLAYER:UNDO_FEEDBACK', trackToken);
     const histItem = songHistory.find(h => h.trackToken === trackToken);
     if (histItem && histItem.feedbackId) {
         const result = await api.deleteFeedback(histItem.feedbackId);
@@ -465,7 +445,6 @@ ipcMain.handle('PLAYER:UNDO_FEEDBACK', async (event, { trackToken }) => {
 
 // Play a station or item
 ipcMain.handle('NAV:PLAY_URI', async (event, payload) => {
-    console.log(`[IPC] NAV:PLAY_URI - ${typeof payload === 'string' ? payload : payload.uri}`);
     let uri = typeof payload === 'string' ? payload : payload.uri;
     const metadata = typeof payload === 'object' ? payload : {};
 
@@ -477,7 +456,6 @@ ipcMain.handle('NAV:PLAY_URI', async (event, payload) => {
     const id = uri.substring(firstColon + 1);
 
     if (type === 'station') {
-        console.log(`[IPC] Station play request - ID: ${id}`);
         sendToUI('UI:LOADING', { isLoading: true });
 
         // Check if this station already exists in the user's collection
@@ -488,7 +466,6 @@ ipcMain.handle('NAV:PLAY_URI', async (event, payload) => {
         );
 
         if (existingStation) {
-            console.log(`[IPC] Found existing station: ${existingStation.stationId}`);
             const result = await playStation(existingStation.stationId);
             sendToUI('UI:LOADING', { isLoading: false });
             return result;
@@ -500,7 +477,7 @@ ipcMain.handle('NAV:PLAY_URI', async (event, payload) => {
             sendToUI('UI:LOADING', { isLoading: false });
             return result;
         } catch (e) {
-            console.log(`[IPC] Direct play failed for ${id}, trying createStation...`);
+            // Direct play failed, try creating a station from this seed
         }
 
         // If direct play failed, try creating a station from this seed
@@ -512,13 +489,10 @@ ipcMain.handle('NAV:PLAY_URI', async (event, payload) => {
             return result;
         }
 
-        console.error(`[IPC] Failed to play or create station for: ${id}`);
         sendToUI('UI:LOADING', { isLoading: false });
         return { error: 'Failed to play station' };
 
     } else if (type === 'song' || type === 'TR' || type === 'track' || type === 'artist') {
-        // Create station from seed (Song or Artist)
-        console.log(`[IPC] Creating native Pandora station from ${type}: ${id}`);
         sendToUI('UI:LOADING', { isLoading: true });
         const station = await api.createStation(id);
 
@@ -533,7 +507,6 @@ ipcMain.handle('NAV:PLAY_URI', async (event, payload) => {
             return result;
         }
 
-        console.error(`[IPC] Failed to create native station for ${type}: ${id}`);
         sendToUI('UI:LOADING', { isLoading: false });
         return { error: 'Failed to create Pandora station' };
     }
@@ -543,7 +516,6 @@ ipcMain.handle('NAV:PLAY_URI', async (event, payload) => {
 
 // Search
 ipcMain.handle('CONTENT:SEARCH', async (event, query) => {
-    console.log(`[IPC] CONTENT:SEARCH - ${query}`);
     const results = await api.search(query);
     // Send results to renderer
     sendToUI('UI:SEARCH_RESULTS', results);
@@ -551,7 +523,6 @@ ipcMain.handle('CONTENT:SEARCH', async (event, query) => {
 });
 
 ipcMain.handle('CONTENT:REMOVE_STATION', async (event, id) => {
-    console.log(`[IPC] CONTENT:REMOVE_STATION - ${id}`);
     const success = await api.removeStation(id);
     if (success) {
         // Refresh stations using the centralized loader
@@ -564,7 +535,6 @@ ipcMain.handle('CONTENT:REMOVE_STATION', async (event, id) => {
 ipcMain.handle('CONTENT:FETCH_LYRICS', async (event, artist, title) => {
     try {
         const getUrl = `https://lrclib.net/api/get?artist_name=${encodeURIComponent(artist)}&track_name=${encodeURIComponent(title)}`;
-        console.log(`[Main] Fetching lyrics from: ${getUrl}`);
 
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10000);
@@ -583,7 +553,6 @@ ipcMain.handle('CONTENT:FETCH_LYRICS', async (event, artist, title) => {
         // Fallback to fuzzy search if exact match fails
         if (response.status === 404) {
             const searchUrl = `https://lrclib.net/api/search?q=${encodeURIComponent(artist + ' ' + title)}`;
-            console.log(`[Main] Exact match failed. Falling back to fuzzy search: ${searchUrl}`);
 
             const searchController = new AbortController();
             const searchTimeout = setTimeout(() => searchController.abort(), 10000);
@@ -650,8 +619,7 @@ app.whenReady().then(() => {
 
     // Handle session expiration
     api.onSessionExpired = () => {
-        console.log('[Main] Session expired handler triggered! Forcing logout...');
-        api.logout(); // Clears config and tokens
+        api.logout();
         sendLoginStatus(false);
     };
 

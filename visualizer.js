@@ -109,8 +109,10 @@ class AudioVisualizer {
             this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         }
 
-        window.removeEventListener('resize', this._resizeHandler);
-        console.log("[Visualizer] Stopped rendering.");
+        if (this._resizeHandler) {
+            window.removeEventListener('resize', this._resizeHandler);
+            this._resizeHandler = null;
+        }
     }
 
     setVolume(volume) {
