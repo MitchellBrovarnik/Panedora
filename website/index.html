@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panedora - The Beautiful Pandora Desktop Client</title>
+    <title>Panedora - A Modern Pandora Client</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <link rel="stylesheet" href="styles.css">
@@ -22,26 +22,17 @@
                 <span>Panedora</span>
             </div>
             <div class="nav-links">
-                <a href="#features">Features</a>
-                <a href="#download" class="btn btn-primary">Download</a>
+                <a href="https://github.com/MitchellBrovarnik/Panedora" target="_blank" class="nav-link"><i class='bx bxl-github'></i> GitHub</a>
             </div>
         </div>
     </nav>
 
-    <main>
+    <main class="main-content">
         <section class="hero">
             <div class="container hero-container">
-                <div class="hero-content">
+                <div class="hero-text-content">
                     <h1 class="hero-title">Experience Pandora Like Never Before</h1>
                     <p class="hero-subtitle">A stunning, completely reimagined desktop client for Pandora with seamless playback controls, intelligent feedback, and a modern glassmorphic interface.</p>
-                    <div class="hero-cta">
-                        <a href="#download" class="btn btn-primary btn-large">
-                            <i class='bx bx-download'></i> Download Now
-                        </a>
-                        <a href="https://github.com/yourusername/panedora" class="btn btn-secondary btn-large" target="_blank">
-                            <i class='bx bxl-github'></i> View Source
-                        </a>
-                    </div>
                 </div>
                 <div class="hero-image-wrapper">
                     <img src="screenshot.png" alt="Panedora App Screenshot" class="app-screenshot" />
@@ -49,57 +40,25 @@
             </div>
         </section>
 
-        <section id="features" class="features">
-            <div class="container">
-                <h2 class="section-title">Incredible Features</h2>
-                <div class="feature-grid">
-                    <div class="glass-panel feature-card">
-                        <div class="feature-icon"><i class='bx bx-desktop'></i></div>
-                        <h3>Desktop Integrated</h3>
-                        <p>Built as a native-feeling Electron application. Enjoy media key support, system tray integration, smooth frameless windows, and low resource overhead.</p>
-                    </div>
-                    <div class="glass-panel feature-card">
-                        <div class="feature-icon"><i class='bx bx-headphone'></i></div>
-                        <h3>High-Quality Audio</h3>
-                        <p>Requests the premium aacplus (HE-AAC) streaming format from Pandora's servers, ensuring a clear and consistent listening experience.</p>
-                    </div>
-                    <div class="glass-panel feature-card">
-                        <div class="feature-icon"><i class='bx bx-like'></i></div>
-                        <h3>Intelligent Feedback</h3>
-                        <p>Large, interactive Thumbs Up and Down buttons that sync directly with Pandora. Review your recently played history and instantly undo any negative feedback.</p>
-                    </div>
-                    <div class="glass-panel feature-card">
-                        <div class="feature-icon"><i class='bx bx-minus'></i></div>
-                        <h3>Mini Player Mode</h3>
-                        <p>Collapse the app into a compact floating bar that stays gracefully on top of all other windows, including borderless fullscreen games.</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
         <section id="download" class="download">
             <div class="container">
-                <h2 class="section-title">Get Panedora Today</h2>
-                <p class="section-subtitle">Choose your platform and elevate your music experience.</p>
+                <h2 class="section-title">Download Panedora</h2>
                 <div class="download-grid">
-                    <div class="glass-panel download-card">
+                    <a href="https://github.com/MitchellBrovarnik/Panedora/releases" target="_blank" class="glass-panel download-card">
                         <i class='bx bxl-windows'></i>
                         <h3>Windows</h3>
-                        <p>Windows 10 / 11</p>
-                        <a href="#" class="btn btn-primary download-btn">Download .exe</a>
-                    </div>
-                    <div class="glass-panel download-card">
+                        <span class="btn btn-primary download-btn">Download .exe</span>
+                    </a>
+                    <a href="https://github.com/MitchellBrovarnik/Panedora/releases" target="_blank" class="glass-panel download-card">
                         <i class='bx bxl-apple'></i>
                         <h3>macOS</h3>
-                        <p>macOS 10.15+</p>
-                        <a href="#" class="btn btn-primary download-btn">Download .dmg</a>
-                    </div>
-                    <div class="glass-panel download-card">
+                        <span class="btn btn-primary download-btn">Download .dmg</span>
+                    </a>
+                    <a href="https://github.com/MitchellBrovarnik/Panedora/releases" target="_blank" class="glass-panel download-card">
                         <i class='bx bxl-tux'></i>
                         <h3>Linux</h3>
-                        <p>AppImage / Snap</p>
-                        <a href="#" class="btn btn-primary download-btn">Download .AppImage</a>
-                    </div>
+                        <span class="btn btn-primary download-btn">Download AppImage</span>
+                    </a>
                 </div>
             </div>
         </section>
@@ -112,10 +71,9 @@
                     <i class='bx bx-play-circle'></i>
                     <span>Panedora</span>
                 </div>
-                <p class="footer-text">An open-source, unofficial client for Pandora.</p>
             </div>
             <div class="footer-right">
-                <p>Designed with <i class='bx bxs-heart'></i> for music lovers.</p>
+                <p>An open-source, unofficial client for Pandora.</p>
             </div>
         </div>
     </footer>
