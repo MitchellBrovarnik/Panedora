@@ -239,6 +239,13 @@ h1, h2, h3 {
     font-size: 1.2rem;
     color: var(--text-muted);
     line-height: 1.6;
+    margin-bottom: 2.5rem;
+}
+
+.hero-cta {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
 }
 
 /* App Screenshot */
@@ -341,6 +348,10 @@ footer {
 
     .hero-title {
         font-size: 2.5rem;
+    }
+
+    .hero-cta {
+        flex-direction: column;
     }
 
     .nav-links a:not(.btn) {
