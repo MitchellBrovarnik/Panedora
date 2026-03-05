@@ -5,12 +5,12 @@
 
 function createCard(image, title, subtitle, dataId) {
   const placeholder = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Crect fill='%23282828' width='180' height='180'/%3E%3C/svg%3E`;
-  const id = `card_${Math.random().toString(36).substr(2, 9)}`;
+  const id = `card_${Math.random().toString(36).slice(2, 11)}`;
 
   return `
     <div class="card" id="${id}" data-id="${dataId || ''}" tabindex="0">
       <div class="card-image-container">
-        <img class="card-image" src="${image || placeholder}" alt="${title}">
+        <img class="card-image" src="${image || placeholder}" alt="${title}" data-fallback="${placeholder}">
         <button class="card-play-button" aria-label="Play ${title}">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
         </button>
@@ -24,13 +24,13 @@ function createCard(image, title, subtitle, dataId) {
 
 function createTrackRow(index, title, artist, duration, coverArt, dataId) {
   const placeholder = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect fill='%23282828' width='40' height='40'/%3E%3C/svg%3E`;
-  const id = `track_${Math.random().toString(36).substr(2, 9)}`;
+  const id = `track_${Math.random().toString(36).slice(2, 11)}`;
 
   return `
     <div class="track-row" id="${id}" data-id="${dataId || ''}" tabindex="0">
       <div class="track-number"><span>${index}</span></div>
       <div class="track-info">
-        <img class="track-art" src="${coverArt || placeholder}" alt="">
+        <img class="track-art" src="${coverArt || placeholder}" alt="" data-fallback="${placeholder}">
         <div class="track-details">
           <span class="track-title">${escapeHtml(title)}</span>
           <span class="track-artist">${escapeHtml(artist)}</span>
@@ -77,3 +77,13 @@ function debounce(func, wait) {
     timeout = setTimeout(() => func(...args), wait);
   };
 }
+
+// Global error handler for broken images
+document.addEventListener('error', function(e) {
+  if (e.target && e.target.tagName === 'IMG' && e.target.hasAttribute('data-fallback')) {
+    const fallback = e.target.getAttribute('data-fallback');
+    if (e.target.src !== fallback) {
+      e.target.src = fallback;
+    }
+  }
+}, true);
