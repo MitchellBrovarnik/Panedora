@@ -46,7 +46,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: pandora-glass-${{ matrix.platform }}
+          name: panedora-${{ matrix.platform }}
           path: |
             release/*.exe
             release/*.dmg

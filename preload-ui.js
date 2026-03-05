@@ -1,5 +1,5 @@
 /**
- * Pandora Glass v2 - UI Preload Script
+ * Panedora - UI Preload Script
  * Context Bridge for API-based architecture
  */
 

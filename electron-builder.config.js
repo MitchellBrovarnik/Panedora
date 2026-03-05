@@ -1,6 +1,6 @@
 module.exports = {
-    appId: 'com.pandoraglass.app',
-    productName: 'Pandora Glass',
+    appId: 'com.panedora.app',
+    productName: 'Panedora',
     directories: {
         app: 'dist',
         output: 'release'

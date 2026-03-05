@@ -1,5 +1,5 @@
 /**
- * Pandora Glass v2 - Main Process
+ * Panedora - Main Process
  * Direct API-based architecture (no hidden browser)
  */
 
@@ -350,7 +350,7 @@ ipcMain.handle('APP:INIT', async () => {
             if (!isPaid) {
                 api.logout();
                 sendLoginStatus(false);
-                sendToUI('UI:ERROR', { message: 'Pandora Glass requires a Pandora Premium or Plus subscription.' });
+                sendToUI('UI:ERROR', { message: 'Panedora requires a Pandora Premium or Plus subscription.' });
                 return { status: 'needsLogin' };
             }
 
@@ -540,7 +540,7 @@ ipcMain.handle('CONTENT:FETCH_LYRICS', async (event, artist, title) => {
         const timeout = setTimeout(() => controller.abort(), 10000);
 
         let response = await fetch(getUrl, {
-            headers: { 'User-Agent': 'PandoraGlass/1.0.0 (https://github.com/mitchell/pandora-glass)' },
+            headers: { 'User-Agent': 'Panedora/1.0.0' },
             signal: controller.signal
         });
         clearTimeout(timeout);
@@ -558,7 +558,7 @@ ipcMain.handle('CONTENT:FETCH_LYRICS', async (event, artist, title) => {
             const searchTimeout = setTimeout(() => searchController.abort(), 10000);
 
             let searchResponse = await fetch(searchUrl, {
-                headers: { 'User-Agent': 'PandoraGlass/1.0.0 (https://github.com/mitchell/pandora-glass)' },
+                headers: { 'User-Agent': 'Panedora/1.0.0' },
                 signal: searchController.signal
             });
             clearTimeout(searchTimeout);

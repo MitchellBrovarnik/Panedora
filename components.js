@@ -1,5 +1,5 @@
 /**
- * Pandora Glass - UI Components
+ * Panedora - UI Components
  * Helper functions for generating Spotify-style UI elements
  */
 

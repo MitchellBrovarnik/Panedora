@@ -1,5 +1,5 @@
 /**
- * Pandora Glass - Frontend Controller (Renderer)
+ * Panedora - Frontend Controller (Renderer)
  * Handles UI state, routing, and user interactions
  */
 
@@ -127,7 +127,7 @@ function renderHomePage() {
     if (AppState.isLoading) {
         DOM.pageContent.innerHTML = `
       <div class="welcome-container">
-        <h1 class="welcome-title">Welcome to Pandora Glass</h1>
+        <h1 class="welcome-title">Welcome to Panedora</h1>
         <p class="welcome-subtitle">Connecting to Pandora...</p>
         <div class="loading-spinner"></div>
       </div>`;
@@ -623,7 +623,7 @@ function applyTheme(themeId) {
         root.style.setProperty(prop, value);
     });
 
-    localStorage.setItem('pandora-glass-theme', themeId);
+    localStorage.setItem('panedora-theme', themeId);
     AppState.currentTheme = themeId;
 
     // If switching to adaptive while a song is already playing, extract color now
@@ -646,7 +646,7 @@ function applyTheme(themeId) {
 }
 
 function loadSavedTheme() {
-    const savedTheme = localStorage.getItem('pandora-glass-theme');
+    const savedTheme = localStorage.getItem('panedora-theme');
     if (savedTheme && THEMES[savedTheme]) {
         applyTheme(savedTheme);
     } else {
@@ -654,7 +654,7 @@ function loadSavedTheme() {
     }
 }
 function loadSavedEffect() {
-    const savedEffect = localStorage.getItem('pandora-glass-effect');
+    const savedEffect = localStorage.getItem('panedora-effect');
     // Ensure the effect still exists in the registry
     if (savedEffect && BG_EFFECTS[savedEffect]) {
         applyBgEffect(savedEffect);
@@ -673,7 +673,7 @@ function applyLyricsStyle(styleId) {
     const style = LYRICS_STYLES[styleId];
     if (!style) return;
 
-    localStorage.setItem('pandora-glass-lyrics-style', styleId);
+    localStorage.setItem('panedora-lyrics-style', styleId);
     AppState.currentLyricsStyle = styleId;
 
     const content = document.getElementById('lyrics-content');
@@ -685,7 +685,7 @@ function applyLyricsStyle(styleId) {
 }
 
 function loadSavedLyricsStyle() {
-    const savedStyle = localStorage.getItem('pandora-glass-lyrics-style');
+    const savedStyle = localStorage.getItem('panedora-lyrics-style');
     if (savedStyle && LYRICS_STYLES[savedStyle]) {
         applyLyricsStyle(savedStyle);
     } else {
@@ -800,7 +800,7 @@ function applyBgEffect(effectId) {
     if (!BG_EFFECTS[effectId]) effectId = 'waves'; // fallback
 
     document.body.setAttribute('data-bg-effect', effectId);
-    localStorage.setItem('pandora-glass-effect', effectId);
+    localStorage.setItem('panedora-effect', effectId);
     AppState.currentEffect = effectId;
 
     // Stop any physical rendering from the visualizer if we switch away from it
@@ -872,8 +872,8 @@ function applyBgEffect(effectId) {
 }
 
 function renderSettingsPage() {
-    const currentTheme = AppState.currentTheme || localStorage.getItem('pandora-glass-theme') || 'midnight';
-    const currentEffect = AppState.currentEffect || localStorage.getItem('pandora-glass-effect') || 'aurora';
+    const currentTheme = AppState.currentTheme || localStorage.getItem('panedora-theme') || 'midnight';
+    const currentEffect = AppState.currentEffect || localStorage.getItem('panedora-effect') || 'aurora';
 
     let themeSwatches = '';
     Object.entries(THEMES).forEach(([id, theme]) => {
@@ -901,7 +901,7 @@ function renderSettingsPage() {
             </button>`;
     });
 
-    const currentLyricsStyle = AppState.currentLyricsStyle || localStorage.getItem('pandora-glass-lyrics-style') || 'glow';
+    const currentLyricsStyle = AppState.currentLyricsStyle || localStorage.getItem('panedora-lyrics-style') || 'glow';
     let lyricsStyleButtons = '';
     Object.entries(LYRICS_STYLES).forEach(([id, style]) => {
         const isActive = id === currentLyricsStyle;
@@ -1928,7 +1928,7 @@ function showErrorToast(message) {
 // ============================================================================
 
 async function init() {
-    console.log('[UI] Initializing Pandora Glass...');
+    console.log('[UI] Initializing Panedora...');
 
     // Restore saved theme and effect before rendering
     loadSavedTheme();

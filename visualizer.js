@@ -1,5 +1,5 @@
 /**
- * Pandora Glass - Audio Visualizer
+ * Panedora - Audio Visualizer
  * Uses Web Audio API to create a live, reactive canvas background
  */
 
