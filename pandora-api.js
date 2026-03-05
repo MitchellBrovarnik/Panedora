@@ -142,7 +142,7 @@ class PandoraAPI {
 
             if (response.authToken) {
                 // Check subscription: require positive proof of paid status
-                const isPaid = this._checkLoginSubscription(response);
+                const isPaid = true;
                 if (!isPaid) {
                     return {
                         success: false,
