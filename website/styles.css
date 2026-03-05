@@ -269,6 +269,24 @@ h1, h2, h3 {
     text-align: center;
 }
 
+.disclaimer-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: rgba(255, 165, 0, 0.15);
+    border: 1px solid rgba(255, 165, 0, 0.3);
+    color: #ffb74d;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    margin-bottom: 3rem;
+    font-size: 1rem;
+    max-width: 600px;
+}
+
+.disclaimer-badge i {
+    font-size: 1.5rem;
+}
+
 .download-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -325,6 +343,17 @@ footer {
     align-items: center;
     flex-wrap: wrap;
     gap: 2rem;
+    margin-bottom: 2rem;
+}
+
+.legal-jargon {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    opacity: 0.7;
+    max-width: 800px;
+    margin: 0 auto;
 }
 
 .footer-text {
