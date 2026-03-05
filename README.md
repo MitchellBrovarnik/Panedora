@@ -1,12 +1,12 @@
-# Pandora Glass
+# Panedora
 
 ## Project Purpose
-Pandora Glass is a personal, educational, and experimental project created purely for fun. It was built as a creative exercise to explore modern UI design (Glassmorphism) and Electron-based desktop application development. This project is intended for personal use only and was developed with zero intent to cause harm, bypass security, or interfere with Pandora's business operations. It is shared as a demonstration of UI/UX design and technical integration.
+Panedora is a personal, educational, and experimental project created purely for fun. It was built as a creative exercise to explore modern UI design (Glassmorphism) and Electron-based desktop application development. This project is intended for personal use only and was developed with zero intent to cause harm, bypass security, or interfere with Pandora's business operations. It is shared as a demonstration of UI/UX design and technical integration.
 
 ![App Interface](screenshot.png)
-*A preview of the Pandora Glass immersive station library.*
+*A preview of the Panedora immersive station library.*
 
-A premium, immersive Pandora desktop client built with Electron. Pandora Glass features a fully theme-driven Glassmorphism design system, persistent session management, and an enhanced playback experience that goes far beyond the standard Pandora web player.
+A premium, immersive Pandora desktop client built with Electron. Panedora features a fully theme-driven Glassmorphism design system, persistent session management, and an enhanced playback experience that goes far beyond the standard Pandora web player.
 
 > ### A Note to Developers on the Backend Code
 > You are completely free to explore, learn from, and adapt the frontend Glassmorphism UI code for your own non-commercial projects. However, to prevent abuse of the legacy API and to maintain the integrity of the subscription-tier checks, the backend logic (`pandora-api.js`, etc.) has been intentionally obfuscated.
@@ -24,7 +24,7 @@ A premium, immersive Pandora desktop client built with Electron. Pandora Glass f
 
 ## Overview
 
-Pandora Glass is designed to provide the absolute best desktop listening experience for Pandora users. By providing real-time feedback synchronization with your Pandora account, it operates as a fully functional client — not just a web wrapper. Every visual element is driven by a live CSS custom property system, so the entire look of the app updates instantly whenever you switch themes or effects.
+Panedora is designed to provide the absolute best desktop listening experience for Pandora users. By providing real-time feedback synchronization with your Pandora account, it operates as a fully functional client — not just a web wrapper. Every visual element is driven by a live CSS custom property system, so the entire look of the app updates instantly whenever you switch themes or effects.
 
 ## Key Features
 
@@ -78,7 +78,7 @@ Your selected effect is saved and restored automatically on next launch.
 
 ## Technical Architecture
 
-Pandora Glass is built using a modern Electron stack, emphasizing security and separation of concerns:
+Panedora is built using a modern Electron stack, emphasizing security and separation of concerns:
 
 *   **Main Process (`main.js`):** Acts as the orchestrator. It manages the application lifecycle, handles all API requests to Pandora from the secure Node.js context, builds playlist queues, manages the `songHistory` array, controls the Mini Player window state, and exposes functionality to the renderer via IPC handlers.
 *   **Pandora API Controller (`pandora-api.js`):** A dedicated class that handles all communication with Pandora's backend REST endpoints. It routes requests through Electron's `net.fetch` (Chromium's native network stack) and manages auth token and CSRF token lifecycle.
@@ -96,8 +96,8 @@ Pandora Glass is built using a modern Electron stack, emphasizing security and s
 ### Setup Steps
 1. Clone the repository to your local machine:
    ```bash
-   git clone https://github.com/MitchellBrovarnik/Pandora-Glass.git
-   cd Pandora-Glass
+   git clone https://github.com/MitchellBrovarnik/Panedora.git
+   cd Panedora
    ```
 2. Install the necessary dependencies:
    ```bash
@@ -109,9 +109,9 @@ Pandora Glass is built using a modern Electron stack, emphasizing security and s
    ```
 
 ## Creating a Production Build
-To package Pandora Glass into a standalone executable, use `electron-packager` (ensure it is installed):
+To package Panedora into a standalone executable, use `electron-packager` (ensure it is installed):
 ```bash
-npx electron-packager . PandoraGlass --platform=win32 --arch=x64 --out=dist
+npx electron-packager . Panedora --platform=win32 --arch=x64 --out=dist
 ```
 *(Replace `win32` and `x64` with your target platform and architecture.)*
 
@@ -130,13 +130,13 @@ npx electron-packager . PandoraGlass --platform=win32 --arch=x64 --out=dist
 
 ## Known Issues
 
-*   **Station Tuning Limitations:** The "Tune Your Station" feature (e.g., selecting "Discovery", "Deep Cuts", or "Artist Only") is currently not supported directly within Pandora Glass.
-    *   **Workaround:** Open the official Pandora web or mobile app, go to your station, select the desired Tune mode, and let a few songs play. When you return to Pandora Glass, that station will reflect the updated tuning.
+*   **Station Tuning Limitations:** The "Tune Your Station" feature (e.g., selecting "Discovery", "Deep Cuts", or "Artist Only") is currently not supported directly within Panedora.
+    *   **Workaround:** Open the official Pandora web or mobile app, go to your station, select the desired Tune mode, and let a few songs play. When you return to Panedora, that station will reflect the updated tuning.
 *   **Search Functionality:** The search tab is a work in progress. Searching for a specific song may not play that exact track.
 
 ## Privacy and Security
 
-Pandora Glass is designed with user privacy as a priority:
+Panedora is designed with user privacy as a priority:
 *   **Direct Authentication:** Your credentials are used solely to authenticate with Pandora's official API. Your password is encrypted at rest using your operating system's secure keychain (Electron safeStorage).
 *   **Local Storage Only:** Authentication tokens and encrypted credentials are stored locally on your machine in your user data directory. All auth data is cleared on sign-out.
 *   **No Third-Party Tracking:** No personal data is collected or shared with any third-party services. The application communicates exclusively with Pandora's infrastructure.

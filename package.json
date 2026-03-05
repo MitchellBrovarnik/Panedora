@@ -1,5 +1,5 @@
 {
-    "name": "pandora-glass",
+    "name": "panedora",
     "version": "1.0.0",
     "description": "A premium Pandora client with a Spotify-inspired native interface",
     "main": "main.js",

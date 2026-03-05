@@ -1,5 +1,5 @@
 /**
- * Pandora Glass - Configuration Storage
+ * Panedora - Configuration Storage
  * Simple file-based storage (no external dependencies)
  */
 
@@ -10,7 +10,7 @@ const { app, safeStorage } = require('electron');
 // Storage file path
 const getConfigPath = () => {
     const userDataPath = app.getPath('userData');
-    return path.join(userDataPath, 'pandora-glass-config.json');
+    return path.join(userDataPath, 'panedora-config.json');
 };
 
 // Default config

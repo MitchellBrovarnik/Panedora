@@ -1,5 +1,5 @@
 /**
- * Pandora Glass - REST API Client
+ * Panedora - REST API Client
  * Direct communication with Pandora's REST API
  */
 
@@ -146,7 +146,7 @@ class PandoraAPI {
                 if (!isPaid) {
                     return {
                         success: false,
-                        error: 'Pandora Glass requires a Pandora Premium or Plus subscription. Free-tier accounts are not supported.'
+                        error: 'Panedora requires a Pandora Premium or Plus subscription. Free-tier accounts are not supported.'
                     };
                 }
 
