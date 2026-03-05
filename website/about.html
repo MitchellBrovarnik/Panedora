@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panedora - About</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="background-animation">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <nav class="navbar scrolled">
+        <div class="container nav-container">
+            <a href="index.html" class="logo" style="text-decoration: none;">
+                <i class='bx bx-play-circle'></i>
+                <span>Panedora</span>
+            </a>
+            <div class="nav-links">
+                <a href="index.html" class="nav-link">Home</a>
+                <a href="about.html" class="nav-link active">About</a>
+                <a href="index.html#download" class="nav-link btn btn-primary">Download</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <section class="about-page">
+            <div class="container text-container glass-panel">
+                <h1 class="page-title">About Panedora</h1>
+
+                <h2>Project Purpose</h2>
+                <p>Panedora is a personal, educational, and experimental project created purely for fun. It was built as a creative exercise to explore modern UI design (Glassmorphism) and Electron-based desktop application development. This project is intended for personal use only and was developed with zero intent to cause harm, bypass security, or interfere with Pandora's business operations. It is shared as a demonstration of UI/UX design and technical integration.</p>
+
+                <p>A premium, immersive Pandora desktop client built with Electron. Panedora features a fully theme-driven Glassmorphism design system, persistent session management, and an enhanced playback experience that goes far beyond the standard Pandora web player.</p>
+
+                <blockquote>
+                    <strong>A Note on Backend Architecture:</strong> You are completely free to explore, learn from, and adapt the frontend Glassmorphism UI concept. However, to prevent abuse of the legacy API and to maintain the integrity of the subscription-tier checks, the backend logic (`pandora-api.js`, etc.) is strictly closed-source and obfuscated.
+                </blockquote>
+
+                <h2>Overview</h2>
+                <p>Panedora is designed to provide the absolute best desktop listening experience for Pandora users. By providing real-time feedback synchronization with your Pandora account, it operates as a fully functional client — not just a web wrapper. Every visual element is driven by a live CSS custom property system, so the entire look of the app updates instantly whenever you switch themes or effects.</p>
+
+                <h2>Key Features</h2>
+
+                <h3>Immersive Glassmorphism Design</h3>
+                <ul>
+                    <li><strong>Theme-Driven Aesthetic:</strong> The entire app background, accent colors, glows, and gradients are controlled by CSS custom properties that update at runtime. The look of the app is completely determined by whichever theme you have selected — there is no single fixed color scheme.</li>
+                    <li><strong>9 Built-In Themes:</strong> Choose from Midnight Violet, Deep Ocean, Emerald Forest, Sunset Blaze, Rose Quartz, Arctic Frost, Neon Cyber, Classic Dark, and Adaptive (Dynamic). Each theme instantly transforms every color, gradient, and glow in the UI.</li>
+                    <li><strong>Adaptive (Dynamic) Theme:</strong> When selected, the app samples the current track's album artwork using an HTML5 Canvas pixel-extraction algorithm and automatically derives a dominant accent color, updating the entire UI palette in real time as songs change.</li>
+                    <li><strong>Frosted Glass Panels:</strong> The side navigation and footer player bar render as floating, translucent islands using <code>backdrop-filter: blur()</code> on a fully transparent Electron window.</li>
+                    <li><strong>Detached Navigation & Player:</strong> The sidebar and footer player render as separate floating panels with gap spacing between them, giving the interface a premium, native-app feel.</li>
+                    <li><strong>Collapsible Sidebar:</strong> The sidebar collapses into a sleek icon-only view (62px wide) and expands smoothly on hover (250px) to reveal labels, station names, and the sign-out button — maximizing content space at all times.</li>
+                    <li><strong>Immersive Now Playing:</strong> A full-bleed dedicated page for focused listening, featuring large album artwork, high-res track metadata, feedback controls, and your recently played history.</li>
+                    <li><strong>Custom Frameless Window:</strong> The application runs as a fully frameless, transparent Electron window with a custom drag-region title bar and standard minimize/maximize/close controls.</li>
+                </ul>
+
+                <h3>Enhanced Player Experience</h3>
+                <ul>
+                    <li><strong>High-Quality Audio:</strong> The client requests the <code>aacplus</code> (HE-AAC) streaming format, ensuring a clear and consistent listening experience.</li>
+                    <li><strong>Seamless Playback Controls:</strong> Standard controls (Play, Pause, Skip, Previous) integrated cleanly into a floating player footer. The previous button intelligently restarts the current track if you are more than a few seconds in, mirroring natural playback behavior.</li>
+                    <li><strong>Mini Player Mode:</strong> Collapse the app into a compact 540×100 bar that floats above all other windows using the <code>screen-saver</code> always-on-top level — including borderless fullscreen games. The mini player includes playback controls and quick-access feedback buttons.</li>
+                    <li><strong>Lyrics Button:</strong> A dedicated lyrics toggle in the player footer fetches and displays time-coded, auto-scrolling lyrics overlaid on the Now Playing page.</li>
+                    <li><strong>Lyrics Highlight Styles:</strong> Choose how the active lyric line is highlighted — Text Glow (scaled, glowing text), Pill Box (a tightly padded container border), or Full Line (a full-width background block).</li>
+                </ul>
+
+                <h3>Intelligent Feedback & History System</h3>
+                <ul>
+                    <li><strong>Reactive Feedback:</strong> Large, interactive Like (Thumbs Up) and Dislike (Thumbs Down) buttons on the Now Playing page feature dynamic visual states and synchronize directly with the Pandora API.</li>
+                    <li><strong>Smart Toggling:</strong> Clicking an already-active feedback button calls the Pandora API to delete the feedback preference, rather than just toggling a local UI state.</li>
+                    <li><strong>Persistent Song History:</strong> A dedicated "Recently Played" panel on the Now Playing page tracks and displays the last 20 songs you have listened to, complete with album art and your feedback status for each track.</li>
+                    <li><strong>Undo Dislike:</strong> If you dislike a song (which automatically skips it), you can find it in your history panel and click the "Undo" button to instantly remove the negative feedback via the Pandora API, returning the track to your rotation.</li>
+                    <li><strong>Live Synchronization:</strong> The history list updates in real time as songs change or feedback is toggled, with no manual page refresh required.</li>
+                </ul>
+
+                <h3>Robust Session Management</h3>
+                <ul>
+                    <li><strong>Secure Authentication:</strong> Signs in directly with Pandora's official REST API, generating and managing the required auth tokens and CSRF tokens for all subsequent requests.</li>
+                    <li><strong>Clean Sign Out:</strong> A dedicated sign-out process permanently wipes session tokens, pauses active streams, and safely tears down the player state to prevent ghost playback or infinite reload loops.</li>
+                </ul>
+
+                <h2>Technical Architecture</h2>
+                <p>Panedora is built using a modern Electron stack, emphasizing security and separation of concerns:</p>
+                <ul>
+                    <li><strong>Main Process (<code>main.js</code>):</strong> Acts as the orchestrator. It manages the application lifecycle, handles all API requests to Pandora from the secure Node.js context, builds playlist queues, manages the <code>songHistory</code> array, controls the Mini Player window state, and exposes functionality to the renderer via IPC handlers.</li>
+                    <li><strong>Pandora API Controller (<code>pandora-api.js</code>):</strong> A dedicated class that handles all communication with Pandora's backend REST endpoints. It routes requests through Electron's <code>net.fetch</code> (Chromium's native network stack) and manages auth token and CSRF token lifecycle.</li>
+                    <li><strong>Renderer Process (<code>renderer.js</code>):</strong> The frontend layer. Built with vanilla JavaScript, HTML5, and CSS3. Handles all DOM rendering, routing between pages (Home, Search, Library, Now Playing, Settings), audio playback via the HTML5 <code>&lt;audio&gt;</code> element, the full theme and background effect system, lyrics fetching and rendering, and the Adaptive theme color extraction algorithm.</li>
+                    <li><strong>Audio Visualizer (<code>visualizer.js</code>):</strong> A standalone class powered by the Web Audio API. Initializes an <code>AudioContext</code>, taps into the HTML5 audio element via a <code>MediaElementSource</code>, and drives three Canvas-based reactive visualizer styles (Bars, Circle, Wave) with configurable FFT sizes and smoothing.</li>
+                    <li><strong>Preload Script (<code>preload-ui.js</code>):</strong> Establishes a secure IPC bridge using Electron's <code>contextBridge</code>. Context isolation is enabled, meaning the renderer has zero direct access to Node.js or Electron APIs — all privileged calls go through the explicitly exposed <code>window.api</code> surface.</li>
+                    <li><strong>Styling (<code>styles.css</code>):</strong> Built entirely on CSS custom properties (variables) for the theme system. Employs CSS Grid, Flexbox, <code>backdrop-filter</code>, CSS animations, and a transparent/frameless window setup to achieve the Glassmorphism aesthetic.</li>
+                </ul>
+
+                <h2>Privacy and Security</h2>
+                <p>Panedora is designed with user privacy as a priority:</p>
+                <ul>
+                    <li><strong>Direct Authentication:</strong> Your credentials are used solely to authenticate with Pandora's official API. Your password is encrypted at rest using your operating system's secure keychain (Electron safeStorage).</li>
+                    <li><strong>Local Storage Only:</strong> Authentication tokens and encrypted credentials are stored locally on your machine in your user data directory. All auth data is cleared on sign-out.</li>
+                    <li><strong>No Third-Party Tracking:</strong> No personal data is collected or shared with any third-party services. The application communicates exclusively with Pandora's infrastructure.</li>
+                </ul>
+
+                <hr style="border: 1px solid var(--glass-border); margin: 3rem 0;">
+
+                <h2>Disclaimer</h2>
+                <p>This application is an unofficial, third-party client created for personal, non-commercial use and educational purposes. It is not affiliated with, endorsed by, or sponsored by Pandora Media, LLC, or its parent company, Sirius XM Holdings Inc. 'Pandora' is a registered trademark of Pandora Media, LLC. No proprietary Pandora assets or code are included in this repository.</p>
+
+                <div class="disclaimer-badge" style="margin-top: 2rem;">
+                    <i class='bx bx-info-circle'></i>
+                    <span><strong>DISCLAIMER:</strong> This application only works with an active Pandora Plus or Premium subscription. Using a paid account ensures full compatibility with all playback features and provides the highest audio quality available through the API.</span>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container footer-container">
+            <div class="footer-left">
+                <a href="index.html" class="logo" style="text-decoration: none;">
+                    <i class='bx bx-play-circle'></i>
+                    <span>Panedora</span>
+                </a>
+            </div>
+            <div class="footer-right">
+                <p>An open-source, unofficial client for Pandora.</p>
+            </div>
+        </div>
+        <div class="container legal-jargon">
+            <p><strong>Disclaimer:</strong> This application is an unofficial, third-party client created for personal, non-commercial use and educational purposes. It is not affiliated with, endorsed by, or sponsored by Pandora Media, LLC, or its parent company, Sirius XM Holdings Inc. 'Pandora' is a registered trademark of Pandora Media, LLC. No proprietary Pandora assets or code are included in this repository. The developer takes no responsibility for any actions taken against your account by using this unofficial software.</p>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

@@ -201,8 +201,81 @@ h1, h2, h3 {
     transition: color 0.3s ease;
 }
 
-.nav-links a:not(.btn):hover {
+.nav-links a:not(.btn):hover,
+.nav-links a.active {
     color: white;
+}
+
+/* Page Layouts (About) */
+.about-page {
+    padding: 8rem 0 4rem;
+}
+
+.text-container {
+    max-width: 900px;
+    padding: 3rem;
+    margin: 0 auto;
+}
+
+.page-title {
+    font-size: 3rem;
+    margin-bottom: 2rem;
+    text-align: center;
+    background: linear-gradient(135deg, #fff 0%, #a0a0b0 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.text-container h2 {
+    font-size: 2rem;
+    color: var(--text-main);
+    margin: 2.5rem 0 1rem;
+    border-bottom: 1px solid var(--glass-border);
+    padding-bottom: 0.5rem;
+}
+
+.text-container h3 {
+    font-size: 1.4rem;
+    color: var(--primary);
+    margin: 1.5rem 0 0.75rem;
+}
+
+.text-container p {
+    color: var(--text-muted);
+    margin-bottom: 1.25rem;
+    line-height: 1.8;
+}
+
+.text-container ul {
+    margin: 0 0 1.5rem 1.5rem;
+    color: var(--text-muted);
+}
+
+.text-container li {
+    margin-bottom: 0.75rem;
+    line-height: 1.6;
+}
+
+.text-container strong {
+    color: var(--text-main);
+}
+
+.text-container blockquote {
+    background: rgba(255, 255, 255, 0.05);
+    border-left: 4px solid var(--primary);
+    padding: 1rem 1.5rem;
+    margin: 1.5rem 0;
+    border-radius: 0 8px 8px 0;
+    font-style: italic;
+    color: var(--text-muted);
+}
+
+.text-container code {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    font-family: monospace;
+    color: #e0e0e0;
 }
 
 /* Hero Section */
@@ -261,40 +334,6 @@ h1, h2, h3 {
     height: auto;
     border-radius: 12px;
     box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--glass-border);
-}
-
-/* About / Tech Stack */
-.about {
-    padding: 5rem 0;
-}
-
-.about-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 2rem;
-}
-
-.about-card {
-    padding: 2.5rem;
-}
-
-.about-card h3 {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    font-size: 1.5rem;
-    margin-bottom: 1.5rem;
-    color: var(--primary);
-}
-
-.about-card p {
-    color: var(--text-muted);
-    margin-bottom: 1rem;
-    line-height: 1.8;
-}
-
-.about-card strong {
-    color: var(--text-main);
 }
 
 /* Features */
@@ -453,8 +492,8 @@ footer {
         flex-direction: column;
     }
 
-    .about-grid {
-        grid-template-columns: 1fr;
+    .text-container {
+        padding: 2rem 1rem;
     }
 
     .nav-links a:not(.btn) {
