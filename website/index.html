@@ -5,6 +5,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Panedora — A Premium Pandora Desktop Experience</title>
+    <meta name="description"
+        content="Panedora is a premium, immersive Pandora desktop client with glassmorphism themes, live lyrics, audio visualizers, and an always-on-top mini player.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         *,
         *::before,
@@ -23,22 +27,26 @@
             --grad-1: #1a0a2e;
             --grad-2: #0d1b3e;
             --grad-3: #1e0a3a;
-            --bg-dark: var(--bg-base);
-            --bg-card: rgba(255, 255, 255, 0.04);
+            --card: rgba(255, 255, 255, 0.04);
             --border: rgba(255, 255, 255, 0.08);
             --text: #e8e6f0;
-            --text-dim: #8b87a0;
+            --text-dim: rgba(255, 255, 255, 0.55);
+            --ease: cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        html {
+            scroll-behavior: smooth;
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: var(--bg-base);
             color: var(--text);
             min-height: 100vh;
             overflow-x: hidden;
             position: relative;
             z-index: 0;
-            transition: background 0.5s ease;
+            transition: background 0.6s ease;
         }
 
         body::before {
@@ -51,12 +59,11 @@
                 radial-gradient(ellipse 60% 70% at 85% 15%, var(--grad-2), transparent 70%),
                 radial-gradient(ellipse 50% 50% at 50% 50%, var(--grad-3), transparent 80%),
                 var(--bg-base);
-            background-size: 100% 100%;
+            transition: background 0.6s ease;
             pointer-events: none;
-            transition: background 0.5s ease;
         }
 
-        /* Background effects container (CSS-based effects) */
+        /* Background effects */
         #bg-effects {
             position: fixed;
             inset: 0;
@@ -65,7 +72,6 @@
             pointer-events: none;
         }
 
-        /* Background canvas (reactive effects only) */
         #bg-canvas {
             position: fixed;
             inset: 0;
@@ -76,7 +82,483 @@
             display: none;
         }
 
-        /* === WAVES === */
+        /* Shared */
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        section {
+            position: relative;
+            z-index: 1;
+        }
+
+        /* ─── Nav ─── */
+        nav {
+            padding: 20px 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            font-size: 1.4rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+
+        .logo span {
+            color: var(--accent);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 28px;
+        }
+
+        .nav-links a {
+            color: var(--text-dim);
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: var(--text);
+        }
+
+        /* ─── Hero ─── */
+        .hero {
+            text-align: center;
+            padding: 80px 0 32px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 100px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            font-size: 0.75rem;
+            color: var(--accent);
+            margin-bottom: 28px;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        .hero h1 {
+            font-size: clamp(2.4rem, 5.5vw, 3.8rem);
+            font-weight: 800;
+            letter-spacing: -1.5px;
+            line-height: 1.08;
+            margin-bottom: 20px;
+        }
+
+        .hero h1 .hl {
+            background: linear-gradient(135deg, var(--accent), #a855f7, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero p {
+            font-size: 1.1rem;
+            color: var(--text-dim);
+            max-width: 560px;
+            margin: 0 auto 40px;
+            line-height: 1.7;
+        }
+
+        /* ─── Buttons ─── */
+        .btn-row {
+            display: flex;
+            gap: 14px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 13px 26px;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.25s ease;
+            cursor: pointer;
+            border: none;
+            font-family: inherit;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #fff;
+            box-shadow: 0 4px 24px var(--accent-glow);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px var(--accent-glow);
+        }
+
+        .btn-ghost {
+            background: var(--card);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .btn-ghost:hover {
+            background: rgba(255, 255, 255, 0.08);
+            transform: translateY(-2px);
+        }
+
+        .btn svg {
+            width: 18px;
+            height: 18px;
+            fill: currentColor;
+        }
+
+        /* ─── Screenshot ─── */
+        .shot-wrap {
+            margin: 48px 0 0;
+            position: relative;
+        }
+
+        .shot-wrap::before {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            border-radius: 18px;
+            background: linear-gradient(135deg, var(--accent), #a855f7, #3b82f6);
+            opacity: 0.25;
+            filter: blur(1px);
+        }
+
+        .shot-wrap img {
+            position: relative;
+            width: 100%;
+            border-radius: 16px;
+            display: block;
+            border: 1px solid var(--border);
+        }
+
+        /* ─── Section heading util ─── */
+        .sec-head {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .sec-head h2 {
+            font-size: 1.9rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            margin-bottom: 10px;
+        }
+
+        .sec-head p {
+            color: var(--text-dim);
+            font-size: 0.95rem;
+        }
+
+        /* ─── Themes ─── */
+        .themes {
+            padding: 90px 0 40px;
+        }
+
+        .swatch-row {
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 16px;
+        }
+
+        .swatch {
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.15s var(--ease);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            flex-shrink: 0;
+        }
+
+        .swatch:hover {
+            transform: scale(1.15);
+        }
+
+        .swatch.active {
+            transform: scale(1.15);
+            box-shadow: 0 0 0 3px var(--bg-base), 0 0 0 6px var(--accent);
+        }
+
+        .theme-name {
+            text-align: center;
+            color: var(--accent);
+            font-weight: 600;
+            font-size: 0.95rem;
+            min-height: 1.3em;
+            transition: color 0.3s;
+        }
+
+        /* ─── Effects ─── */
+        .effects {
+            padding: 60px 0;
+        }
+
+        .fx-row {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+
+        .fx-btn {
+            padding: 9px 18px;
+            border-radius: 8px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .fx-btn:hover {
+            color: var(--text);
+            border-color: rgba(124, 91, 245, 0.3);
+        }
+
+        .fx-btn.active {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+            box-shadow: 0 2px 12px var(--accent-glow);
+        }
+
+        .fx-label {
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 0.8rem;
+            min-height: 1.2em;
+        }
+
+        /* ─── Features ─── */
+        .features {
+            padding: 60px 0;
+        }
+
+        .feat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 18px;
+        }
+
+        .feat-card {
+            padding: 26px;
+            border-radius: 16px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .feat-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(124, 91, 245, 0.3);
+        }
+
+        .feat-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, var(--accent), #a855f7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 14px;
+        }
+
+        .feat-icon svg {
+            width: 20px;
+            height: 20px;
+            fill: #fff;
+        }
+
+        .feat-card h3 {
+            font-size: 1.05rem;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .feat-card p {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            line-height: 1.6;
+        }
+
+        /* ─── Architecture ─── */
+        .arch {
+            padding: 60px 0;
+        }
+
+        .arch-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 18px;
+        }
+
+        .arch-card {
+            padding: 26px;
+            border-radius: 16px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            backdrop-filter: blur(20px);
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .arch-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(124, 91, 245, 0.3);
+        }
+
+        .arch-card h4 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .arch-card h4::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 10px var(--accent-glow);
+            flex-shrink: 0;
+        }
+
+        .arch-card p {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            line-height: 1.6;
+        }
+
+        /* ─── About ─── */
+        .about {
+            padding: 60px 0;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .about-box {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 32px;
+            backdrop-filter: blur(20px);
+            font-size: 0.95rem;
+            line-height: 1.7;
+            color: var(--text-dim);
+        }
+
+        .note {
+            margin-top: 20px;
+            padding: 18px 20px;
+            background: rgba(124, 91, 245, 0.08);
+            border-left: 4px solid var(--accent);
+            border-radius: 0 8px 8px 0;
+            font-size: 0.9rem;
+        }
+
+        .note strong {
+            display: block;
+            color: var(--accent);
+            margin-bottom: 6px;
+        }
+
+        /* ─── Reqs ─── */
+        .reqs {
+            padding: 60px 0;
+            text-align: center;
+        }
+
+        .reqs h2 {
+            font-size: 1.9rem;
+            font-weight: 700;
+            margin-bottom: 14px;
+        }
+
+        .reqs>p {
+            color: var(--text-dim);
+            margin-bottom: 28px;
+        }
+
+        .req-row {
+            display: flex;
+            gap: 18px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .req-card {
+            padding: 22px 30px;
+            border-radius: 12px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            min-width: 180px;
+        }
+
+        .req-card h4 {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+        }
+
+        .req-card p {
+            font-size: 0.95rem;
+        }
+
+        /* ─── Footer ─── */
+        footer {
+            padding: 36px 0;
+            text-align: center;
+            border-top: 1px solid var(--border);
+            margin-top: 40px;
+        }
+
+        footer p {
+            color: var(--text-dim);
+            font-size: 0.8rem;
+            line-height: 1.8;
+        }
+
+        footer a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* ─── CSS Effects ─── */
         .waves-container {
             position: absolute;
             bottom: 0;
@@ -92,7 +574,7 @@
         }
 
         .parallax-waves>use {
-            animation: move-forever 12s cubic-bezier(.55, .5, .45, .5) infinite;
+            animation: waveMove 12s cubic-bezier(.55, .5, .45, .5) infinite;
         }
 
         .parallax-waves>use:nth-child(1) {
@@ -115,7 +597,7 @@
             animation-duration: 12s;
         }
 
-        @keyframes move-forever {
+        @keyframes waveMove {
             0% {
                 transform: translate3d(-90px, 0, 0);
             }
@@ -125,7 +607,6 @@
             }
         }
 
-        /* === ORBS === */
         .orb {
             position: absolute;
             border-radius: 50%;
@@ -139,7 +620,7 @@
             background: var(--accent);
             top: -20vh;
             left: -20vw;
-            animation: floatOrb1 18s infinite alternate ease-in-out;
+            animation: fo1 18s infinite alternate ease-in-out;
         }
 
         .orb-2 {
@@ -148,7 +629,7 @@
             background: var(--grad-1);
             bottom: -30vh;
             right: -20vw;
-            animation: floatOrb2 25s infinite alternate ease-in-out;
+            animation: fo2 25s infinite alternate ease-in-out;
         }
 
         .orb-3 {
@@ -157,66 +638,59 @@
             background: var(--grad-3);
             top: 40vh;
             left: 50vw;
-            animation: floatOrb3 20s infinite alternate ease-in-out;
+            animation: fo3 20s infinite alternate ease-in-out;
         }
 
-        @keyframes floatOrb1 {
+        @keyframes fo1 {
             0% {
-                transform: translate(0, 0) scale(1);
+                transform: translate(0, 0) scale(1)
             }
 
             50% {
-                transform: translate(70vw, 30vh) scale(1.2);
+                transform: translate(70vw, 30vh) scale(1.2)
             }
 
             100% {
-                transform: translate(20vw, 80vh) scale(0.8);
+                transform: translate(20vw, 80vh) scale(.8)
             }
         }
 
-        @keyframes floatOrb2 {
+        @keyframes fo2 {
             0% {
-                transform: translate(0, 0) scale(1);
+                transform: translate(0, 0) scale(1)
             }
 
             50% {
-                transform: translate(-80vw, -40vh) scale(1.1);
+                transform: translate(-80vw, -40vh) scale(1.1)
             }
 
             100% {
-                transform: translate(-30vw, -80vh) scale(1.3);
+                transform: translate(-30vw, -80vh) scale(1.3)
             }
         }
 
-        @keyframes floatOrb3 {
+        @keyframes fo3 {
             0% {
-                transform: translate(0, 0) scale(1);
+                transform: translate(0, 0) scale(1)
             }
 
             50% {
-                transform: translate(-60vw, 20vh) scale(1.4);
+                transform: translate(-60vw, 20vh) scale(1.4)
             }
 
             100% {
-                transform: translate(40vw, -50vh) scale(0.9);
+                transform: translate(40vw, -50vh) scale(.9)
             }
         }
 
-        /* === SPACE === */
         .star-layer {
             position: absolute;
             inset: -100%;
-            background-image:
-                radial-gradient(2px 2px at 20px 30px, #ffffff, rgba(0, 0, 0, 0)),
-                radial-gradient(2px 2px at 40px 70px, #e2e8f0, rgba(0, 0, 0, 0)),
-                radial-gradient(3px 3px at 50px 160px, #f8fafc, rgba(0, 0, 0, 0)),
-                radial-gradient(2px 2px at 90px 40px, #ffffff, rgba(0, 0, 0, 0)),
-                radial-gradient(2px 2px at 130px 80px, #cbd5e1, rgba(0, 0, 0, 0)),
-                radial-gradient(4px 4px at 160px 120px, #ffffff, rgba(0, 0, 0, 0));
+            background-image: radial-gradient(2px 2px at 20px 30px, #fff, transparent), radial-gradient(2px 2px at 40px 70px, #e2e8f0, transparent), radial-gradient(3px 3px at 50px 160px, #f8fafc, transparent), radial-gradient(2px 2px at 90px 40px, #fff, transparent), radial-gradient(2px 2px at 130px 80px, #cbd5e1, transparent), radial-gradient(4px 4px at 160px 120px, #fff, transparent);
             background-repeat: repeat;
             background-size: 200px 200px;
             opacity: 0.8;
-            animation: spacePan 40s linear infinite;
+            animation: spPan 40s linear infinite;
         }
 
         .star-layer:nth-child(1) {
@@ -237,44 +711,40 @@
             opacity: 1;
         }
 
-        @keyframes spacePan {
+        @keyframes spPan {
             0% {
-                transform: translateY(0);
+                transform: translateY(0)
             }
 
             100% {
-                transform: translateY(50%);
+                transform: translateY(50%)
             }
         }
 
-        /* === GRID === */
         .synth-grid {
             position: absolute;
             width: 200%;
             height: 150%;
             bottom: -40%;
             left: -50%;
-            background-image:
-                linear-gradient(var(--accent) 2px, transparent 2px),
-                linear-gradient(90deg, var(--accent) 2px, transparent 2px);
+            background-image: linear-gradient(var(--accent) 2px, transparent 2px), linear-gradient(90deg, var(--accent) 2px, transparent 2px);
             background-size: 50px 50px;
             transform: perspective(600px) rotateX(70deg);
-            animation: gridMove 1.5s linear infinite;
+            animation: gridM 1.5s linear infinite;
             -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 35%);
             mask-image: linear-gradient(to top, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 35%);
         }
 
-        @keyframes gridMove {
+        @keyframes gridM {
             0% {
-                background-position: 0 0;
+                background-position: 0 0
             }
 
             100% {
-                background-position: 0 50px;
+                background-position: 0 50px
             }
         }
 
-        /* === PARTICLES === */
         .particle {
             position: absolute;
             top: -20px;
@@ -283,32 +753,31 @@
             background: var(--accent);
             border-radius: 50%;
             box-shadow: 0 0 15px var(--accent-glow);
-            animation: particleFall linear infinite;
+            animation: pFall linear infinite;
             opacity: 0;
         }
 
-        @keyframes particleFall {
+        @keyframes pFall {
             0% {
-                transform: translateY(0) scale(0.5);
-                opacity: 0;
+                transform: translateY(0) scale(.5);
+                opacity: 0
             }
 
             10% {
-                opacity: 0.9;
-                transform: translateY(10vh) scale(1);
+                opacity: .9;
+                transform: translateY(10vh) scale(1)
             }
 
             90% {
-                opacity: 0.9;
+                opacity: .9
             }
 
             100% {
-                transform: translateY(120vh) scale(0.5);
-                opacity: 0;
+                transform: translateY(120vh) scale(.5);
+                opacity: 0
             }
         }
 
-        /* === RINGS === */
         .ring-container {
             position: absolute;
             top: 50%;
@@ -327,563 +796,48 @@
             border: 5px solid var(--accent);
             opacity: 0;
             box-shadow: 0 0 30px var(--accent-glow), inset 0 0 30px var(--accent-glow);
-            animation: ringExpand 6s ease-out infinite;
+            animation: ringExp 6s ease-out infinite;
         }
 
         .ring-1 {
-            animation-delay: 0s;
+            animation-delay: 0s
         }
 
         .ring-2 {
-            animation-delay: 1.5s;
+            animation-delay: 1.5s
         }
 
         .ring-3 {
-            animation-delay: 3s;
+            animation-delay: 3s
         }
 
         .ring-4 {
-            animation-delay: 4.5s;
+            animation-delay: 4.5s
         }
 
-        @keyframes ringExpand {
+        @keyframes ringExp {
             0% {
                 width: 0;
                 height: 0;
                 opacity: 1;
-                border-width: 10px;
+                border-width: 10px
             }
 
             100% {
                 width: 120vw;
                 height: 120vw;
                 opacity: 0;
-                border-width: 2px;
+                border-width: 2px
             }
         }
 
-        /* Layout */
-        .container {
-            position: relative;
-            z-index: 1;
-            max-width: 1100px;
-            margin: 0 auto;
-            padding: 0 24px;
-        }
-
-        /* Nav */
-        nav {
-            padding: 24px 0;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 24px;
-        }
-
-        .logo {
-            font-size: 1.5rem;
-            font-weight: 700;
-            letter-spacing: -0.5px;
-            color: var(--text);
-        }
-
-        .logo span {
-            color: var(--accent);
-        }
-
-        .nav-links {
-            display: flex;
-            gap: 24px;
-        }
-
-        .nav-links a {
-            color: var(--text-dim);
-            text-decoration: none;
-            font-size: 0.9rem;
-            transition: color 0.2s;
-        }
-
-        .nav-links a:hover {
-            color: var(--text);
-        }
-
-        /* Hero */
-        .hero {
-            text-align: center;
-            padding: 80px 0 40px;
-        }
-
-        .badge {
-            display: inline-block;
-            padding: 6px 16px;
-            border-radius: 100px;
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            font-size: 0.8rem;
-            color: var(--accent);
-            margin-bottom: 24px;
-            letter-spacing: 0.5px;
-        }
-
-        .hero h1 {
-            font-size: clamp(2.5rem, 6vw, 4rem);
-            font-weight: 800;
-            letter-spacing: -1.5px;
-            line-height: 1.1;
-            margin-bottom: 20px;
-        }
-
-        .hero h1 .highlight {
-            background: linear-gradient(135deg, var(--accent), #a855f7, #3b82f6);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .hero p {
-            font-size: 1.15rem;
-            color: var(--text-dim);
-            max-width: 600px;
-            margin: 0 auto 40px;
-            line-height: 1.7;
-        }
-
-        /* Download buttons */
-        .download-row {
-            display: flex;
-            gap: 16px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            padding: 14px 28px;
-            border-radius: 12px;
-            font-size: 0.95rem;
-            font-weight: 600;
-            text-decoration: none;
-            transition: all 0.25s ease;
-            cursor: pointer;
-            border: none;
-            font-family: inherit;
-        }
-
-        .btn-primary {
-            background: var(--accent);
-            color: #fff;
-            box-shadow: 0 4px 24px var(--accent-glow);
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 32px var(--accent-glow);
-        }
-
-        .btn-secondary {
-            background: var(--bg-card);
-            color: var(--text);
-            border: 1px solid var(--border);
-        }
-
-        .btn-secondary:hover {
-            background: rgba(255, 255, 255, 0.08);
-            transform: translateY(-2px);
-        }
-
-        .btn svg {
-            width: 20px;
-            height: 20px;
-            fill: currentColor;
-        }
-
-        /* Screenshot */
-        .screenshot-wrap {
-            margin: 60px 0;
-            position: relative;
-        }
-
-        .screenshot-wrap::before {
-            content: '';
-            position: absolute;
-            inset: -2px;
-            border-radius: 18px;
-            background: linear-gradient(135deg, var(--accent), #a855f7, #3b82f6);
-            opacity: 0.3;
-            filter: blur(1px);
-        }
-
-        .screenshot-wrap img {
-            position: relative;
-            width: 100%;
-            border-radius: 16px;
-            display: block;
-            border: 1px solid var(--border);
-        }
-
-        /* Effects Demo */
-        .effects-demo {
-            padding: 80px 0;
-        }
-
-        .effects-demo h2 {
-            text-align: center;
-            font-size: 2rem;
-            font-weight: 700;
-            margin-bottom: 12px;
-            letter-spacing: -0.5px;
-        }
-
-        .effects-demo .subtitle {
-            text-align: center;
-            color: var(--text-dim);
-            font-size: 1rem;
-            margin-bottom: 40px;
-        }
-
-        .effects-grid {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            flex-wrap: wrap;
-            margin-bottom: 24px;
-        }
-
-        .effect-btn {
-            padding: 10px 20px;
-            border-radius: 8px;
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            color: var(--text-dim);
-            font-size: 0.85rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-            font-family: inherit;
-        }
-
-        .effect-btn:hover {
-            color: var(--text);
-            border-color: rgba(124, 91, 245, 0.3);
-        }
-
-        .effect-btn.active {
-            background: var(--accent);
-            color: #fff;
-            border-color: var(--accent);
-            box-shadow: 0 2px 12px var(--accent-glow);
-        }
-
-        .effect-label {
-            text-align: center;
-            color: var(--text-dim);
-            font-size: 0.85rem;
-            min-height: 1.2em;
-        }
-
-        /* Themes Demo */
-        .themes-demo {
-            padding: 80px 0 40px;
-        }
-
-        .themes-demo h2 {
-            text-align: center;
-            font-size: 2rem;
-            font-weight: 700;
-            margin-bottom: 12px;
-            letter-spacing: -0.5px;
-        }
-
-        .themes-demo .subtitle {
-            text-align: center;
-            color: var(--text-dim);
-            font-size: 1rem;
-            margin-bottom: 40px;
-        }
-
-        .theme-grid {
-            display: flex;
-            gap: 16px;
-            flex-wrap: wrap;
-            justify-content: center;
-            margin-bottom: 24px;
-        }
-
-        .theme-swatch {
-            width: 48px;
-            height: 48px;
-            border-radius: 50%;
-            border: 2px solid transparent;
-            cursor: pointer;
-            transition: all 150ms var(--ease);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            flex-shrink: 0;
-        }
-
-        .theme-swatch:hover {
-            transform: scale(1.15);
-            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
-        }
-
-        .theme-swatch.active {
-            transform: scale(1.15);
-            box-shadow: 0 0 0 3px var(--bg-base), 0 0 0 6px var(--accent);
-        }
-
-        .theme-label {
-            text-align: center;
-            color: var(--accent);
-            font-weight: 600;
-            font-size: 1rem;
-            min-height: 1.2em;
-        }
-
-        /* Features */
-        .features {
-            padding: 60px 0;
-        }
-
-        .features h2 {
-            text-align: center;
-            font-size: 2rem;
-            font-weight: 700;
-            margin-bottom: 48px;
-            letter-spacing: -0.5px;
-        }
-
-        .features-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-        }
-
-        .feature-card {
-            padding: 28px;
-            border-radius: 16px;
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            transition: transform 0.2s, border-color 0.2s;
-        }
-
-        .feature-card:hover {
-            transform: translateY(-4px);
-            border-color: rgba(124, 91, 245, 0.3);
-        }
-
-        .feature-icon {
-            width: 44px;
-            height: 44px;
-            border-radius: 10px;
-            background: linear-gradient(135deg, var(--accent), #a855f7);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 16px;
-        }
-
-        .feature-icon svg {
-            width: 22px;
-            height: 22px;
-            fill: #fff;
-        }
-
-        .feature-card h3 {
-            font-size: 1.1rem;
-            font-weight: 600;
-            margin-bottom: 8px;
-        }
-
-        .feature-card p {
-            font-size: 0.9rem;
-            color: var(--text-dim);
-            line-height: 1.6;
-        }
-
-        /* About Section */
-        .about-section {
-            padding: 80px 0 40px;
-            max-width: 800px;
-            margin: 0 auto;
-        }
-
-        .about-section h2 {
-            text-align: center;
-            font-size: 2rem;
-            font-weight: 700;
-            margin-bottom: 24px;
-            letter-spacing: -0.5px;
-        }
-
-        .about-content {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 32px;
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            font-size: 1.05rem;
-            line-height: 1.7;
-            color: var(--text-dim);
-        }
-
-        .note-box {
-            margin-top: 24px;
-            padding: 20px;
-            background: rgba(124, 91, 245, 0.08);
-            border-left: 4px solid var(--accent);
-            border-radius: 0 8px 8px 0;
-            font-size: 0.95rem;
-        }
-
-        .note-box strong {
-            display: block;
-            color: var(--accent);
-            margin-bottom: 8px;
-            font-size: 1rem;
-        }
-
-        /* Architecture Section */
-        .architecture-section {
-            padding: 60px 0;
-        }
-
-        .architecture-section h2 {
-            text-align: center;
-            font-size: 2rem;
-            font-weight: 700;
-            margin-bottom: 48px;
-            letter-spacing: -0.5px;
-        }
-
-        .arch-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-        }
-
-        .arch-card {
-            padding: 28px;
-            border-radius: 16px;
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            transition: transform 0.2s, border-color 0.2s;
-        }
-
-        .arch-card:hover {
-            transform: translateY(-4px);
-            border-color: rgba(124, 91, 245, 0.3);
-        }
-
-        .arch-card h4 {
-            font-size: 1.1rem;
-            font-weight: 600;
-            color: var(--text);
-            margin-bottom: 12px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .arch-card h4::before {
-            content: '';
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--accent);
-            box-shadow: 0 0 10px var(--accent-glow);
-        }
-
-        .arch-card p {
-            font-size: 0.9rem;
-            color: var(--text-dim);
-            line-height: 1.6;
-            margin: 0;
-        }
-
-        /* Requirements */
-        .requirements {
-            padding: 60px 0;
-            text-align: center;
-        }
-
-        .requirements h2 {
-            font-size: 2rem;
-            font-weight: 700;
-            margin-bottom: 16px;
-        }
-
-        .requirements>p {
-            color: var(--text-dim);
-            margin-bottom: 32px;
-            font-size: 1rem;
-        }
-
-        .req-cards {
-            display: flex;
-            gap: 20px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-
-        .req-card {
-            padding: 24px 32px;
-            border-radius: 12px;
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            min-width: 200px;
-        }
-
-        .req-card h4 {
-            font-size: 0.85rem;
-            color: var(--text-dim);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 8px;
-        }
-
-        .req-card p {
-            font-size: 1rem;
-            color: var(--text);
-            margin-bottom: 0;
-        }
-
-        /* Footer */
-        footer {
-            padding: 40px 0;
-            text-align: center;
-            border-top: 1px solid var(--border);
-            margin-top: 40px;
-        }
-
-        footer p {
-            color: var(--text-dim);
-            font-size: 0.85rem;
-            line-height: 1.8;
-        }
-
-        footer a {
-            color: var(--accent);
-            text-decoration: none;
-        }
-
-        footer a:hover {
-            text-decoration: underline;
-        }
-
-        /* Responsive */
+        /* ─── Responsive ─── */
         @media (max-width: 640px) {
             .hero {
-                padding: 50px 0 30px;
+                padding: 50px 0 24px;
             }
 
-            .download-row {
+            .btn-row {
                 flex-direction: column;
                 align-items: center;
             }
@@ -894,17 +848,26 @@
                 justify-content: center;
             }
 
-            .features-grid {
+            .feat-grid,
+            .arch-grid {
                 grid-template-columns: 1fr;
             }
 
-            .effects-grid {
+            .fx-row {
                 gap: 6px;
             }
 
-            .effect-btn {
-                padding: 8px 14px;
-                font-size: 0.8rem;
+            .fx-btn {
+                padding: 7px 12px;
+                font-size: 0.75rem;
+            }
+
+            .nav-links {
+                gap: 14px;
+            }
+
+            .nav-links a {
+                font-size: 0.75rem;
             }
         }
     </style>
@@ -918,36 +881,35 @@
         <nav>
             <div class="logo">Pane<span>dora</span></div>
             <div class="nav-links">
-                <a href="#about">About</a>
-                <a href="#architecture">Architecture</a>
                 <a href="#themes">Themes</a>
                 <a href="#effects">Effects</a>
                 <a href="#features">Features</a>
+                <a href="#arch">Architecture</a>
             </div>
         </nav>
 
+        <!-- Hero -->
         <section class="hero">
             <div class="badge">Requires Pandora Premium or Plus</div>
-            <h1>Your music deserves a <span class="highlight">better window.</span></h1>
-            <p>Panedora is a premium desktop client for Pandora with immersive glassmorphism themes, live lyrics, audio
+            <h1>Your music deserves a <span class="hl">better window.</span></h1>
+            <p>Panedora is an immersive desktop client for Pandora with glassmorphism themes, live synced lyrics, audio
                 visualizers, and a mini player that floats over everything.</p>
-
-            <div class="download-row">
-                <a href="#" class="btn btn-primary" id="download-win">
+            <div class="btn-row">
+                <a href="#" class="btn btn-primary">
                     <svg viewBox="0 0 24 24">
                         <path
                             d="M3 12V6.75l8-1.25V12H3zm0 .5h8v6.5l-8-1.25V12.5zM12 5.25l10-1.5V12H12V5.25zm0 7.25h10v7.75l-10-1.5V12.5z" />
                     </svg>
                     Windows
                 </a>
-                <a href="#" class="btn btn-secondary" id="download-mac">
+                <a href="#" class="btn btn-ghost">
                     <svg viewBox="0 0 24 24">
                         <path
                             d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
                     </svg>
                     macOS
                 </a>
-                <a href="#" class="btn btn-secondary" id="download-linux">
+                <a href="#" class="btn btn-ghost">
                     <svg viewBox="0 0 24 24">
                         <path
                             d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333l.003.003c.391.778 1.113 1.368 1.884 1.43.868.07 1.723-.26 2.456-.594.733-.34 1.333-.616 1.963-.393.63.222 1.168.267 1.56.09.395-.166.626-.636.64-1.342v-.067c-.05-.333-.12-.733-.18-1.137-.034-.262.015-.543.18-.755a4.71 4.71 0 00.623-1.832c.056-.467.088-1.057-.013-1.59-.1-.533-.372-1.068-.882-1.333a2.18 2.18 0 00-.547-.2c.002-.135.006-.315.004-.539-.063-1.158-.46-2.358-1.218-3.67-.863-1.397-1.683-2.14-2.217-2.813-.534-.672-.881-1.366-.92-2.48C15.603 4.953 16.775.571 12.504 0z" />
@@ -957,157 +919,97 @@
             </div>
         </section>
 
-        <div class="screenshot-wrap">
+        <div class="shot-wrap">
             <img src="screenshot.png" alt="Panedora App Interface" loading="lazy">
         </div>
 
-        <section class="about-section" id="about">
-            <h2>About this Project</h2>
-            <div class="about-content">
-                <p>Panedora is a personal, educational, and experimental project created purely for fun. It was built as
-                    a creative exercise to explore modern UI design (Glassmorphism) and Electron-based desktop
-                    application development. This project is intended for personal use only and was developed with zero
-                    intent to cause harm, bypass security, or interfere with Pandora's business operations. It is shared
-                    as a demonstration of UI/UX design and technical integration.</p>
-
-                <div class="note-box">
-                    <strong>A Note to Developers on the Backend Code:</strong>
-                    <p>You are completely free to explore, learn from, and adapt the frontend Glassmorphism UI code for
-                        your own non-commercial projects. However, to prevent abuse of the legacy API and to maintain
-                        the integrity of the subscription-tier checks, the backend logic (`pandora-api.js`, etc.) has
-                        been intentionally obfuscated in public releases.</p>
-                </div>
+        <!-- Themes -->
+        <section class="themes" id="themes">
+            <div class="sec-head">
+                <h2>9 glassmorphism themes.</h2>
+                <p>Click any swatch to transform this entire page.</p>
             </div>
+            <div class="swatch-row" id="swatch-row"></div>
+            <p class="theme-name" id="theme-name">Midnight Violet</p>
         </section>
 
-        <section class="architecture-section" id="architecture">
-            <h2>Technical Architecture</h2>
-            <div class="arch-grid">
-                <div class="arch-card">
-                    <h4>Main Process</h4>
-                    <p>Acts as the orchestrator. Manages application lifecycle, handles secure API requests to Pandora
-                        from a Node.js context, and controls window state via IPC handlers.</p>
-                </div>
-                <div class="arch-card">
-                    <h4>API Controller</h4>
-                    <p>A dedicated class that handles all communication with Pandora's backend REST endpoints, managing
-                        auth token and CSRF token lifecycles.</p>
-                </div>
-                <div class="arch-card">
-                    <h4>Renderer Process</h4>
-                    <p>The vanilla JavaScript, HTML5, and CSS3 frontend. Handles DOM rendering, routing, audio playback,
-                        the theme system, and the Adaptive Color extraction algorithm.</p>
-                </div>
-                <div class="arch-card">
-                    <h4>Web Audio Visualizer</h4>
-                    <p>A standalone class powered by the Web Audio API that drives three Canvas-based reactive
-                        visualizer styles (Bars, Circle, Wave) with heavy math smoothing.</p>
-                </div>
-                <div class="arch-card">
-                    <h4>Context Bridge</h4>
-                    <p>Establishes a secure IPC bridge using Electron's `contextBridge` with full context isolation —
-                        the renderer has zero direct access to Node.js or Electron APIs.</p>
-                </div>
-                <div class="arch-card">
-                    <h4>Dynamic CSS</h4>
-                    <p>Built entirely on CSS custom properties (variables). Employs CSS Grid, Flexbox,
-                        `backdrop-filter`, and a transparent frameless window setup.</p>
-                </div>
+        <!-- Effects -->
+        <section class="effects" id="effects">
+            <div class="sec-head">
+                <h2>10 live background effects.</h2>
+                <p>Reactive effects use simulated audio data.</p>
             </div>
+            <div class="fx-row" id="fx-row">
+                <button class="fx-btn active" data-fx="orbs">Orbs</button>
+                <button class="fx-btn" data-fx="waves">Waves</button>
+                <button class="fx-btn" data-fx="space">Space</button>
+                <button class="fx-btn" data-fx="grid">Grid</button>
+                <button class="fx-btn" data-fx="particles">Particles</button>
+                <button class="fx-btn" data-fx="rings">Rings</button>
+                <button class="fx-btn" data-fx="reactive-bars">Reactive Bars</button>
+                <button class="fx-btn" data-fx="reactive-circle">Reactive Circle</button>
+                <button class="fx-btn" data-fx="reactive-wave">Reactive Wave</button>
+                <button class="fx-btn" data-fx="static">Static</button>
+            </div>
+            <p class="fx-label" id="fx-label">Orbs — Floating glowing spheres</p>
         </section>
 
-        <section class="themes-demo" id="themes">
-            <h2>9 Glassmorphism themes.</h2>
-            <p class="subtitle">Click a theme swatch below to see the entire page transform instantly.</p>
-            <div class="theme-grid" id="theme-grid">
-                <!-- Theme swatches injected by JS -->
-            </div>
-            <p class="theme-label" id="theme-label">Midnight Violet</p>
-        </section>
-
-        <section class="effects-demo" id="effects">
-            <h2>10 live background effects.</h2>
-            <p class="subtitle">Click any effect to see it on this page. Reactive effects use simulated audio data.</p>
-            <div class="effects-grid">
-                <button class="effect-btn active" data-effect="orbs">Orbs</button>
-                <button class="effect-btn" data-effect="waves">Waves</button>
-                <button class="effect-btn" data-effect="space">Space</button>
-                <button class="effect-btn" data-effect="grid">Grid</button>
-                <button class="effect-btn" data-effect="particles">Particles</button>
-                <button class="effect-btn" data-effect="rings">Rings</button>
-                <button class="effect-btn" data-effect="reactive-bars">Reactive Bars</button>
-                <button class="effect-btn" data-effect="reactive-circle">Reactive Circle</button>
-                <button class="effect-btn" data-effect="reactive-wave">Reactive Wave</button>
-                <button class="effect-btn" data-effect="static">Static</button>
-            </div>
-            <p class="effect-label" id="effect-label">Orbs -- Floating glowing spheres</p>
-        </section>
-
+        <!-- Features -->
         <section class="features" id="features">
-            <h2>Everything you need to listen better.</h2>
-            <div class="features-grid">
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <svg viewBox="0 0 24 24">
+            <div class="sec-head">
+                <h2>Everything you need to listen better.</h2>
+            </div>
+            <div class="feat-grid">
+                <div class="feat-card">
+                    <div class="feat-icon"><svg viewBox="0 0 24 24">
                             <path
                                 d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-1-.01-.83.67-1.49 1.5-1.49H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" />
-                        </svg>
-                    </div>
+                        </svg></div>
                     <h3>9 Glassmorphism Themes</h3>
-                    <p>Frosted glass panels, translucent islands, and full CSS variable theming that transforms every
-                        pixel instantly when you switch.</p>
+                    <p>Frosted glass panels, translucent islands, and a full CSS variable theming system that transforms
+                        every pixel instantly when you switch.</p>
                 </div>
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <svg viewBox="0 0 24 24">
+                <div class="feat-card">
+                    <div class="feat-icon"><svg viewBox="0 0 24 24">
                             <path
                                 d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-                        </svg>
-                    </div>
+                        </svg></div>
                     <h3>Live Synced Lyrics</h3>
                     <p>Time-coded lyrics auto-scroll with the music, highlighted line by line. Choose from glow, pill,
                         or full-line highlight styles.</p>
                 </div>
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <svg viewBox="0 0 24 24">
+                <div class="feat-card">
+                    <div class="feat-icon"><svg viewBox="0 0 24 24">
                             <path
                                 d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
-                        </svg>
-                    </div>
+                        </svg></div>
                     <h3>Audio Visualizers</h3>
                     <p>10 animated background effects powered by Web Audio API. Reactive bars, circles, and waves that
-                        move with your music.</p>
+                        respond to your music in real time.</p>
                 </div>
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <svg viewBox="0 0 24 24">
+                <div class="feat-card">
+                    <div class="feat-icon"><svg viewBox="0 0 24 24">
                             <path
                                 d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-7-2h2v-4h4v-2h-4V7h-2v4H8v2h4z" />
-                        </svg>
-                    </div>
+                        </svg></div>
                     <h3>Always-on-Top Mini Player</h3>
-                    <p>A compact floating bar that stays above all windows, even borderless fullscreen games. Controls
+                    <p>A compact floating bar that stays above all windows — even borderless fullscreen games. Controls
                         and feedback at a glance.</p>
                 </div>
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <svg viewBox="0 0 24 24">
+                <div class="feat-card">
+                    <div class="feat-icon"><svg viewBox="0 0 24 24">
                             <path
                                 d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zM5 15h14v3H5z" />
-                        </svg>
-                    </div>
+                        </svg></div>
                     <h3>Adaptive Dynamic Theme</h3>
                     <p>Samples your current album art and extracts a dominant color, repainting the entire UI in real
                         time as songs change.</p>
                 </div>
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <svg viewBox="0 0 24 24">
+                <div class="feat-card">
+                    <div class="feat-icon"><svg viewBox="0 0 24 24">
                             <path
                                 d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z" />
-                        </svg>
-                    </div>
+                        </svg></div>
                     <h3>Private and Secure</h3>
                     <p>Credentials encrypted with OS keychain. No third-party tracking. All data stored locally and
                         wiped on sign-out.</p>
@@ -1115,17 +1017,76 @@
             </div>
         </section>
 
-        <section class="requirements">
+        <!-- Architecture -->
+        <section class="arch" id="arch">
+            <div class="sec-head">
+                <h2>Built with a modern Electron stack.</h2>
+            </div>
+            <div class="arch-grid">
+                <div class="arch-card">
+                    <h4>Main Process</h4>
+                    <p>Orchestrates the app lifecycle, manages all API requests from a secure Node.js context, and
+                        controls Mini Player window state via IPC.</p>
+                </div>
+                <div class="arch-card">
+                    <h4>API Controller</h4>
+                    <p>Handles all communication with Pandora's backend REST endpoints, routing through Chromium's
+                        native network stack with managed auth tokens.</p>
+                </div>
+                <div class="arch-card">
+                    <h4>Renderer Process</h4>
+                    <p>Vanilla JS, HTML5, CSS3 frontend. Handles routing, audio playback, the full theme system, and the
+                        Adaptive Color extraction algorithm.</p>
+                </div>
+                <div class="arch-card">
+                    <h4>Web Audio Visualizer</h4>
+                    <p>Standalone class powered by the Web Audio API with three Canvas-based reactive styles and
+                        configurable FFT sizes with math smoothing.</p>
+                </div>
+                <div class="arch-card">
+                    <h4>Secure Context Bridge</h4>
+                    <p>IPC bridge via Electron's contextBridge with full context isolation — the renderer has zero
+                        access to Node.js or Electron APIs.</p>
+                </div>
+                <div class="arch-card">
+                    <h4>Dynamic CSS System</h4>
+                    <p>Built entirely on CSS custom properties. Employs CSS Grid, Flexbox, backdrop-filter, and a
+                        transparent frameless window setup.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- About -->
+        <section class="about">
+            <div class="sec-head">
+                <h2>About this project</h2>
+            </div>
+            <div class="about-box">
+                <p>Panedora is a personal, educational, and experimental project created purely for fun. It was built as
+                    a creative exercise to explore modern UI design (Glassmorphism) and Electron-based desktop
+                    application development. This project is intended for personal use only and was developed with zero
+                    intent to cause harm, bypass security, or interfere with Pandora's business operations.</p>
+                <div class="note">
+                    <strong>A Note on the Backend Code</strong>
+                    <p>You are free to explore and adapt the frontend Glassmorphism UI code for your own non-commercial
+                        projects. However, to prevent abuse, the backend logic has been intentionally obfuscated in
+                        public releases.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Requirements -->
+        <section class="reqs">
             <h2>Before you download</h2>
             <p>Panedora requires an active Pandora subscription to work.</p>
-            <div class="req-cards">
+            <div class="req-row">
                 <div class="req-card">
                     <h4>Subscription</h4>
                     <p>Pandora Premium or Plus</p>
                 </div>
                 <div class="req-card">
                     <h4>Platforms</h4>
-                    <p>Windows, macOS, Linux</p>
+                    <p>Windows · macOS · Linux</p>
                 </div>
                 <div class="req-card">
                     <h4>Connection</h4>
@@ -1143,372 +1104,122 @@
 
     <script>
         (function () {
-            const bgEffects = document.getElementById('bg-effects');
+            const bgEl = document.getElementById('bg-effects');
             const canvas = document.getElementById('bg-canvas');
             const ctx = canvas.getContext('2d');
-            let w, h, animId;
-            let currentEffect = 'orbs';
-            let previousWaveHeights = null;
+            let w, h, animId, currentFx = 'orbs', prevWave = null;
 
-            // Ensure we fetch current variables after theme updates
-            function getCssVar(name) {
-                return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-            }
+            function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+            function accent() { return cssVar('--accent') || '#7c5bf5'; }
+            function glow() { return cssVar('--accent-glow') || 'rgba(124,91,245,0.3)'; }
 
-            function getAccentColor() { return getCssVar('--accent') || '#7c5bf5'; }
-            function getGlowColor() { return getCssVar('--accent-glow') || 'rgba(124, 91, 245, 0.3)'; }
+            function resize() { w = canvas.width = innerWidth; h = canvas.height = innerHeight; }
+            addEventListener('resize', resize); resize();
 
-            function resize() {
-                w = canvas.width = window.innerWidth;
-                h = canvas.height = window.innerHeight;
-            }
-            window.addEventListener('resize', resize);
-            resize();
-
-            // Simulated audio data for reactive effects
-            function fakeFrequencyData(len) {
-                const t = performance.now() / 1000;
-                const arr = new Uint8Array(len);
+            // ── Fake audio data ──
+            function fakeFreq(len) {
+                const t = performance.now() / 1000, a = new Uint8Array(len);
                 for (let i = 0; i < len; i++) {
-                    const freq = 0.5 + i * 0.3;
-                    const val = (Math.sin(t * freq + i * 0.7) * 0.5 + 0.5)
-                        * (Math.sin(t * 0.3 + i * 0.1) * 0.3 + 0.7)
-                        * (1 - i / len * 0.6);
-                    arr[i] = Math.floor(val * 255);
+                    const v = (Math.sin(t * (0.5 + i * 0.3) + i * 0.7) * 0.5 + 0.5) * (Math.sin(t * 0.3 + i * 0.1) * 0.3 + 0.7) * (1 - i / len * 0.6);
+                    a[i] = Math.floor(v * 255);
                 }
-                return arr;
+                return a;
+            }
+            function fakeTime(len) {
+                const t = performance.now() / 1000, a = new Uint8Array(len);
+                for (let i = 0; i < len; i++) a[i] = Math.max(0, Math.min(255, 128 + Math.sin(t * 2 + i * 0.05) * 30 + Math.sin(t * 3.7 + i * 0.08) * 15 + Math.sin(t * 0.5 + i * 0.02) * 10));
+                return a;
             }
 
-            function fakeTimeDomainData(len) {
-                const t = performance.now() / 1000;
-                const arr = new Uint8Array(len);
-                for (let i = 0; i < len; i++) {
-                    // Center at 128 like real time-domain data
-                    const wave = Math.sin(t * 2 + i * 0.05) * 30
-                        + Math.sin(t * 3.7 + i * 0.08) * 15
-                        + Math.sin(t * 0.5 + i * 0.02) * 10;
-                    arr[i] = Math.max(0, Math.min(255, 128 + wave));
-                }
-                return arr;
-            }
-
-            // --- CSS-BASED EFFECTS (identical to app) ---
-
-            function applyCSSEffect(effectId) {
-                bgEffects.innerHTML = '';
-                canvas.style.display = 'none';
+            // ── CSS effects ──
+            function cssEffect(id) {
+                bgEl.innerHTML = ''; canvas.style.display = 'none';
                 if (animId) { cancelAnimationFrame(animId); animId = null; }
-
-                if (effectId === 'waves') {
-                    bgEffects.innerHTML = `
-                    <div class="waves-container">
-                        <svg class="waves" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 24 150 28" preserveAspectRatio="none" shape-rendering="auto">
-                        <defs><path id="gentle-wave" d="M-160 44c30 0 58-18 88-18s 58 18 88 18 58-18 88-18 58 18 88 18 v44h-352z" /></defs>
-                        <g class="parallax-waves">
-                        <use xlink:href="#gentle-wave" x="48" y="0" fill="var(--accent-glow)" />
-                        <use xlink:href="#gentle-wave" x="48" y="3" fill="var(--accent-soft)" />
-                        <use xlink:href="#gentle-wave" x="48" y="5" fill="var(--glass)" />
-                        <use xlink:href="#gentle-wave" x="48" y="7" fill="var(--accent)" opacity="0.4" />
-                        </g></svg>
-                    </div>`;
-                } else if (effectId === 'orbs') {
-                    bgEffects.innerHTML = `
-                    <div class="orb orb-1"></div>
-                    <div class="orb orb-2"></div>
-                    <div class="orb orb-3"></div>`;
-                } else if (effectId === 'space') {
-                    bgEffects.innerHTML = `
-                    <div class="star-layer"></div>
-                    <div class="star-layer"></div>
-                    <div class="star-layer"></div>`;
-                } else if (effectId === 'grid') {
-                    bgEffects.innerHTML = `<div class="synth-grid"></div>`;
-                } else if (effectId === 'particles') {
-                    let parts = '';
-                    for (let i = 0; i < 30; i++) {
-                        parts += `<div class="particle" style="left: ${Math.random() * 100}%; animation-delay: ${Math.random() * 5}s; animation-duration: ${4 + Math.random() * 4}s;"></div>`;
-                    }
-                    bgEffects.innerHTML = parts;
-                } else if (effectId === 'rings') {
-                    bgEffects.innerHTML = `
-                    <div class="ring-container">
-                        <div class="ring ring-1"></div>
-                        <div class="ring ring-2"></div>
-                        <div class="ring ring-3"></div>
-                        <div class="ring ring-4"></div>
-                    </div>`;
-                } else if (effectId === 'static') {
-                    // No effect
-                }
+                if (id === 'waves') bgEl.innerHTML = `<div class="waves-container"><svg class="waves" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 24 150 28" preserveAspectRatio="none"><defs><path id="gw" d="M-160 44c30 0 58-18 88-18s 58 18 88 18 58-18 88-18 58 18 88 18 v44h-352z"/></defs><g class="parallax-waves"><use xlink:href="#gw" x="48" y="0" fill="var(--accent-glow)"/><use xlink:href="#gw" x="48" y="3" fill="var(--accent-soft)"/><use xlink:href="#gw" x="48" y="5" fill="var(--glass)"/><use xlink:href="#gw" x="48" y="7" fill="var(--accent)" opacity="0.4"/></g></svg></div>`;
+                else if (id === 'orbs') bgEl.innerHTML = '<div class="orb orb-1"></div><div class="orb orb-2"></div><div class="orb orb-3"></div>';
+                else if (id === 'space') bgEl.innerHTML = '<div class="star-layer"></div><div class="star-layer"></div><div class="star-layer"></div>';
+                else if (id === 'grid') bgEl.innerHTML = '<div class="synth-grid"></div>';
+                else if (id === 'particles') { let p = ''; for (let i = 0; i < 30; i++) p += `<div class="particle" style="left:${Math.random() * 100}%;animation-delay:${Math.random() * 5}s;animation-duration:${4 + Math.random() * 4}s"></div>`; bgEl.innerHTML = p; }
+                else if (id === 'rings') bgEl.innerHTML = '<div class="ring-container"><div class="ring ring-1"></div><div class="ring ring-2"></div><div class="ring ring-3"></div><div class="ring ring-4"></div></div>';
             }
 
-            // --- CANVAS-BASED REACTIVE EFFECTS (identical algorithms to visualizer.js) ---
-
-            // Reactive Bars — matches visualizer.js drawBars()
-            function drawReactiveBars() {
-                ctx.clearRect(0, 0, w, h);
-                const bufferLength = 128; // fftSize 256 -> frequencyBinCount = 128
-                const dataArray = fakeFrequencyData(bufferLength);
-                const barWidth = (w / bufferLength) * 2.5;
-                let x = 0;
-                const heightMultiplier = 0.6;
-
-                for (let i = 0; i < bufferLength; i++) {
-                    const normalized = dataArray[i] / 255;
-                    const enhanced = Math.pow(normalized, 1.2);
-                    const barHeight = enhanced * (h * heightMultiplier);
-
-                    const gradient = ctx.createLinearGradient(0, h - barHeight, 0, h);
-                    gradient.addColorStop(0, getAccentColor());
-                    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-
-                    ctx.fillStyle = gradient;
-                    ctx.fillRect(x, h - barHeight, barWidth - 1, barHeight);
-                    x += barWidth;
-                }
+            // ── Canvas effects ──
+            function drawBars() {
+                ctx.clearRect(0, 0, w, h); const d = fakeFreq(128), bw = (w / 128) * 2.5; let x = 0;
+                for (let i = 0; i < 128; i++) { const bh = Math.pow(d[i] / 255, 1.2) * h * 0.6; const g = ctx.createLinearGradient(0, h - bh, 0, h); g.addColorStop(0, accent()); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(x, h - bh, bw - 1, bh); x += bw; }
             }
-
-            // Reactive Circle — matches visualizer.js drawCircle()
-            function drawReactiveCircle() {
-                ctx.clearRect(0, 0, w, h);
-                const bufferLength = 128;
-                const dataArray = fakeFrequencyData(bufferLength);
-                const centerX = w / 2;
-                const centerY = h / 2;
-                const baseRadius = Math.min(w, h) * 0.2;
-
-                // Bass pulsing
-                let bassSum = 0;
-                const bassCount = Math.min(10, bufferLength);
-                for (let i = 0; i < bassCount; i++) {
-                    bassSum += dataArray[i];
-                }
-                const bassAvg = (bassSum / bassCount) / 255.0;
-                const dynamicRadius = baseRadius + (Math.pow(bassAvg, 1.5) * baseRadius * 0.4);
-                const maxRipple = dynamicRadius * 0.6;
-
-                ctx.lineWidth = 3;
-                ctx.strokeStyle = getAccentColor();
-                ctx.shadowBlur = 20;
-                ctx.shadowColor = getGlowColor();
-
-                // Extract rgb from accent for the fill overlay
-                const accent = getAccentColor();
-                ctx.fillStyle = getCssVar('--accent-soft') || 'rgba(124, 91, 245, 0.1)';
-
+            function drawCircle() {
+                ctx.clearRect(0, 0, w, h); const d = fakeFreq(128), cx2 = w / 2, cy = h / 2, br = Math.min(w, h) * 0.2;
+                let bs = 0; for (let i = 0; i < 10; i++) bs += d[i]; const ba = bs / 10 / 255;
+                const dr = br + Math.pow(ba, 1.5) * br * 0.4, mr = dr * 0.6, vl = Math.floor(128 * 0.7);
+                ctx.lineWidth = 3; ctx.strokeStyle = accent(); ctx.shadowBlur = 20; ctx.shadowColor = glow(); ctx.fillStyle = cssVar('--accent-soft') || 'rgba(124,91,245,0.1)';
                 ctx.beginPath();
-
-                const validDataLength = Math.floor(bufferLength * 0.7);
-
-                // Right half (0 to PI)
-                for (let i = 0; i < validDataLength; i++) {
-                    const normalized = dataArray[i] / 255;
-                    const ripple = Math.pow(normalized, 1.8) * maxRipple;
-                    const r = dynamicRadius + ripple;
-                    const angle = (i / (validDataLength - 1)) * Math.PI - (Math.PI / 2);
-                    const x = centerX + Math.cos(angle) * r;
-                    const y = centerY + Math.sin(angle) * r;
-                    if (i === 0) ctx.moveTo(x, y);
-                    else ctx.lineTo(x, y);
-                }
-
-                // Left half (PI to 2PI) — mirrored
-                for (let i = validDataLength - 1; i >= 0; i--) {
-                    const normalized = dataArray[i] / 255;
-                    const ripple = Math.pow(normalized, 1.8) * maxRipple;
-                    const r = dynamicRadius + ripple;
-                    const angle = Math.PI + ((validDataLength - 1 - i) / (validDataLength - 1)) * Math.PI - (Math.PI / 2);
-                    const x = centerX + Math.cos(angle) * r;
-                    const y = centerY + Math.sin(angle) * r;
-                    ctx.lineTo(x, y);
-                }
-
-                ctx.closePath();
-                ctx.fill();
-                ctx.stroke();
-                ctx.shadowBlur = 0;
+                for (let i = 0; i < vl; i++) { const r = dr + Math.pow(d[i] / 255, 1.8) * mr, a = (i / (vl - 1)) * Math.PI - Math.PI / 2; const px = cx2 + Math.cos(a) * r, py = cy + Math.sin(a) * r; i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py); }
+                for (let i = vl - 1; i >= 0; i--) { const r = dr + Math.pow(d[i] / 255, 1.8) * mr, a = Math.PI + ((vl - 1 - i) / (vl - 1)) * Math.PI - Math.PI / 2; ctx.lineTo(cx2 + Math.cos(a) * r, cy + Math.sin(a) * r); }
+                ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.shadowBlur = 0;
             }
-
-            // Reactive Wave — matches visualizer.js drawWave()
-            function drawReactiveWave() {
-                ctx.clearRect(0, 0, w, h);
-                const bufferLength = 512; // fftSize for wave mode
-                const dataArray = fakeTimeDomainData(bufferLength);
-
-                ctx.lineWidth = 4;
-                ctx.strokeStyle = getAccentColor();
-                ctx.shadowBlur = 15;
-                ctx.shadowColor = getGlowColor();
-
-                ctx.beginPath();
-
-                const sliceWidth = w / (bufferLength - 1);
+            function drawWave() {
+                ctx.clearRect(0, 0, w, h); const bl = 512, d = fakeTime(bl); ctx.lineWidth = 4; ctx.strokeStyle = accent(); ctx.shadowBlur = 15; ctx.shadowColor = glow(); ctx.beginPath();
+                const sw = w / (bl - 1), ms = h * 0.08, sm = new Float32Array(bl);
+                for (let i = 0; i < bl; i++) { let s = 0, c = 0; for (let j = Math.max(0, i - 12); j <= Math.min(bl - 1, i + 12); j++) { s += d[j]; c++; } sm[i] = s / c; }
+                if (!prevWave || prevWave.length !== bl) { prevWave = new Float32Array(bl); for (let i = 0; i < bl; i++) prevWave[i] = h / 2; }
                 let x = 0;
-                const maxSwing = h * 0.08;
-
-                // 25-point moving average smoothing
-                const smoothedData = new Float32Array(bufferLength);
-                const windowSize = 25;
-                for (let i = 0; i < bufferLength; i++) {
-                    let sum = 0;
-                    let count = 0;
-                    let start = Math.max(0, i - Math.floor(windowSize / 2));
-                    let end = Math.min(bufferLength - 1, i + Math.floor(windowSize / 2));
-                    for (let j = start; j <= end; j++) {
-                        sum += dataArray[j];
-                        count++;
-                    }
-                    smoothedData[i] = sum / count;
-                }
-
-                // Initialize lerp state
-                if (!previousWaveHeights || previousWaveHeights.length !== bufferLength) {
-                    previousWaveHeights = new Float32Array(bufferLength);
-                    for (let i = 0; i < bufferLength; i++) previousWaveHeights[i] = h / 2;
-                }
-
-                for (let i = 0; i < bufferLength; i++) {
-                    const rawV = (smoothedData[i] - 128) / 128.0;
-                    const v = Math.sign(rawV) * Math.pow(Math.abs(rawV), 1.6);
-                    const targetY = (h / 2) + (v * maxSwing);
-                    const lerpedY = (previousWaveHeights[i] * 0.85) + (targetY * 0.15);
-                    previousWaveHeights[i] = lerpedY;
-
-                    if (i === 0) ctx.moveTo(x, lerpedY);
-                    else ctx.lineTo(x, lerpedY);
-                    x += sliceWidth;
-                }
-
-                ctx.stroke();
-                ctx.shadowBlur = 0;
+                for (let i = 0; i < bl; i++) { const rv = (sm[i] - 128) / 128, v = Math.sign(rv) * Math.pow(Math.abs(rv), 1.6), ty = h / 2 + v * ms, ly = prevWave[i] * 0.85 + ty * 0.15; prevWave[i] = ly; i === 0 ? ctx.moveTo(x, ly) : ctx.lineTo(x, ly); x += sw; }
+                ctx.stroke(); ctx.shadowBlur = 0;
             }
 
-            // --- THEMES ---
+            const drawFns = { 'reactive-bars': drawBars, 'reactive-circle': drawCircle, 'reactive-wave': drawWave };
+            const fxDescs = { orbs: 'Orbs — Floating glowing spheres', waves: 'Waves — Flowing neon lines', space: 'Space — Parallax starfield', grid: 'Grid — Synthwave 3D floor', particles: 'Particles — Falling digital snow', rings: 'Rings — Pulsing concentric circles', 'reactive-bars': 'Reactive Bars — Frequency visualizer', 'reactive-circle': 'Reactive Circle — Pulsing equalizer ring', 'reactive-wave': 'Reactive Wave — Oscilloscope waveform', 'static': 'Static — No animation' };
 
+            function setFx(name) {
+                currentFx = name; prevWave = null;
+                document.getElementById('fx-label').textContent = fxDescs[name] || '';
+                document.querySelectorAll('.fx-btn').forEach(b => b.classList.toggle('active', b.dataset.fx === name));
+                if (name.startsWith('reactive-')) { bgEl.innerHTML = ''; canvas.style.display = 'block'; canvas.style.opacity = '0.6'; canvas.style.mixBlendMode = 'screen'; resize(); if (!animId) animate(); }
+                else cssEffect(name);
+            }
+            function animate() { const fn = drawFns[currentFx]; if (fn) { fn(); animId = requestAnimationFrame(animate); } else animId = null; }
+
+            document.querySelectorAll('.fx-btn').forEach(b => b.addEventListener('click', () => setFx(b.dataset.fx)));
+
+            // ── Themes ──
             const THEMES = {
-                midnight: { name: 'Midnight Violet', preview: ['#1a0a2e', '#0d1b3e', '#7c5bf5'], vars: { '--bg-base': '#080810', '--grad-1': '#1a0a2e', '--grad-2': '#0d1b3e', '--grad-3': '#1e0a3a', '--accent': '#7c5bf5', '--accent-glow': 'rgba(124, 91, 245, 0.3)', '--accent-soft': 'rgba(124, 91, 245, 0.12)' } },
-                ocean: { name: 'Deep Ocean', preview: ['#0a1628', '#0c2340', '#3b82f6'], vars: { '--bg-base': '#060d1a', '--grad-1': '#0a1628', '--grad-2': '#0c2340', '--grad-3': '#0a1e38', '--accent': '#3b82f6', '--accent-glow': 'rgba(59, 130, 246, 0.3)', '--accent-soft': 'rgba(59, 130, 246, 0.12)' } },
-                emerald: { name: 'Emerald Forest', preview: ['#0a1e14', '#0d2818', '#10b981'], vars: { '--bg-base': '#060f0a', '--grad-1': '#0a1e14', '--grad-2': '#0d2818', '--grad-3': '#0a2416', '--accent': '#10b981', '--accent-glow': 'rgba(16, 185, 129, 0.3)', '--accent-soft': 'rgba(16, 185, 129, 0.12)' } },
-                sunset: { name: 'Sunset Blaze', preview: ['#2a0a0a', '#3d1a0a', '#f97316'], vars: { '--bg-base': '#120606', '--grad-1': '#2a0a0a', '--grad-2': '#3d1a0a', '--grad-3': '#2e0e08', '--accent': '#f97316', '--accent-glow': 'rgba(249, 115, 22, 0.3)', '--accent-soft': 'rgba(249, 115, 22, 0.12)' } },
-                rose: { name: 'Rose Quartz', preview: ['#2a0a1e', '#3d0a28', '#ec4899'], vars: { '--bg-base': '#120610', '--grad-1': '#2a0a1e', '--grad-2': '#3d0a28', '--grad-3': '#2e0820', '--accent': '#ec4899', '--accent-glow': 'rgba(236, 72, 153, 0.3)', '--accent-soft': 'rgba(236, 72, 153, 0.12)' } },
-                arctic: { name: 'Arctic Frost', preview: ['#0a1420', '#0e1c2e', '#67e8f9'], vars: { '--bg-base': '#060c14', '--grad-1': '#0a1420', '--grad-2': '#0e1c2e', '--grad-3': '#0c1826', '--accent': '#67e8f9', '--accent-glow': 'rgba(103, 232, 249, 0.3)', '--accent-soft': 'rgba(103, 232, 249, 0.12)' } },
-                neon: { name: 'Neon Cyber', preview: ['#0a0a1a', '#1a0a2e', '#22d3ee'], vars: { '--bg-base': '#050510', '--grad-1': '#0a0a1a', '--grad-2': '#1a0a2e', '--grad-3': '#0a0a20', '--accent': '#22d3ee', '--accent-glow': 'rgba(34, 211, 238, 0.3)', '--accent-soft': 'rgba(34, 211, 238, 0.12)' } },
-                classic: { name: 'Classic Dark', preview: ['#121212', '#1a1a1a', '#1db954'], vars: { '--bg-base': '#0a0a0a', '--grad-1': '#121212', '--grad-2': '#1a1a1a', '--grad-3': '#161616', '--accent': '#1db954', '--accent-glow': 'rgba(29, 185, 84, 0.3)', '--accent-soft': 'rgba(29, 185, 84, 0.12)' } },
-                adaptive: { name: 'Adaptive (Dynamic)', preview: ['#1e1e24', 'linear-gradient(to right, #ff0000, #00ff00, #0000ff)', '#ffffff'], vars: { '--bg-base': '#0a0a0a', '--grad-1': '#121212', '--grad-2': '#1a1a1a', '--grad-3': '#161616', '--accent': '#7c5bf5', '--accent-glow': 'rgba(124, 91, 245, 0.4)', '--accent-soft': 'rgba(124, 91, 245, 0.12)' } }
+                midnight: { name: 'Midnight Violet', preview: ['#1a0a2e', '#0d1b3e', '#7c5bf5'], vars: { '--bg-base': '#080810', '--grad-1': '#1a0a2e', '--grad-2': '#0d1b3e', '--grad-3': '#1e0a3a', '--accent': '#7c5bf5', '--accent-glow': 'rgba(124,91,245,0.3)', '--accent-soft': 'rgba(124,91,245,0.12)', '--glass': 'rgba(255,255,255,0.045)' } },
+                ocean: { name: 'Deep Ocean', preview: ['#0a1628', '#0c2340', '#3b82f6'], vars: { '--bg-base': '#060d1a', '--grad-1': '#0a1628', '--grad-2': '#0c2340', '--grad-3': '#0a1e38', '--accent': '#3b82f6', '--accent-glow': 'rgba(59,130,246,0.3)', '--accent-soft': 'rgba(59,130,246,0.12)', '--glass': 'rgba(255,255,255,0.06)' } },
+                emerald: { name: 'Emerald Forest', preview: ['#0a1e14', '#0d2818', '#10b981'], vars: { '--bg-base': '#060f0a', '--grad-1': '#0a1e14', '--grad-2': '#0d2818', '--grad-3': '#0a2416', '--accent': '#10b981', '--accent-glow': 'rgba(16,185,129,0.3)', '--accent-soft': 'rgba(16,185,129,0.12)', '--glass': 'rgba(255,255,255,0.05)' } },
+                sunset: { name: 'Sunset Blaze', preview: ['#2a0a0a', '#3d1a0a', '#f97316'], vars: { '--bg-base': '#120606', '--grad-1': '#2a0a0a', '--grad-2': '#3d1a0a', '--grad-3': '#2e0e08', '--accent': '#f97316', '--accent-glow': 'rgba(249,115,22,0.3)', '--accent-soft': 'rgba(249,115,22,0.12)', '--glass': 'rgba(255,255,255,0.06)' } },
+                rose: { name: 'Rose Quartz', preview: ['#2a0a1e', '#3d0a28', '#ec4899'], vars: { '--bg-base': '#120610', '--grad-1': '#2a0a1e', '--grad-2': '#3d0a28', '--grad-3': '#2e0820', '--accent': '#ec4899', '--accent-glow': 'rgba(236,72,153,0.3)', '--accent-soft': 'rgba(236,72,153,0.12)', '--glass': 'rgba(255,255,255,0.055)' } },
+                arctic: { name: 'Arctic Frost', preview: ['#0a1420', '#0e1c2e', '#67e8f9'], vars: { '--bg-base': '#060c14', '--grad-1': '#0a1420', '--grad-2': '#0e1c2e', '--grad-3': '#0c1826', '--accent': '#67e8f9', '--accent-glow': 'rgba(103,232,249,0.3)', '--accent-soft': 'rgba(103,232,249,0.12)', '--glass': 'rgba(255,255,255,0.08)' } },
+                neon: { name: 'Neon Cyber', preview: ['#0a0a1a', '#1a0a2e', '#22d3ee'], vars: { '--bg-base': '#050510', '--grad-1': '#0a0a1a', '--grad-2': '#1a0a2e', '--grad-3': '#0a0a20', '--accent': '#22d3ee', '--accent-glow': 'rgba(34,211,238,0.3)', '--accent-soft': 'rgba(34,211,238,0.12)', '--glass': 'rgba(255,255,255,0.08)' } },
+                classic: { name: 'Classic Dark', preview: ['#121212', '#1a1a1a', '#1db954'], vars: { '--bg-base': '#0a0a0a', '--grad-1': '#121212', '--grad-2': '#1a1a1a', '--grad-3': '#161616', '--accent': '#1db954', '--accent-glow': 'rgba(29,185,84,0.3)', '--accent-soft': 'rgba(29,185,84,0.12)', '--glass': 'rgba(255,255,255,0.07)' } },
+                adaptive: { name: 'Adaptive (Dynamic)', preview: ['#1e1e24', 'linear-gradient(to right,#ff0000,#00ff00,#0000ff)', '#ffffff'], vars: { '--bg-base': '#0a0a0a', '--grad-1': '#121212', '--grad-2': '#1a1a1a', '--grad-3': '#161616', '--accent': '#7c5bf5', '--accent-glow': 'rgba(124,91,245,0.4)', '--accent-soft': 'rgba(124,91,245,0.12)', '--glass': 'rgba(255,255,255,0.07)' } }
             };
 
-            function initThemes() {
-                const grid = document.getElementById('theme-grid');
-                const label = document.getElementById('theme-label');
-                let current = 'midnight';
+            const swatchRow = document.getElementById('swatch-row');
+            const themeName = document.getElementById('theme-name');
+            let curTheme = 'midnight';
 
-                let html = '';
-                for (const [id, theme] of Object.entries(THEMES)) {
-                    html += `
-                    <button class="theme-swatch ${id === current ? 'active' : ''}" 
-                            data-theme="${id}" 
-                            title="${theme.name}"
-                            style="background: linear-gradient(135deg, ${theme.preview[0]}, ${theme.preview[1]}); border-color: ${theme.preview[2]};">
-                    </button>
-                `;
-                }
-                grid.innerHTML = html;
-
-                grid.addEventListener('click', (e) => {
-                    const btn = e.target.closest('.theme-swatch');
-                    if (!btn) return;
-
-                    const id = btn.dataset.theme;
-                    const theme = THEMES[id];
-                    if (!theme) return;
-
-                    // Update UI
-                    grid.querySelectorAll('.theme-swatch').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    label.textContent = theme.name;
-                    current = id;
-
-                    // Apply CSS variables
-                    for (const [key, val] of Object.entries(theme.vars)) {
-                        document.documentElement.style.setProperty(key, val);
-                    }
-
-                    // If a canvas effect is active, redraw it so it picks up the new colors immediately
-                    if (currentEffect && currentEffect.startsWith('reactive-')) {
-                        // It will automatically pick up the new colors on the next frame
-                    } else {
-                        applyCSSEffect(currentEffect); // Re-apply to update CSS vars in innerHTML (like waves)
-                    }
-                });
-
-                // Set initial
-                for (const [key, val] of Object.entries(THEMES[current].vars)) {
-                    document.documentElement.style.setProperty(key, val);
-                }
+            let sh = '';
+            for (const [id, t] of Object.entries(THEMES)) {
+                sh += `<button class="swatch ${id === curTheme ? 'active' : ''}" data-theme="${id}" title="${t.name}" style="background:linear-gradient(135deg,${t.preview[0]},${t.preview[1]});border-color:${t.preview[2]}"></button>`;
             }
+            swatchRow.innerHTML = sh;
 
-            // --- EFFECT SWITCHING ---
-
-            const descriptions = {
-                'orbs': 'Orbs -- Floating glowing spheres',
-                'waves': 'Waves -- Flowing neon lines',
-                'space': 'Space -- Parallax starfield',
-                'grid': 'Grid -- Synthwave 3D floor',
-                'particles': 'Particles -- Falling digital snow',
-                'rings': 'Rings -- Pulsing concentric circles',
-                'reactive-bars': 'Reactive Bars -- Frequency visualizer',
-                'reactive-circle': 'Reactive Circle -- Pulsing equalizer ring',
-                'reactive-wave': 'Reactive Wave -- Oscilloscope waveform',
-                'static': 'Static -- No animation'
-            };
-
-            const reactiveDrawFns = {
-                'reactive-bars': drawReactiveBars,
-                'reactive-circle': drawReactiveCircle,
-                'reactive-wave': drawReactiveWave
-            };
-
-            function setEffect(name) {
-                currentEffect = name;
-                previousWaveHeights = null;
-
-                document.getElementById('effect-label').textContent = descriptions[name] || '';
-                document.querySelectorAll('.effect-btn').forEach(btn => {
-                    btn.classList.toggle('active', btn.dataset.effect === name);
-                });
-
-                if (name.startsWith('reactive-')) {
-                    // Canvas mode for reactive effects
-                    bgEffects.innerHTML = '';
-                    canvas.style.display = 'block';
-                    canvas.style.opacity = '0.6';
-                    canvas.style.mixBlendMode = 'screen';
-                    resize();
-                    if (!animId) animate();
-                } else {
-                    // CSS mode for non-reactive effects
-                    applyCSSEffect(name);
-                }
-            }
-
-            function animate() {
-                const fn = reactiveDrawFns[currentEffect];
-                if (fn) {
-                    fn();
-                    animId = requestAnimationFrame(animate);
-                } else {
-                    animId = null;
-                }
-            }
-
-            // Button listeners
-            document.querySelectorAll('.effect-btn').forEach(btn => {
-                btn.addEventListener('click', () => setEffect(btn.dataset.effect));
+            swatchRow.addEventListener('click', e => {
+                const btn = e.target.closest('.swatch');
+                if (!btn) return;
+                const id = btn.dataset.theme, t = THEMES[id];
+                if (!t) return;
+                swatchRow.querySelectorAll('.swatch').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                themeName.textContent = t.name;
+                curTheme = id;
+                for (const [k, v] of Object.entries(t.vars)) document.documentElement.style.setProperty(k, v);
+                if (!currentFx.startsWith('reactive-')) cssEffect(currentFx);
             });
 
-            // Start with orbs and initialize themes
-            initThemes();
-            setEffect('orbs');
+            // Init
+            setFx('orbs');
         })();
     </script>
 </body>
