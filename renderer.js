@@ -1930,6 +1930,14 @@ function showErrorToast(message) {
 async function init() {
     console.log('[UI] Initializing Panedora...');
 
+    // Replace broken images with a dark placeholder
+    document.addEventListener('error', (e) => {
+        if (e.target.tagName === 'IMG' && !e.target.dataset.fallbackApplied) {
+            e.target.dataset.fallbackApplied = 'true';
+            e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect fill='%23282828' width='180' height='180'/%3E%3Ctext x='90' y='100' text-anchor='middle' fill='%23555' font-size='36'%3E%E2%99%AA%3C/text%3E%3C/svg%3E";
+        }
+    }, true);
+
     // Restore saved theme and effect before rendering
     loadSavedTheme();
     loadSavedEffect();

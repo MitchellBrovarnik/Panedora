@@ -5,7 +5,7 @@
 
 function createCard(image, title, subtitle, dataId) {
   const placeholder = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Crect fill='%23282828' width='180' height='180'/%3E%3C/svg%3E`;
-  const id = `card_${Math.random().toString(36).substr(2, 9)}`;
+  const id = `card_${Math.random().toString(36).slice(2, 11)}`;
 
   return `
     <div class="card" id="${id}" data-id="${dataId || ''}" tabindex="0">
@@ -24,7 +24,7 @@ function createCard(image, title, subtitle, dataId) {
 
 function createTrackRow(index, title, artist, duration, coverArt, dataId) {
   const placeholder = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect fill='%23282828' width='40' height='40'/%3E%3C/svg%3E`;
-  const id = `track_${Math.random().toString(36).substr(2, 9)}`;
+  const id = `track_${Math.random().toString(36).slice(2, 11)}`;
 
   return `
     <div class="track-row" id="${id}" data-id="${dataId || ''}" tabindex="0">
