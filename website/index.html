@@ -1,20 +1,29 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Panedora — A Premium Pandora Desktop Experience</title>
     <style>
-        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        *,
+        *::before,
+        *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
         :root {
             --accent: #7c5bf5;
             --accent-glow: rgba(124, 91, 245, 0.3);
             --accent-soft: rgba(124, 91, 245, 0.12);
             --glass: rgba(255, 255, 255, 0.045);
+            --bg-base: #080810;
             --grad-1: #1a0a2e;
+            --grad-2: #0d1b3e;
             --grad-3: #1e0a3a;
-            --bg-dark: #080810;
+            --bg-dark: var(--bg-base);
             --bg-card: rgba(255, 255, 255, 0.04);
             --border: rgba(255, 255, 255, 0.08);
             --text: #e8e6f0;
@@ -23,10 +32,28 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--bg-dark);
+            background: var(--bg-base);
             color: var(--text);
             min-height: 100vh;
             overflow-x: hidden;
+            position: relative;
+            z-index: 0;
+            transition: background 0.5s ease;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: -50%;
+            z-index: -1;
+            background:
+                radial-gradient(ellipse 80% 50% at 30% 85%, var(--grad-1), transparent 70%),
+                radial-gradient(ellipse 60% 70% at 85% 15%, var(--grad-2), transparent 70%),
+                radial-gradient(ellipse 50% 50% at 50% 50%, var(--grad-3), transparent 80%),
+                var(--bg-base);
+            background-size: 100% 100%;
+            pointer-events: none;
+            transition: background 0.5s ease;
         }
 
         /* Background effects container (CSS-based effects) */
@@ -58,20 +85,44 @@
             min-height: 350px;
             opacity: 0.8;
         }
+
         .waves-container .waves {
             width: 100%;
             height: 100%;
         }
-        .parallax-waves > use {
-            animation: move-forever 12s cubic-bezier(.55,.5,.45,.5) infinite;
+
+        .parallax-waves>use {
+            animation: move-forever 12s cubic-bezier(.55, .5, .45, .5) infinite;
         }
-        .parallax-waves > use:nth-child(1) { animation-delay: -2s; animation-duration: 4s; }
-        .parallax-waves > use:nth-child(2) { animation-delay: -3s; animation-duration: 6s; }
-        .parallax-waves > use:nth-child(3) { animation-delay: -4s; animation-duration: 8s; }
-        .parallax-waves > use:nth-child(4) { animation-delay: -5s; animation-duration: 12s; }
+
+        .parallax-waves>use:nth-child(1) {
+            animation-delay: -2s;
+            animation-duration: 4s;
+        }
+
+        .parallax-waves>use:nth-child(2) {
+            animation-delay: -3s;
+            animation-duration: 6s;
+        }
+
+        .parallax-waves>use:nth-child(3) {
+            animation-delay: -4s;
+            animation-duration: 8s;
+        }
+
+        .parallax-waves>use:nth-child(4) {
+            animation-delay: -5s;
+            animation-duration: 12s;
+        }
+
         @keyframes move-forever {
-            0%   { transform: translate3d(-90px, 0, 0); }
-            100% { transform: translate3d(85px, 0, 0); }
+            0% {
+                transform: translate3d(-90px, 0, 0);
+            }
+
+            100% {
+                transform: translate3d(85px, 0, 0);
+            }
         }
 
         /* === ORBS === */
@@ -81,38 +132,74 @@
             filter: blur(60px);
             opacity: 0.7;
         }
+
         .orb-1 {
-            width: 50vw; height: 50vw;
+            width: 50vw;
+            height: 50vw;
             background: var(--accent);
-            top: -20vh; left: -20vw;
+            top: -20vh;
+            left: -20vw;
             animation: floatOrb1 18s infinite alternate ease-in-out;
         }
+
         .orb-2 {
-            width: 60vw; height: 60vw;
+            width: 60vw;
+            height: 60vw;
             background: var(--grad-1);
-            bottom: -30vh; right: -20vw;
+            bottom: -30vh;
+            right: -20vw;
             animation: floatOrb2 25s infinite alternate ease-in-out;
         }
+
         .orb-3 {
-            width: 45vw; height: 45vw;
+            width: 45vw;
+            height: 45vw;
             background: var(--grad-3);
-            top: 40vh; left: 50vw;
+            top: 40vh;
+            left: 50vw;
             animation: floatOrb3 20s infinite alternate ease-in-out;
         }
+
         @keyframes floatOrb1 {
-            0%   { transform: translate(0, 0) scale(1); }
-            50%  { transform: translate(70vw, 30vh) scale(1.2); }
-            100% { transform: translate(20vw, 80vh) scale(0.8); }
+            0% {
+                transform: translate(0, 0) scale(1);
+            }
+
+            50% {
+                transform: translate(70vw, 30vh) scale(1.2);
+            }
+
+            100% {
+                transform: translate(20vw, 80vh) scale(0.8);
+            }
         }
+
         @keyframes floatOrb2 {
-            0%   { transform: translate(0, 0) scale(1); }
-            50%  { transform: translate(-80vw, -40vh) scale(1.1); }
-            100% { transform: translate(-30vw, -80vh) scale(1.3); }
+            0% {
+                transform: translate(0, 0) scale(1);
+            }
+
+            50% {
+                transform: translate(-80vw, -40vh) scale(1.1);
+            }
+
+            100% {
+                transform: translate(-30vw, -80vh) scale(1.3);
+            }
         }
+
         @keyframes floatOrb3 {
-            0%   { transform: translate(0, 0) scale(1); }
-            50%  { transform: translate(-60vw, 20vh) scale(1.4); }
-            100% { transform: translate(40vw, -50vh) scale(0.9); }
+            0% {
+                transform: translate(0, 0) scale(1);
+            }
+
+            50% {
+                transform: translate(-60vw, 20vh) scale(1.4);
+            }
+
+            100% {
+                transform: translate(40vw, -50vh) scale(0.9);
+            }
         }
 
         /* === SPACE === */
@@ -120,72 +207,120 @@
             position: absolute;
             inset: -100%;
             background-image:
-                radial-gradient(2px 2px at 20px 30px, #ffffff, rgba(0,0,0,0)),
-                radial-gradient(2px 2px at 40px 70px, #e2e8f0, rgba(0,0,0,0)),
-                radial-gradient(3px 3px at 50px 160px, #f8fafc, rgba(0,0,0,0)),
-                radial-gradient(2px 2px at 90px 40px, #ffffff, rgba(0,0,0,0)),
-                radial-gradient(2px 2px at 130px 80px, #cbd5e1, rgba(0,0,0,0)),
-                radial-gradient(4px 4px at 160px 120px, #ffffff, rgba(0,0,0,0));
+                radial-gradient(2px 2px at 20px 30px, #ffffff, rgba(0, 0, 0, 0)),
+                radial-gradient(2px 2px at 40px 70px, #e2e8f0, rgba(0, 0, 0, 0)),
+                radial-gradient(3px 3px at 50px 160px, #f8fafc, rgba(0, 0, 0, 0)),
+                radial-gradient(2px 2px at 90px 40px, #ffffff, rgba(0, 0, 0, 0)),
+                radial-gradient(2px 2px at 130px 80px, #cbd5e1, rgba(0, 0, 0, 0)),
+                radial-gradient(4px 4px at 160px 120px, #ffffff, rgba(0, 0, 0, 0));
             background-repeat: repeat;
             background-size: 200px 200px;
             opacity: 0.8;
             animation: spacePan 40s linear infinite;
         }
-        .star-layer:nth-child(1) { background-size: 150px 150px; animation-duration: 30s; opacity: 0.6; }
-        .star-layer:nth-child(2) { background-size: 250px 250px; animation-duration: 20s; opacity: 0.8; }
-        .star-layer:nth-child(3) { background-size: 350px 350px; animation-duration: 10s; opacity: 1; }
+
+        .star-layer:nth-child(1) {
+            background-size: 150px 150px;
+            animation-duration: 30s;
+            opacity: 0.6;
+        }
+
+        .star-layer:nth-child(2) {
+            background-size: 250px 250px;
+            animation-duration: 20s;
+            opacity: 0.8;
+        }
+
+        .star-layer:nth-child(3) {
+            background-size: 350px 350px;
+            animation-duration: 10s;
+            opacity: 1;
+        }
+
         @keyframes spacePan {
-            0%   { transform: translateY(0); }
-            100% { transform: translateY(50%); }
+            0% {
+                transform: translateY(0);
+            }
+
+            100% {
+                transform: translateY(50%);
+            }
         }
 
         /* === GRID === */
         .synth-grid {
             position: absolute;
-            width: 200%; height: 150%;
-            bottom: -40%; left: -50%;
+            width: 200%;
+            height: 150%;
+            bottom: -40%;
+            left: -50%;
             background-image:
                 linear-gradient(var(--accent) 2px, transparent 2px),
                 linear-gradient(90deg, var(--accent) 2px, transparent 2px);
             background-size: 50px 50px;
             transform: perspective(600px) rotateX(70deg);
             animation: gridMove 1.5s linear infinite;
-            -webkit-mask-image: linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 35%);
-            mask-image: linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 35%);
+            -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 35%);
+            mask-image: linear-gradient(to top, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 35%);
         }
+
         @keyframes gridMove {
-            0%   { background-position: 0 0; }
-            100% { background-position: 0 50px; }
+            0% {
+                background-position: 0 0;
+            }
+
+            100% {
+                background-position: 0 50px;
+            }
         }
 
         /* === PARTICLES === */
         .particle {
             position: absolute;
             top: -20px;
-            width: 8px; height: 8px;
+            width: 8px;
+            height: 8px;
             background: var(--accent);
             border-radius: 50%;
             box-shadow: 0 0 15px var(--accent-glow);
             animation: particleFall linear infinite;
             opacity: 0;
         }
+
         @keyframes particleFall {
-            0%   { transform: translateY(0) scale(0.5); opacity: 0; }
-            10%  { opacity: 0.9; transform: translateY(10vh) scale(1); }
-            90%  { opacity: 0.9; }
-            100% { transform: translateY(120vh) scale(0.5); opacity: 0; }
+            0% {
+                transform: translateY(0) scale(0.5);
+                opacity: 0;
+            }
+
+            10% {
+                opacity: 0.9;
+                transform: translateY(10vh) scale(1);
+            }
+
+            90% {
+                opacity: 0.9;
+            }
+
+            100% {
+                transform: translateY(120vh) scale(0.5);
+                opacity: 0;
+            }
         }
 
         /* === RINGS === */
         .ring-container {
             position: absolute;
-            top: 50%; left: 50%;
+            top: 50%;
+            left: 50%;
             transform: translate(-50%, -50%);
-            width: 100vw; height: 100vw;
+            width: 100vw;
+            height: 100vw;
             display: flex;
             align-items: center;
             justify-content: center;
         }
+
         .ring {
             position: absolute;
             border-radius: 50%;
@@ -194,13 +329,37 @@
             box-shadow: 0 0 30px var(--accent-glow), inset 0 0 30px var(--accent-glow);
             animation: ringExpand 6s ease-out infinite;
         }
-        .ring-1 { animation-delay: 0s; }
-        .ring-2 { animation-delay: 1.5s; }
-        .ring-3 { animation-delay: 3s; }
-        .ring-4 { animation-delay: 4.5s; }
+
+        .ring-1 {
+            animation-delay: 0s;
+        }
+
+        .ring-2 {
+            animation-delay: 1.5s;
+        }
+
+        .ring-3 {
+            animation-delay: 3s;
+        }
+
+        .ring-4 {
+            animation-delay: 4.5s;
+        }
+
         @keyframes ringExpand {
-            0%   { width: 0; height: 0; opacity: 1; border-width: 10px; }
-            100% { width: 120vw; height: 120vw; opacity: 0; border-width: 2px; }
+            0% {
+                width: 0;
+                height: 0;
+                opacity: 1;
+                border-width: 10px;
+            }
+
+            100% {
+                width: 120vw;
+                height: 120vw;
+                opacity: 0;
+                border-width: 2px;
+            }
         }
 
         /* Layout */
@@ -228,7 +387,9 @@
             color: var(--text);
         }
 
-        .logo span { color: var(--accent); }
+        .logo span {
+            color: var(--accent);
+        }
 
         .nav-links {
             display: flex;
@@ -242,7 +403,9 @@
             transition: color 0.2s;
         }
 
-        .nav-links a:hover { color: var(--text); }
+        .nav-links a:hover {
+            color: var(--text);
+        }
 
         /* Hero */
         .hero {
@@ -420,6 +583,63 @@
             min-height: 1.2em;
         }
 
+        /* Themes Demo */
+        .themes-demo {
+            padding: 80px 0 40px;
+        }
+
+        .themes-demo h2 {
+            text-align: center;
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            letter-spacing: -0.5px;
+        }
+
+        .themes-demo .subtitle {
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 1rem;
+            margin-bottom: 40px;
+        }
+
+        .theme-grid {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 24px;
+        }
+
+        .theme-swatch {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all 150ms var(--ease);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            flex-shrink: 0;
+        }
+
+        .theme-swatch:hover {
+            transform: scale(1.15);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+        }
+
+        .theme-swatch.active {
+            transform: scale(1.15);
+            box-shadow: 0 0 0 3px var(--bg-base), 0 0 0 6px var(--accent);
+        }
+
+        .theme-label {
+            text-align: center;
+            color: var(--accent);
+            font-weight: 600;
+            font-size: 1rem;
+            min-height: 1.2em;
+        }
+
         /* Features */
         .features {
             padding: 60px 0;
@@ -495,7 +715,7 @@
             margin-bottom: 16px;
         }
 
-        .requirements > p {
+        .requirements>p {
             color: var(--text-dim);
             margin-bottom: 32px;
             font-size: 1rem;
@@ -549,19 +769,43 @@
             text-decoration: none;
         }
 
-        footer a:hover { text-decoration: underline; }
+        footer a:hover {
+            text-decoration: underline;
+        }
 
         /* Responsive */
         @media (max-width: 640px) {
-            .hero { padding: 50px 0 30px; }
-            .download-row { flex-direction: column; align-items: center; }
-            .btn { width: 100%; max-width: 280px; justify-content: center; }
-            .features-grid { grid-template-columns: 1fr; }
-            .effects-grid { gap: 6px; }
-            .effect-btn { padding: 8px 14px; font-size: 0.8rem; }
+            .hero {
+                padding: 50px 0 30px;
+            }
+
+            .download-row {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .btn {
+                width: 100%;
+                max-width: 280px;
+                justify-content: center;
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .effects-grid {
+                gap: 6px;
+            }
+
+            .effect-btn {
+                padding: 8px 14px;
+                font-size: 0.8rem;
+            }
         }
     </style>
 </head>
+
 <body>
     <div id="bg-effects"></div>
     <canvas id="bg-canvas"></canvas>
@@ -570,27 +814,39 @@
         <nav>
             <div class="logo">Pane<span>dora</span></div>
             <div class="nav-links">
-                <a href="#effects">Effects</a>
-                <a href="#features">Features</a>
-            </div>
+                <div class="nav-links">
+                    <a href="#themes">Themes</a>
+                    <a href="#effects">Effects</a>
+                    <a href="#features">Features</a>
+                </div>
         </nav>
 
         <section class="hero">
             <div class="badge">Requires Pandora Premium or Plus</div>
             <h1>Your music deserves a <span class="highlight">better window.</span></h1>
-            <p>Panedora is a premium desktop client for Pandora with immersive glassmorphism themes, live lyrics, audio visualizers, and a mini player that floats over everything.</p>
+            <p>Panedora is a premium desktop client for Pandora with immersive glassmorphism themes, live lyrics, audio
+                visualizers, and a mini player that floats over everything.</p>
 
             <div class="download-row">
                 <a href="#" class="btn btn-primary" id="download-win">
-                    <svg viewBox="0 0 24 24"><path d="M3 12V6.75l8-1.25V12H3zm0 .5h8v6.5l-8-1.25V12.5zM12 5.25l10-1.5V12H12V5.25zm0 7.25h10v7.75l-10-1.5V12.5z"/></svg>
+                    <svg viewBox="0 0 24 24">
+                        <path
+                            d="M3 12V6.75l8-1.25V12H3zm0 .5h8v6.5l-8-1.25V12.5zM12 5.25l10-1.5V12H12V5.25zm0 7.25h10v7.75l-10-1.5V12.5z" />
+                    </svg>
                     Windows
                 </a>
                 <a href="#" class="btn btn-secondary" id="download-mac">
-                    <svg viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+                    <svg viewBox="0 0 24 24">
+                        <path
+                            d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
+                    </svg>
                     macOS
                 </a>
                 <a href="#" class="btn btn-secondary" id="download-linux">
-                    <svg viewBox="0 0 24 24"><path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333l.003.003c.391.778 1.113 1.368 1.884 1.43.868.07 1.723-.26 2.456-.594.733-.34 1.333-.616 1.963-.393.63.222 1.168.267 1.56.09.395-.166.626-.636.64-1.342v-.067c-.05-.333-.12-.733-.18-1.137-.034-.262.015-.543.18-.755a4.71 4.71 0 00.623-1.832c.056-.467.088-1.057-.013-1.59-.1-.533-.372-1.068-.882-1.333a2.18 2.18 0 00-.547-.2c.002-.135.006-.315.004-.539-.063-1.158-.46-2.358-1.218-3.67-.863-1.397-1.683-2.14-2.217-2.813-.534-.672-.881-1.366-.92-2.48C15.603 4.953 16.775.571 12.504 0z"/></svg>
+                    <svg viewBox="0 0 24 24">
+                        <path
+                            d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333l.003.003c.391.778 1.113 1.368 1.884 1.43.868.07 1.723-.26 2.456-.594.733-.34 1.333-.616 1.963-.393.63.222 1.168.267 1.56.09.395-.166.626-.636.64-1.342v-.067c-.05-.333-.12-.733-.18-1.137-.034-.262.015-.543.18-.755a4.71 4.71 0 00.623-1.832c.056-.467.088-1.057-.013-1.59-.1-.533-.372-1.068-.882-1.333a2.18 2.18 0 00-.547-.2c.002-.135.006-.315.004-.539-.063-1.158-.46-2.358-1.218-3.67-.863-1.397-1.683-2.14-2.217-2.813-.534-.672-.881-1.366-.92-2.48C15.603 4.953 16.775.571 12.504 0z" />
+                    </svg>
                     Linux
                 </a>
             </div>
@@ -599,6 +855,15 @@
         <div class="screenshot-wrap">
             <img src="screenshot.png" alt="Panedora App Interface" loading="lazy">
         </div>
+
+        <section class="themes-demo" id="themes">
+            <h2>9 Glassmorphism themes.</h2>
+            <p class="subtitle">Click a theme swatch below to see the entire page transform instantly.</p>
+            <div class="theme-grid" id="theme-grid">
+                <!-- Theme swatches injected by JS -->
+            </div>
+            <p class="theme-label" id="theme-label">Midnight Violet</p>
+        </section>
 
         <section class="effects-demo" id="effects">
             <h2>10 live background effects.</h2>
@@ -623,45 +888,69 @@
             <div class="features-grid">
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <svg viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-1-.01-.83.67-1.49 1.5-1.49H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-1-.01-.83.67-1.49 1.5-1.49H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" />
+                        </svg>
                     </div>
                     <h3>9 Glassmorphism Themes</h3>
-                    <p>Frosted glass panels, translucent islands, and full CSS variable theming that transforms every pixel instantly when you switch.</p>
+                    <p>Frosted glass panels, translucent islands, and full CSS variable theming that transforms every
+                        pixel instantly when you switch.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <svg viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                        </svg>
                     </div>
                     <h3>Live Synced Lyrics</h3>
-                    <p>Time-coded lyrics auto-scroll with the music, highlighted line by line. Choose from glow, pill, or full-line highlight styles.</p>
+                    <p>Time-coded lyrics auto-scroll with the music, highlighted line by line. Choose from glow, pill,
+                        or full-line highlight styles.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
+                        </svg>
                     </div>
                     <h3>Audio Visualizers</h3>
-                    <p>10 animated background effects powered by Web Audio API. Reactive bars, circles, and waves that move with your music.</p>
+                    <p>10 animated background effects powered by Web Audio API. Reactive bars, circles, and waves that
+                        move with your music.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-7-2h2v-4h4v-2h-4V7h-2v4H8v2h4z"/></svg>
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-7-2h2v-4h4v-2h-4V7h-2v4H8v2h4z" />
+                        </svg>
                     </div>
                     <h3>Always-on-Top Mini Player</h3>
-                    <p>A compact floating bar that stays above all windows, even borderless fullscreen games. Controls and feedback at a glance.</p>
+                    <p>A compact floating bar that stays above all windows, even borderless fullscreen games. Controls
+                        and feedback at a glance.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <svg viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zM5 15h14v3H5z"/></svg>
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zM5 15h14v3H5z" />
+                        </svg>
                     </div>
                     <h3>Adaptive Dynamic Theme</h3>
-                    <p>Samples your current album art and extracts a dominant color, repainting the entire UI in real time as songs change.</p>
+                    <p>Samples your current album art and extracts a dominant color, repainting the entire UI in real
+                        time as songs change.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z" />
+                        </svg>
                     </div>
                     <h3>Private and Secure</h3>
-                    <p>Credentials encrypted with OS keychain. No third-party tracking. All data stored locally and wiped on sign-out.</p>
+                    <p>Credentials encrypted with OS keychain. No third-party tracking. All data stored locally and
+                        wiped on sign-out.</p>
                 </div>
             </div>
         </section>
@@ -686,65 +975,72 @@
         </section>
 
         <footer>
-            <p>Panedora is an unofficial, third-party client for personal use. Not affiliated with Pandora Media, LLC.</p>
+            <p>Panedora is an unofficial, third-party client for personal use. Not affiliated with Pandora Media, LLC.
+            </p>
             <p>Licensed under <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/">CC BY-NC-ND 4.0</a></p>
         </footer>
     </div>
 
     <script>
-    (function() {
-        const bgEffects = document.getElementById('bg-effects');
-        const canvas = document.getElementById('bg-canvas');
-        const ctx = canvas.getContext('2d');
-        let w, h, animId;
-        let currentEffect = 'orbs';
-        let previousWaveHeights = null;
-        const accentColor = '#7c5bf5';
-        const glowColor = 'rgba(124, 91, 245, 0.3)';
+        (function () {
+            const bgEffects = document.getElementById('bg-effects');
+            const canvas = document.getElementById('bg-canvas');
+            const ctx = canvas.getContext('2d');
+            let w, h, animId;
+            let currentEffect = 'orbs';
+            let previousWaveHeights = null;
 
-        function resize() {
-            w = canvas.width = window.innerWidth;
-            h = canvas.height = window.innerHeight;
-        }
-        window.addEventListener('resize', resize);
-        resize();
-
-        // Simulated audio data for reactive effects
-        function fakeFrequencyData(len) {
-            const t = performance.now() / 1000;
-            const arr = new Uint8Array(len);
-            for (let i = 0; i < len; i++) {
-                const freq = 0.5 + i * 0.3;
-                const val = (Math.sin(t * freq + i * 0.7) * 0.5 + 0.5)
-                          * (Math.sin(t * 0.3 + i * 0.1) * 0.3 + 0.7)
-                          * (1 - i / len * 0.6);
-                arr[i] = Math.floor(val * 255);
+            // Ensure we fetch current variables after theme updates
+            function getCssVar(name) {
+                return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
             }
-            return arr;
-        }
 
-        function fakeTimeDomainData(len) {
-            const t = performance.now() / 1000;
-            const arr = new Uint8Array(len);
-            for (let i = 0; i < len; i++) {
-                // Center at 128 like real time-domain data
-                const wave = Math.sin(t * 2 + i * 0.05) * 30
-                           + Math.sin(t * 3.7 + i * 0.08) * 15
-                           + Math.sin(t * 0.5 + i * 0.02) * 10;
-                arr[i] = Math.max(0, Math.min(255, 128 + wave));
+            function getAccentColor() { return getCssVar('--accent') || '#7c5bf5'; }
+            function getGlowColor() { return getCssVar('--accent-glow') || 'rgba(124, 91, 245, 0.3)'; }
+
+            function resize() {
+                w = canvas.width = window.innerWidth;
+                h = canvas.height = window.innerHeight;
             }
-            return arr;
-        }
+            window.addEventListener('resize', resize);
+            resize();
 
-        // --- CSS-BASED EFFECTS (identical to app) ---
+            // Simulated audio data for reactive effects
+            function fakeFrequencyData(len) {
+                const t = performance.now() / 1000;
+                const arr = new Uint8Array(len);
+                for (let i = 0; i < len; i++) {
+                    const freq = 0.5 + i * 0.3;
+                    const val = (Math.sin(t * freq + i * 0.7) * 0.5 + 0.5)
+                        * (Math.sin(t * 0.3 + i * 0.1) * 0.3 + 0.7)
+                        * (1 - i / len * 0.6);
+                    arr[i] = Math.floor(val * 255);
+                }
+                return arr;
+            }
 
-        function applyCSSEffect(effectId) {
-            bgEffects.innerHTML = '';
-            canvas.style.display = 'none';
-            if (animId) { cancelAnimationFrame(animId); animId = null; }
+            function fakeTimeDomainData(len) {
+                const t = performance.now() / 1000;
+                const arr = new Uint8Array(len);
+                for (let i = 0; i < len; i++) {
+                    // Center at 128 like real time-domain data
+                    const wave = Math.sin(t * 2 + i * 0.05) * 30
+                        + Math.sin(t * 3.7 + i * 0.08) * 15
+                        + Math.sin(t * 0.5 + i * 0.02) * 10;
+                    arr[i] = Math.max(0, Math.min(255, 128 + wave));
+                }
+                return arr;
+            }
 
-            if (effectId === 'waves') {
-                bgEffects.innerHTML = `
+            // --- CSS-BASED EFFECTS (identical to app) ---
+
+            function applyCSSEffect(effectId) {
+                bgEffects.innerHTML = '';
+                canvas.style.display = 'none';
+                if (animId) { cancelAnimationFrame(animId); animId = null; }
+
+                if (effectId === 'waves') {
+                    bgEffects.innerHTML = `
                     <div class="waves-container">
                         <svg class="waves" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 24 150 28" preserveAspectRatio="none" shape-rendering="auto">
                         <defs><path id="gentle-wave" d="M-160 44c30 0 58-18 88-18s 58 18 88 18 58-18 88-18 58 18 88 18 v44h-352z" /></defs>
@@ -755,237 +1051,305 @@
                         <use xlink:href="#gentle-wave" x="48" y="7" fill="var(--accent)" opacity="0.4" />
                         </g></svg>
                     </div>`;
-            } else if (effectId === 'orbs') {
-                bgEffects.innerHTML = `
+                } else if (effectId === 'orbs') {
+                    bgEffects.innerHTML = `
                     <div class="orb orb-1"></div>
                     <div class="orb orb-2"></div>
                     <div class="orb orb-3"></div>`;
-            } else if (effectId === 'space') {
-                bgEffects.innerHTML = `
+                } else if (effectId === 'space') {
+                    bgEffects.innerHTML = `
                     <div class="star-layer"></div>
                     <div class="star-layer"></div>
                     <div class="star-layer"></div>`;
-            } else if (effectId === 'grid') {
-                bgEffects.innerHTML = `<div class="synth-grid"></div>`;
-            } else if (effectId === 'particles') {
-                let parts = '';
-                for (let i = 0; i < 30; i++) {
-                    parts += `<div class="particle" style="left: ${Math.random() * 100}%; animation-delay: ${Math.random() * 5}s; animation-duration: ${4 + Math.random() * 4}s;"></div>`;
-                }
-                bgEffects.innerHTML = parts;
-            } else if (effectId === 'rings') {
-                bgEffects.innerHTML = `
+                } else if (effectId === 'grid') {
+                    bgEffects.innerHTML = `<div class="synth-grid"></div>`;
+                } else if (effectId === 'particles') {
+                    let parts = '';
+                    for (let i = 0; i < 30; i++) {
+                        parts += `<div class="particle" style="left: ${Math.random() * 100}%; animation-delay: ${Math.random() * 5}s; animation-duration: ${4 + Math.random() * 4}s;"></div>`;
+                    }
+                    bgEffects.innerHTML = parts;
+                } else if (effectId === 'rings') {
+                    bgEffects.innerHTML = `
                     <div class="ring-container">
                         <div class="ring ring-1"></div>
                         <div class="ring ring-2"></div>
                         <div class="ring ring-3"></div>
                         <div class="ring ring-4"></div>
                     </div>`;
-            } else if (effectId === 'static') {
-                // No effect
-            }
-        }
-
-        // --- CANVAS-BASED REACTIVE EFFECTS (identical algorithms to visualizer.js) ---
-
-        // Reactive Bars — matches visualizer.js drawBars()
-        function drawReactiveBars() {
-            ctx.clearRect(0, 0, w, h);
-            const bufferLength = 128; // fftSize 256 -> frequencyBinCount = 128
-            const dataArray = fakeFrequencyData(bufferLength);
-            const barWidth = (w / bufferLength) * 2.5;
-            let x = 0;
-            const heightMultiplier = 0.6;
-
-            for (let i = 0; i < bufferLength; i++) {
-                const normalized = dataArray[i] / 255;
-                const enhanced = Math.pow(normalized, 1.2);
-                const barHeight = enhanced * (h * heightMultiplier);
-
-                const gradient = ctx.createLinearGradient(0, h - barHeight, 0, h);
-                gradient.addColorStop(0, accentColor);
-                gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-
-                ctx.fillStyle = gradient;
-                ctx.fillRect(x, h - barHeight, barWidth - 1, barHeight);
-                x += barWidth;
-            }
-        }
-
-        // Reactive Circle — matches visualizer.js drawCircle()
-        function drawReactiveCircle() {
-            ctx.clearRect(0, 0, w, h);
-            const bufferLength = 128;
-            const dataArray = fakeFrequencyData(bufferLength);
-            const centerX = w / 2;
-            const centerY = h / 2;
-            const baseRadius = Math.min(w, h) * 0.2;
-
-            // Bass pulsing
-            let bassSum = 0;
-            const bassCount = Math.min(10, bufferLength);
-            for (let i = 0; i < bassCount; i++) {
-                bassSum += dataArray[i];
-            }
-            const bassAvg = (bassSum / bassCount) / 255.0;
-            const dynamicRadius = baseRadius + (Math.pow(bassAvg, 1.5) * baseRadius * 0.4);
-            const maxRipple = dynamicRadius * 0.6;
-
-            ctx.lineWidth = 3;
-            ctx.strokeStyle = accentColor;
-            ctx.shadowBlur = 20;
-            ctx.shadowColor = glowColor;
-            ctx.fillStyle = 'rgba(124, 91, 245, 0.1)';
-
-            ctx.beginPath();
-
-            const validDataLength = Math.floor(bufferLength * 0.7);
-
-            // Right half (0 to PI)
-            for (let i = 0; i < validDataLength; i++) {
-                const normalized = dataArray[i] / 255;
-                const ripple = Math.pow(normalized, 1.8) * maxRipple;
-                const r = dynamicRadius + ripple;
-                const angle = (i / (validDataLength - 1)) * Math.PI - (Math.PI / 2);
-                const x = centerX + Math.cos(angle) * r;
-                const y = centerY + Math.sin(angle) * r;
-                if (i === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
-            }
-
-            // Left half (PI to 2PI) — mirrored
-            for (let i = validDataLength - 1; i >= 0; i--) {
-                const normalized = dataArray[i] / 255;
-                const ripple = Math.pow(normalized, 1.8) * maxRipple;
-                const r = dynamicRadius + ripple;
-                const angle = Math.PI + ((validDataLength - 1 - i) / (validDataLength - 1)) * Math.PI - (Math.PI / 2);
-                const x = centerX + Math.cos(angle) * r;
-                const y = centerY + Math.sin(angle) * r;
-                ctx.lineTo(x, y);
-            }
-
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
-            ctx.shadowBlur = 0;
-        }
-
-        // Reactive Wave — matches visualizer.js drawWave()
-        function drawReactiveWave() {
-            ctx.clearRect(0, 0, w, h);
-            const bufferLength = 512; // fftSize for wave mode
-            const dataArray = fakeTimeDomainData(bufferLength);
-
-            ctx.lineWidth = 4;
-            ctx.strokeStyle = accentColor;
-            ctx.shadowBlur = 15;
-            ctx.shadowColor = glowColor;
-
-            ctx.beginPath();
-
-            const sliceWidth = w / (bufferLength - 1);
-            let x = 0;
-            const maxSwing = h * 0.08;
-
-            // 25-point moving average smoothing
-            const smoothedData = new Float32Array(bufferLength);
-            const windowSize = 25;
-            for (let i = 0; i < bufferLength; i++) {
-                let sum = 0;
-                let count = 0;
-                let start = Math.max(0, i - Math.floor(windowSize / 2));
-                let end = Math.min(bufferLength - 1, i + Math.floor(windowSize / 2));
-                for (let j = start; j <= end; j++) {
-                    sum += dataArray[j];
-                    count++;
+                } else if (effectId === 'static') {
+                    // No effect
                 }
-                smoothedData[i] = sum / count;
             }
 
-            // Initialize lerp state
-            if (!previousWaveHeights || previousWaveHeights.length !== bufferLength) {
-                previousWaveHeights = new Float32Array(bufferLength);
-                for (let i = 0; i < bufferLength; i++) previousWaveHeights[i] = h / 2;
+            // --- CANVAS-BASED REACTIVE EFFECTS (identical algorithms to visualizer.js) ---
+
+            // Reactive Bars — matches visualizer.js drawBars()
+            function drawReactiveBars() {
+                ctx.clearRect(0, 0, w, h);
+                const bufferLength = 128; // fftSize 256 -> frequencyBinCount = 128
+                const dataArray = fakeFrequencyData(bufferLength);
+                const barWidth = (w / bufferLength) * 2.5;
+                let x = 0;
+                const heightMultiplier = 0.6;
+
+                for (let i = 0; i < bufferLength; i++) {
+                    const normalized = dataArray[i] / 255;
+                    const enhanced = Math.pow(normalized, 1.2);
+                    const barHeight = enhanced * (h * heightMultiplier);
+
+                    const gradient = ctx.createLinearGradient(0, h - barHeight, 0, h);
+                    gradient.addColorStop(0, getAccentColor());
+                    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(x, h - barHeight, barWidth - 1, barHeight);
+                    x += barWidth;
+                }
             }
 
-            for (let i = 0; i < bufferLength; i++) {
-                const rawV = (smoothedData[i] - 128) / 128.0;
-                const v = Math.sign(rawV) * Math.pow(Math.abs(rawV), 1.6);
-                const targetY = (h / 2) + (v * maxSwing);
-                const lerpedY = (previousWaveHeights[i] * 0.85) + (targetY * 0.15);
-                previousWaveHeights[i] = lerpedY;
+            // Reactive Circle — matches visualizer.js drawCircle()
+            function drawReactiveCircle() {
+                ctx.clearRect(0, 0, w, h);
+                const bufferLength = 128;
+                const dataArray = fakeFrequencyData(bufferLength);
+                const centerX = w / 2;
+                const centerY = h / 2;
+                const baseRadius = Math.min(w, h) * 0.2;
 
-                if (i === 0) ctx.moveTo(x, lerpedY);
-                else ctx.lineTo(x, lerpedY);
-                x += sliceWidth;
+                // Bass pulsing
+                let bassSum = 0;
+                const bassCount = Math.min(10, bufferLength);
+                for (let i = 0; i < bassCount; i++) {
+                    bassSum += dataArray[i];
+                }
+                const bassAvg = (bassSum / bassCount) / 255.0;
+                const dynamicRadius = baseRadius + (Math.pow(bassAvg, 1.5) * baseRadius * 0.4);
+                const maxRipple = dynamicRadius * 0.6;
+
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = getAccentColor();
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = getGlowColor();
+
+                // Extract rgb from accent for the fill overlay
+                const accent = getAccentColor();
+                ctx.fillStyle = getCssVar('--accent-soft') || 'rgba(124, 91, 245, 0.1)';
+
+                ctx.beginPath();
+
+                const validDataLength = Math.floor(bufferLength * 0.7);
+
+                // Right half (0 to PI)
+                for (let i = 0; i < validDataLength; i++) {
+                    const normalized = dataArray[i] / 255;
+                    const ripple = Math.pow(normalized, 1.8) * maxRipple;
+                    const r = dynamicRadius + ripple;
+                    const angle = (i / (validDataLength - 1)) * Math.PI - (Math.PI / 2);
+                    const x = centerX + Math.cos(angle) * r;
+                    const y = centerY + Math.sin(angle) * r;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+
+                // Left half (PI to 2PI) — mirrored
+                for (let i = validDataLength - 1; i >= 0; i--) {
+                    const normalized = dataArray[i] / 255;
+                    const ripple = Math.pow(normalized, 1.8) * maxRipple;
+                    const r = dynamicRadius + ripple;
+                    const angle = Math.PI + ((validDataLength - 1 - i) / (validDataLength - 1)) * Math.PI - (Math.PI / 2);
+                    const x = centerX + Math.cos(angle) * r;
+                    const y = centerY + Math.sin(angle) * r;
+                    ctx.lineTo(x, y);
+                }
+
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+                ctx.shadowBlur = 0;
             }
 
-            ctx.stroke();
-            ctx.shadowBlur = 0;
-        }
+            // Reactive Wave — matches visualizer.js drawWave()
+            function drawReactiveWave() {
+                ctx.clearRect(0, 0, w, h);
+                const bufferLength = 512; // fftSize for wave mode
+                const dataArray = fakeTimeDomainData(bufferLength);
 
-        // --- EFFECT SWITCHING ---
+                ctx.lineWidth = 4;
+                ctx.strokeStyle = getAccentColor();
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = getGlowColor();
 
-        const descriptions = {
-            'orbs': 'Orbs -- Floating glowing spheres',
-            'waves': 'Waves -- Flowing neon lines',
-            'space': 'Space -- Parallax starfield',
-            'grid': 'Grid -- Synthwave 3D floor',
-            'particles': 'Particles -- Falling digital snow',
-            'rings': 'Rings -- Pulsing concentric circles',
-            'reactive-bars': 'Reactive Bars -- Frequency visualizer',
-            'reactive-circle': 'Reactive Circle -- Pulsing equalizer ring',
-            'reactive-wave': 'Reactive Wave -- Oscilloscope waveform',
-            'static': 'Static -- No animation'
-        };
+                ctx.beginPath();
 
-        const reactiveDrawFns = {
-            'reactive-bars': drawReactiveBars,
-            'reactive-circle': drawReactiveCircle,
-            'reactive-wave': drawReactiveWave
-        };
+                const sliceWidth = w / (bufferLength - 1);
+                let x = 0;
+                const maxSwing = h * 0.08;
 
-        function setEffect(name) {
-            currentEffect = name;
-            previousWaveHeights = null;
+                // 25-point moving average smoothing
+                const smoothedData = new Float32Array(bufferLength);
+                const windowSize = 25;
+                for (let i = 0; i < bufferLength; i++) {
+                    let sum = 0;
+                    let count = 0;
+                    let start = Math.max(0, i - Math.floor(windowSize / 2));
+                    let end = Math.min(bufferLength - 1, i + Math.floor(windowSize / 2));
+                    for (let j = start; j <= end; j++) {
+                        sum += dataArray[j];
+                        count++;
+                    }
+                    smoothedData[i] = sum / count;
+                }
 
-            document.getElementById('effect-label').textContent = descriptions[name] || '';
+                // Initialize lerp state
+                if (!previousWaveHeights || previousWaveHeights.length !== bufferLength) {
+                    previousWaveHeights = new Float32Array(bufferLength);
+                    for (let i = 0; i < bufferLength; i++) previousWaveHeights[i] = h / 2;
+                }
+
+                for (let i = 0; i < bufferLength; i++) {
+                    const rawV = (smoothedData[i] - 128) / 128.0;
+                    const v = Math.sign(rawV) * Math.pow(Math.abs(rawV), 1.6);
+                    const targetY = (h / 2) + (v * maxSwing);
+                    const lerpedY = (previousWaveHeights[i] * 0.85) + (targetY * 0.15);
+                    previousWaveHeights[i] = lerpedY;
+
+                    if (i === 0) ctx.moveTo(x, lerpedY);
+                    else ctx.lineTo(x, lerpedY);
+                    x += sliceWidth;
+                }
+
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
+
+            // --- THEMES ---
+
+            const THEMES = {
+                midnight: { name: 'Midnight Violet', preview: ['#1a0a2e', '#0d1b3e', '#7c5bf5'], vars: { '--bg-base': '#080810', '--grad-1': '#1a0a2e', '--grad-2': '#0d1b3e', '--grad-3': '#1e0a3a', '--accent': '#7c5bf5', '--accent-glow': 'rgba(124, 91, 245, 0.3)', '--accent-soft': 'rgba(124, 91, 245, 0.12)' } },
+                ocean: { name: 'Deep Ocean', preview: ['#0a1628', '#0c2340', '#3b82f6'], vars: { '--bg-base': '#060d1a', '--grad-1': '#0a1628', '--grad-2': '#0c2340', '--grad-3': '#0a1e38', '--accent': '#3b82f6', '--accent-glow': 'rgba(59, 130, 246, 0.3)', '--accent-soft': 'rgba(59, 130, 246, 0.12)' } },
+                emerald: { name: 'Emerald Forest', preview: ['#0a1e14', '#0d2818', '#10b981'], vars: { '--bg-base': '#060f0a', '--grad-1': '#0a1e14', '--grad-2': '#0d2818', '--grad-3': '#0a2416', '--accent': '#10b981', '--accent-glow': 'rgba(16, 185, 129, 0.3)', '--accent-soft': 'rgba(16, 185, 129, 0.12)' } },
+                sunset: { name: 'Sunset Blaze', preview: ['#2a0a0a', '#3d1a0a', '#f97316'], vars: { '--bg-base': '#120606', '--grad-1': '#2a0a0a', '--grad-2': '#3d1a0a', '--grad-3': '#2e0e08', '--accent': '#f97316', '--accent-glow': 'rgba(249, 115, 22, 0.3)', '--accent-soft': 'rgba(249, 115, 22, 0.12)' } },
+                rose: { name: 'Rose Quartz', preview: ['#2a0a1e', '#3d0a28', '#ec4899'], vars: { '--bg-base': '#120610', '--grad-1': '#2a0a1e', '--grad-2': '#3d0a28', '--grad-3': '#2e0820', '--accent': '#ec4899', '--accent-glow': 'rgba(236, 72, 153, 0.3)', '--accent-soft': 'rgba(236, 72, 153, 0.12)' } },
+                arctic: { name: 'Arctic Frost', preview: ['#0a1420', '#0e1c2e', '#67e8f9'], vars: { '--bg-base': '#060c14', '--grad-1': '#0a1420', '--grad-2': '#0e1c2e', '--grad-3': '#0c1826', '--accent': '#67e8f9', '--accent-glow': 'rgba(103, 232, 249, 0.3)', '--accent-soft': 'rgba(103, 232, 249, 0.12)' } },
+                neon: { name: 'Neon Cyber', preview: ['#0a0a1a', '#1a0a2e', '#22d3ee'], vars: { '--bg-base': '#050510', '--grad-1': '#0a0a1a', '--grad-2': '#1a0a2e', '--grad-3': '#0a0a20', '--accent': '#22d3ee', '--accent-glow': 'rgba(34, 211, 238, 0.3)', '--accent-soft': 'rgba(34, 211, 238, 0.12)' } },
+                classic: { name: 'Classic Dark', preview: ['#121212', '#1a1a1a', '#1db954'], vars: { '--bg-base': '#0a0a0a', '--grad-1': '#121212', '--grad-2': '#1a1a1a', '--grad-3': '#161616', '--accent': '#1db954', '--accent-glow': 'rgba(29, 185, 84, 0.3)', '--accent-soft': 'rgba(29, 185, 84, 0.12)' } }
+            };
+
+            function initThemes() {
+                const grid = document.getElementById('theme-grid');
+                const label = document.getElementById('theme-label');
+                let current = 'midnight';
+
+                let html = '';
+                for (const [id, theme] of Object.entries(THEMES)) {
+                    html += `
+                    <button class="theme-swatch ${id === current ? 'active' : ''}" 
+                            data-theme="${id}" 
+                            title="${theme.name}"
+                            style="background: linear-gradient(135deg, ${theme.preview[0]}, ${theme.preview[1]}); border-color: ${theme.preview[2]};">
+                    </button>
+                `;
+                }
+                grid.innerHTML = html;
+
+                grid.addEventListener('click', (e) => {
+                    const btn = e.target.closest('.theme-swatch');
+                    if (!btn) return;
+
+                    const id = btn.dataset.theme;
+                    const theme = THEMES[id];
+                    if (!theme) return;
+
+                    // Update UI
+                    grid.querySelectorAll('.theme-swatch').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    label.textContent = theme.name;
+                    current = id;
+
+                    // Apply CSS variables
+                    for (const [key, val] of Object.entries(theme.vars)) {
+                        document.documentElement.style.setProperty(key, val);
+                    }
+
+                    // If a canvas effect is active, redraw it so it picks up the new colors immediately
+                    if (currentEffect && currentEffect.startsWith('reactive-')) {
+                        // It will automatically pick up the new colors on the next frame
+                    } else {
+                        applyCSSEffect(currentEffect); // Re-apply to update CSS vars in innerHTML (like waves)
+                    }
+                });
+
+                // Set initial
+                for (const [key, val] of Object.entries(THEMES[current].vars)) {
+                    document.documentElement.style.setProperty(key, val);
+                }
+            }
+
+            // --- EFFECT SWITCHING ---
+
+            const descriptions = {
+                'orbs': 'Orbs -- Floating glowing spheres',
+                'waves': 'Waves -- Flowing neon lines',
+                'space': 'Space -- Parallax starfield',
+                'grid': 'Grid -- Synthwave 3D floor',
+                'particles': 'Particles -- Falling digital snow',
+                'rings': 'Rings -- Pulsing concentric circles',
+                'reactive-bars': 'Reactive Bars -- Frequency visualizer',
+                'reactive-circle': 'Reactive Circle -- Pulsing equalizer ring',
+                'reactive-wave': 'Reactive Wave -- Oscilloscope waveform',
+                'static': 'Static -- No animation'
+            };
+
+            const reactiveDrawFns = {
+                'reactive-bars': drawReactiveBars,
+                'reactive-circle': drawReactiveCircle,
+                'reactive-wave': drawReactiveWave
+            };
+
+            function setEffect(name) {
+                currentEffect = name;
+                previousWaveHeights = null;
+
+                document.getElementById('effect-label').textContent = descriptions[name] || '';
+                document.querySelectorAll('.effect-btn').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.effect === name);
+                });
+
+                if (name.startsWith('reactive-')) {
+                    // Canvas mode for reactive effects
+                    bgEffects.innerHTML = '';
+                    canvas.style.display = 'block';
+                    canvas.style.opacity = '0.6';
+                    canvas.style.mixBlendMode = 'screen';
+                    resize();
+                    if (!animId) animate();
+                } else {
+                    // CSS mode for non-reactive effects
+                    applyCSSEffect(name);
+                }
+            }
+
+            function animate() {
+                const fn = reactiveDrawFns[currentEffect];
+                if (fn) {
+                    fn();
+                    animId = requestAnimationFrame(animate);
+                } else {
+                    animId = null;
+                }
+            }
+
+            // Button listeners
             document.querySelectorAll('.effect-btn').forEach(btn => {
-                btn.classList.toggle('active', btn.dataset.effect === name);
+                btn.addEventListener('click', () => setEffect(btn.dataset.effect));
             });
 
-            if (name.startsWith('reactive-')) {
-                // Canvas mode for reactive effects
-                bgEffects.innerHTML = '';
-                canvas.style.display = 'block';
-                canvas.style.opacity = '0.6';
-                canvas.style.mixBlendMode = 'screen';
-                resize();
-                if (!animId) animate();
-            } else {
-                // CSS mode for non-reactive effects
-                applyCSSEffect(name);
-            }
-        }
-
-        function animate() {
-            const fn = reactiveDrawFns[currentEffect];
-            if (fn) {
-                fn();
-                animId = requestAnimationFrame(animate);
-            } else {
-                animId = null;
-            }
-        }
-
-        // Button listeners
-        document.querySelectorAll('.effect-btn').forEach(btn => {
-            btn.addEventListener('click', () => setEffect(btn.dataset.effect));
-        });
-
-        // Start with orbs
-        setEffect('orbs');
-    })();
+            // Start with orbs and initialize themes
+            initThemes();
+            setEffect('orbs');
+        })();
     </script>
 </body>
+
 </html>
