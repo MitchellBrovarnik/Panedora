@@ -617,8 +617,28 @@ app.whenReady().then(() => {
     // Initialize API
     api = new PandoraAPI();
 
-    // Handle session expiration
-    api.onSessionExpired = () => {
+    // Handle session expiration - attempt to re-authenticate automatically
+    api.onSessionExpired = async () => {
+        console.log('[Main] Session expired, attempting automatic re-authentication...');
+        const config = require('./config');
+        const creds = config.getCredentials();
+
+        if (creds?.email && creds?.password) {
+            try {
+                // Attempt to re-authenticate with stored credentials
+                const result = await api.login(creds.email, creds.password);
+                if (result.success) {
+                    console.log('[Main] Automatic re-authentication successful');
+                    // Session restored, continue without interrupting user
+                    return;
+                }
+            } catch (err) {
+                console.error('[Main] Automatic re-authentication failed:', err);
+            }
+        }
+
+        // Only logout and show login screen if re-authentication failed
+        console.log('[Main] Could not restore session, logging out');
         api.logout();
         sendLoginStatus(false);
     };
