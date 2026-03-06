@@ -3,7 +3,7 @@
  * Direct communication with Pandora's REST API
  */
 
-const config = require('./config');
+const config = require('../utils/config');
 
 class PandoraAPI {
     constructor() {

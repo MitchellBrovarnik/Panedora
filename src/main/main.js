@@ -10,8 +10,8 @@ const path = require('path');
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 app.commandLine.appendSwitch('disable-gpu-disk-cache');
 
-const PandoraAPI = require('./pandora-api');
-const config = require('./config');
+const PandoraAPI = require('../api/pandora-api');
+const config = require('../utils/config');
 
 let uiWindow = null;
 let api = null;
@@ -47,7 +47,7 @@ function createUIWindow() {
         }
     });
 
-    uiWindow.loadFile('index.html');
+    uiWindow.loadFile(path.join(__dirname, '..', 'index.html'));
 
     if (process.argv.includes('--dev')) {
         uiWindow.webContents.openDevTools();

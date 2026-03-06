@@ -6,20 +6,20 @@ const DIST = path.join(__dirname, 'dist');
 
 // Files to obfuscate (your app code)
 const jsFiles = [
-    'main.js',
-    'pandora-api.js',
-    'config.js',
-    'preload-ui.js',
-    'renderer.js',
-    'visualizer.js',
-    'components.js'
+    'src/main/main.js',
+    'src/api/pandora-api.js',
+    'src/utils/config.js',
+    'src/main/preload-ui.js',
+    'src/renderer/renderer.js',
+    'src/ui/visualizer.js',
+    'src/ui/components.js'
 ];
 
 // Files to copy as-is (not JS, or shouldn't be obfuscated)
 const copyFiles = [
     'package.json',
-    'index.html',
-    'styles.css',
+    'src/index.html',
+    'src/styles.css',
     'screenshot.png',
     'assets/icon.ico',
     'assets/icon.icns',
@@ -51,7 +51,10 @@ for (const file of jsFiles) {
     }
     const code = fs.readFileSync(filePath, 'utf8');
     const result = JavaScriptObfuscator.obfuscate(code, obfuscationOptions);
-    fs.writeFileSync(path.join(DIST, file), result.getObfuscatedCode());
+
+    const outPath = path.join(DIST, file);
+    fs.mkdirSync(path.dirname(outPath), { recursive: true });
+    fs.writeFileSync(outPath, result.getObfuscatedCode());
     console.log(`  OBFUSCATED ${file}`);
 }
 
@@ -62,7 +65,9 @@ for (const file of copyFiles) {
         console.log(`  SKIP ${file} (not found)`);
         continue;
     }
-    fs.copyFileSync(filePath, path.join(DIST, path.basename(file)));
+    const outPath = path.join(DIST, file);
+    fs.mkdirSync(path.dirname(outPath), { recursive: true });
+    fs.copyFileSync(filePath, outPath);
     console.log(`  COPIED ${file}`);
 }
 
