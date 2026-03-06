@@ -115,7 +115,14 @@ class PandoraAPI {
                 return json;
             } else {
                 if (response.status === 401 || json.errorCode === 1000) {
-                    if (this.onSessionExpired) this.onSessionExpired();
+                    // Prevent infinite loop if the login request itself fails
+                    if (endpoint !== '/v1/auth/login' && this.onSessionExpired) {
+                        const relogged = await this.onSessionExpired();
+                        if (relogged) {
+                            // Retry the request once after successful relogin
+                            return await this._requestInternal(url, endpoint, data);
+                        }
+                    }
                 }
                 throw { status: response.status, ...json };
             }
@@ -124,6 +131,61 @@ class PandoraAPI {
             if (error.name === 'AbortError') {
                 throw { error: 'Request timed out' };
             }
+            throw error;
+        }
+    }
+
+    /**
+     * Internal request method to retry without infinite loops
+     */
+    async _requestInternal(url, endpoint, data) {
+        const { net } = require('electron');
+        const headers = {
+            'Content-Type': 'application/json',
+            'X-AuthToken': this.authToken || '',
+            'X-CsrfToken': this.csrfToken || '',
+            'User-Agent': `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${process.versions.chrome} Safari/537.36`,
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Origin': 'https://www.pandora.com',
+            'Referer': 'https://www.pandora.com/',
+            'sec-ch-ua': `"Not_A Brand";v="8", "Chromium";v="${process.versions.chrome.split('.')[0]}", "Google Chrome";v="${process.versions.chrome.split('.')[0]}"`,
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin'
+        };
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000);
+
+        try {
+            const response = await net.fetch(url, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(data),
+                signal: controller.signal,
+                credentials: 'include'
+            });
+
+            clearTimeout(timeout);
+
+            const bodyText = await response.text();
+            let json;
+            try {
+                json = JSON.parse(bodyText);
+            } catch (e) {
+                throw { error: 'Invalid JSON', body: bodyText, status: response.status };
+            }
+
+            if (response.ok) {
+                return json;
+            } else {
+                throw { status: response.status, ...json };
+            }
+        } catch (error) {
+            clearTimeout(timeout);
             throw error;
         }
     }

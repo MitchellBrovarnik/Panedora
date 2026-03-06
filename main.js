@@ -618,9 +618,36 @@ app.whenReady().then(() => {
     api = new PandoraAPI();
 
     // Handle session expiration
-    api.onSessionExpired = () => {
-        api.logout();
-        sendLoginStatus(false);
+    let isRelogging = false;
+    api.onSessionExpired = async () => {
+        if (isRelogging) return false;
+        isRelogging = true;
+
+        try {
+            console.log('[Main] Session expired. Attempting auto-relogin...');
+            const creds = config.getCredentials();
+
+            if (creds && creds.email && creds.password) {
+                try {
+                    // login() already calls api.login and handles updating state and loading stations
+                    const result = await login(creds.email, creds.password);
+                    if (result.success) {
+                        console.log('[Main] Auto-relogin successful.');
+                        return true; // Relogin successful, return true for retry
+                    }
+                } catch (err) {
+                    console.error('[Main] Auto-relogin failed:', err);
+                }
+            }
+
+            // If we don't have credentials or relogin failed, fall back to manual logout
+            console.log('[Main] Auto-relogin not possible or failed. Logging out.');
+            api.logout();
+            sendLoginStatus(false);
+            return false;
+        } finally {
+            isRelogging = false;
+        }
     };
 
     createUIWindow();
