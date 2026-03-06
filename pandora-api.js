@@ -270,6 +270,13 @@ class PandoraAPI {
     }
 
     /**
+     * Check if an error represents a STREAM_VIOLATION (HTTP 429 / multi-stream)
+     */
+    _isStreamViolation(error) {
+        return error.status === 429 || error.message === 'STREAM_VIOLATION' || error.errorString === 'STREAM_VIOLATION';
+    }
+
+    /**
      * Get playlist tracks for a station
      */
     async getPlaylist(stationId, isStationStart = false, startingAtTrackId = null, { skipRetry = false } = {}) {
@@ -296,6 +303,10 @@ class PandoraAPI {
 
             return { tracks: response.tracks || [], error: response.error || null };
         } catch (error) {
+            // Check for STREAM_VIOLATION (HTTP 429) — treat as SimStreamViolation
+            if (this._isStreamViolation(error)) {
+                return { tracks: [], error: 'Another device is streaming.' };
+            }
             // Check for SimStreamViolation in error response
             const errorStr = JSON.stringify(error);
             if (errorStr.includes('SimStreamViolation')) {
@@ -379,6 +390,7 @@ class PandoraAPI {
 
     /**
      * Report track started (for scrobbling/analytics)
+     * Returns { success, streamViolation } so callers can react to STREAM_VIOLATION.
      */
     async trackStarted(stationId, trackToken) {
         try {
@@ -386,10 +398,14 @@ class PandoraAPI {
                 stationId,
                 trackToken
             });
-            return true;
+            return { success: true, streamViolation: false };
         } catch (error) {
+            if (this._isStreamViolation(error)) {
+                console.warn('[API] STREAM_VIOLATION on trackStarted — another device is streaming.');
+                return { success: false, streamViolation: true };
+            }
             console.error('[API] Failed to report track started:', error);
-            return false;
+            return { success: false, streamViolation: false };
         }
     }
 

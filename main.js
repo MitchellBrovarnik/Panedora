@@ -158,7 +158,7 @@ function getCurrentState() {
         coverArt: PandoraAPI.getHighResArt(track?.albumArt),
         time: 0, // UI will track via audio element
         duration: track?.trackLength || 0,
-        isPlaying: !!(track?.audioURL), // Auto-play when we have a valid audio URL
+        isPlaying: !!(track?.audioURL) && !streamReclaimed, // Stop playback on stream violation
         trackToken: track?.trackToken || null,
         audioURL: track?.audioURL || null,
         feedback: currentFeedback, // Send current feedback to UI
@@ -215,9 +215,13 @@ async function playStation(stationId, startingAtTrackId = null) {
     currentTrackIndex = 0;
 
     if (currentPlaylist.length > 0) {
-        // Report track started
+        // Report track started and check for stream violations
         const track = currentPlaylist[0];
-        api.trackStarted(stationId, track.trackToken);
+        const tsResult = await api.trackStarted(stationId, track.trackToken);
+        if (tsResult.streamViolation) {
+            streamReclaimed = true;
+            sendToUI('UI:ERROR', { message: 'Another device is streaming. Playback stopped.' });
+        }
 
         // Record first track in history (cap at 50)
         if (!songHistory.length || songHistory[songHistory.length - 1].trackToken !== track.trackToken) {
@@ -278,7 +282,11 @@ async function skipTrack() {
     if (currentTrackIndex < currentPlaylist.length) {
         const track = currentPlaylist[currentTrackIndex];
         if (track && track.trackToken) {
-            api.trackStarted(currentStation?.stationId, track.trackToken);
+            const tsResult = await api.trackStarted(currentStation?.stationId, track.trackToken);
+            if (tsResult.streamViolation) {
+                streamReclaimed = true;
+                sendToUI('UI:ERROR', { message: 'Another device is streaming. Playback stopped.' });
+            }
         }
     }
 
