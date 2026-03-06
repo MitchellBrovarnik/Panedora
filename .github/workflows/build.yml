@@ -32,8 +32,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Obfuscate source
-        run: npm run obfuscate
+      - name: Prepare distribution files
+        run: npm run prepare-dist
 
       - name: Install production deps in dist
         run: cd dist && npm install --omit=dev
