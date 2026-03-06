@@ -43,13 +43,26 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload artifacts
+      - name: Upload Windows artifact
+        if: matrix.platform == 'win'
         uses: actions/upload-artifact@v4
         with:
-          name: panedora-${{ matrix.platform }}
+          name: panedora-win
+          path: release/*.exe
+
+      - name: Upload macOS artifact
+        if: matrix.platform == 'mac'
+        uses: actions/upload-artifact@v4
+        with:
+          name: panedora-mac
+          path: release/*.dmg
+
+      - name: Upload Linux artifacts
+        if: matrix.platform == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: panedora-linux
           path: |
-            release/*.exe
-            release/*.dmg
             release/*.AppImage
             release/*.deb
 

@@ -10,6 +10,8 @@ A premium, immersive Pandora desktop client built with Electron. Panedora featur
 
 > ### A Note to Developers
 > This project is open source and available for educational purposes. You are free to explore and learn from the code. However, under the CC BY-NC-ND 4.0 license, you may not distribute modified versions of this software. Additionally, to prevent abuse of the legacy Pandora API and maintain the integrity of subscription-tier checks, please do not modify or tamper with the backend logic (`pandora-api.js`, etc.).
+>
+> **Important caveat:** Because this is a client-side Electron application, the subscription check (`_checkLoginSubscription` / `verifySubscription` in `pandora-api.js`) is enforced locally. Anyone who clones the source and runs a modified build on their own machine could bypass it. This is an inherent limitation of any open-source desktop client. The CC BY-NC-ND license legally prohibits distributing such modified versions, and the published release binaries are obfuscated to raise the barrier, but no client-side check can be made tamper-proof. Users who choose to abuse this are violating both the license and Pandora's Terms of Service — that responsibility rests with them, not this project.
 
 ## Recent Updates
 
@@ -109,11 +111,41 @@ Panedora is built using a modern Electron stack, emphasizing security and separa
    ```
 
 ## Creating a Production Build
-To package Panedora into a standalone executable, use `electron-packager` (ensure it is installed):
+
+To package Panedora into a standalone executable, ensure all dependencies are installed and then run the build script for your **host operating system** (electron-builder can only produce native installers on the matching platform — use [GitHub Actions](#publishing-a-release-via-github-actions) for cross-platform builds):
+
 ```bash
-npx electron-packager . Panedora --platform=win32 --arch=x64 --out=dist
+# On Windows
+npm run build:win
+
+# On macOS
+npm run build:mac
+
+# On Linux
+npm run build:linux
 ```
-*(Replace `win32` and `x64` with your target platform and architecture.)*
+
+The installer will be output to the `release/` directory.
+
+## Publishing a Release via GitHub Actions
+
+The repository includes a GitHub Actions workflow (`.github/workflows/build.yml`) that automatically builds installers for **Windows (.exe), macOS (.dmg), and Linux (.AppImage / .deb)** and publishes them as a GitHub Release.
+
+To trigger a release build:
+
+1. Update the version number in `package.json`.
+2. Commit and push the change:
+   ```bash
+   git add package.json
+   git commit -m "chore: bump version to v1.x.x"
+   git push
+   ```
+3. Create and push a version tag (**must start with `v`**, e.g. `v1.0.0`):
+   ```bash
+   git tag v1.x.x
+   git push origin v1.x.x
+   ```
+4. GitHub Actions will automatically build all three platform installers and publish them as a new GitHub Release. The download cards on the GitHub Pages site link to `https://github.com/MitchellBrovarnik/Panedora/releases`, so they will automatically surface the new release.
 
 ## Usage
 

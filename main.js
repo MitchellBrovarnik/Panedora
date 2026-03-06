@@ -346,7 +346,7 @@ ipcMain.handle('APP:INIT', async () => {
     try {
         // Check if already logged in
         if (api.restoreAuth()) {
-           const isPaid = await api.verifySubscription();
+            const isPaid = await api.verifySubscription();
             if (!isPaid) {
                 api.logout();
                 sendLoginStatus(false);
