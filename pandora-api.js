@@ -115,7 +115,8 @@ class PandoraAPI {
                 return json;
             } else {
                 if (response.status === 401 || json.errorCode === 1000) {
-                    if (this.onSessionExpired) {
+                    // Prevent infinite loop if the login request itself fails
+                    if (endpoint !== '/v1/auth/login' && this.onSessionExpired) {
                         const relogged = await this.onSessionExpired();
                         if (relogged) {
                             // Retry the request once after successful relogin
