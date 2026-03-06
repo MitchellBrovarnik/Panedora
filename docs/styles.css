@@ -351,6 +351,18 @@ h1, h2, h3 {
     color: #b0bac9;
 }
 
+.license-warning {
+    background: rgba(194, 83, 83, 0.1);
+    border-left: 4px solid var(--primary);
+    padding: 1.5rem 2rem;
+    margin: 2rem 0;
+    border-radius: 0 12px 12px 0;
+    color: #f1f3f5;
+}
+.license-warning p {
+    color: #d1d9e6;
+}
+
 /* Features */
 .features {
     padding: 6rem 0;
