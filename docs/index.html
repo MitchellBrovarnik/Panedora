@@ -54,6 +54,25 @@
             </div>
         </section>
 
+        <section id="about" class="about reveal">
+            <div class="container text-container glass-panel">
+                <h2 style="text-align: center; border: none; margin-top: 0; padding-top: 0;">About the Project</h2>
+                <p>Panedora is a personal, educational, and experimental project created purely for fun. It was built as a creative exercise to explore modern UI design (Glassmorphism) and Electron-based desktop application development. This project is intended for personal use only and was developed with zero intent to cause harm, bypass security, or interfere with Pandora's business operations. It is shared as a demonstration of UI/UX design and technical integration.</p>
+
+                <p>A premium, immersive Pandora desktop client built with Electron. Panedora features a fully theme-driven Glassmorphism design system, persistent session management, and an enhanced playback experience that goes far beyond the standard Pandora web player.</p>
+
+                <blockquote>
+                    <strong>A Note to Developers:</strong> This project is open source and available for educational purposes. You are free to explore and learn from the code. However, under the CC BY-NC-ND 4.0 license, you may not distribute modified versions of this software. Additionally, to prevent abuse of the legacy Pandora API and maintain the integrity of subscription-tier checks, please do not modify or tamper with the backend logic (`pandora-api.js`, etc.).
+                </blockquote>
+
+                <h3>Technical Architecture</h3>
+                <p>Panedora is a modern Electron application utilizing a secure, multi-process architecture. The <strong>Main Process</strong> handles all secure Pandora API communication via Chromium's native network stack, while the <strong>Renderer Process</strong> handles the UI layer using vanilla HTML5/JS and modern CSS. Context isolation is strictly enforced via a preload script, meaning the frontend renderer communicates with the node backend entirely through a secure IPC bridge.</p>
+
+                <h3>Robust Session Management</h3>
+                <p>Direct authentication with Pandora's official REST API endpoints securely handles auth tokens and CSRF token lifecycles. All token state is stored locally and securely, completely preventing third-party tracking or data collection.</p>
+            </div>
+        </section>
+
         <section id="features" class="features reveal">
             <div class="container">
                 <h2 class="section-title">Feature Highlights</h2>
