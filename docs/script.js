@@ -33,25 +33,58 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Add subtle parallax effect to orbs based on mouse movement
-    document.addEventListener('mousemove', (e) => {
-        const orbs = document.querySelectorAll('.orb');
-        const x = e.clientX / window.innerWidth;
-        const y = e.clientY / window.innerHeight;
+    // Intersection Observer for scroll animations
+    const revealElements = document.querySelectorAll('.reveal');
 
+    const revealOptions = {
+        threshold: 0.15,
+        rootMargin: "0px 0px -50px 0px"
+    };
+
+    const revealOnScroll = new IntersectionObserver(function(entries, observer) {
+        entries.forEach(entry => {
+            if (!entry.isIntersecting) {
+                return;
+            } else {
+                entry.target.classList.add('active');
+                observer.unobserve(entry.target);
+            }
+        });
+    }, revealOptions);
+
+    revealElements.forEach(el => {
+        revealOnScroll.observe(el);
+    });
+
+    // Add subtle parallax effect to orbs based on mouse movement
+    let mouseX = 0;
+    let mouseY = 0;
+    let isMouseMoving = false;
+    const orbs = document.querySelectorAll('.orb');
+
+    document.addEventListener('mousemove', (e) => {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+
+        if (!isMouseMoving) {
+            isMouseMoving = true;
+            requestAnimationFrame(updateOrbs);
+        }
+    });
+
+    function updateOrbs() {
         orbs.forEach((orb, index) => {
             const speed = (index + 1) * 20;
-            const xOffset = (window.innerWidth / 2 - e.clientX) / speed;
-            const yOffset = (window.innerHeight / 2 - e.clientY) / speed;
+            const xOffset = (window.innerWidth / 2 - mouseX) / speed;
+            const yOffset = (window.innerHeight / 2 - mouseY) / speed;
 
-            // We combine the base translation with the mouse parallax translation
             orb.style.transform = `translate(${xOffset}px, ${yOffset}px)`;
         });
-    });
+        isMouseMoving = false;
+    }
 
     // Reset orb transform on mouse leave to let CSS animation take over smoothly
     document.addEventListener('mouseleave', () => {
-        const orbs = document.querySelectorAll('.orb');
         orbs.forEach(orb => {
             orb.style.transform = '';
         });

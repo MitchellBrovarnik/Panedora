@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Panedora - A Modern Pandora Client</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -31,27 +33,28 @@
     </nav>
 
     <main class="main-content">
-        <section class="hero">
+        <section class="hero reveal">
             <div class="container hero-container">
                 <div class="hero-text-content">
-                    <h1 class="hero-title">Experience Pandora Like Never Before</h1>
+                    <h1 class="hero-title">Experience Pandora<br/>Like Never Before</h1>
                     <p class="hero-subtitle">A stunning, completely reimagined desktop client for Pandora with seamless playback controls, intelligent feedback, and a modern glassmorphic interface.</p>
                     <div class="hero-cta">
                         <a href="#download" class="btn btn-primary btn-large">
-                            <i class='bx bx-download'></i> Download Installers
+                            <i class='bx bx-download'></i> Download Now
                         </a>
                         <a href="https://github.com/MitchellBrovarnik/Panedora" target="_blank" class="btn btn-secondary btn-large">
-                            <i class='bx bxl-github'></i> View Repository
+                            <i class='bx bxl-github'></i> View on GitHub
                         </a>
                     </div>
                 </div>
                 <div class="hero-image-wrapper">
+                    <div class="glass-reflection"></div>
                     <img src="screenshot.png" alt="Panedora App Screenshot" class="app-screenshot" />
                 </div>
             </div>
         </section>
 
-        <section id="about" class="about">
+        <section id="about" class="about reveal">
             <div class="container text-container glass-panel">
                 <h2 style="text-align: center; border: none; margin-top: 0; padding-top: 0;">About the Project</h2>
                 <p>Panedora is a personal, educational, and experimental project created purely for fun. It was built as a creative exercise to explore modern UI design (Glassmorphism) and Electron-based desktop application development. This project is intended for personal use only and was developed with zero intent to cause harm, bypass security, or interfere with Pandora's business operations. It is shared as a demonstration of UI/UX design and technical integration.</p>
@@ -70,7 +73,7 @@
             </div>
         </section>
 
-        <section id="features" class="features">
+        <section id="features" class="features reveal">
             <div class="container">
                 <h2 class="section-title">Feature Highlights</h2>
                 <div class="feature-grid">
@@ -108,7 +111,7 @@
             </div>
         </section>
 
-        <section id="download" class="download">
+        <section id="download" class="download reveal">
             <div class="container">
                 <h2 class="section-title">Download Panedora</h2>
                 <div class="disclaimer-badge">
