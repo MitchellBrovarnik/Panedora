@@ -257,11 +257,12 @@ async function skipTrack() {
             const result = await api.getPlaylist(currentStation.stationId, false, null, { skipRetry: true });
             if (result.tracks?.length > 0) {
                 currentPlaylist.push(...result.tracks);
-            } else if (result.error) {
+            } else if (result.error && result.error.includes('Another device is streaming')) {
                 // Stream was reclaimed — trim buffer and flag it
                 streamReclaimed = true;
                 currentPlaylist = currentPlaylist.slice(0, currentTrackIndex + 1);
             }
+            // For other errors, just log and continue with existing tracks
         } finally {
             isLoadingMoreTracks = false;
         }
@@ -269,13 +270,15 @@ async function skipTrack() {
 
     // No more tracks left
     if (currentTrackIndex >= currentPlaylist.length) {
-        streamReclaimed = true;
         if (currentPlaylist.length === 0) {
             currentTrackIndex = 0;
             sendToUI('UI:ERROR', { message: 'No tracks available.' });
             return getCurrentState();
         }
-        sendToUI('UI:ERROR', { message: 'Another device is streaming. Playback stopped.' });
+        // Only show stream violation error if we already detected one
+        if (streamReclaimed) {
+            sendToUI('UI:ERROR', { message: 'Another device is streaming. Playback stopped.' });
+        }
         currentTrackIndex = currentPlaylist.length - 1;
     }
 
@@ -600,7 +603,7 @@ ipcMain.handle('PLAYER:GET_MORE_TRACKS', async () => {
     const moreTracks = result.tracks || [];
     currentPlaylist.push(...moreTracks);
 
-    if (moreTracks.length === 0 && result.error) {
+    if (moreTracks.length === 0 && result.error && result.error.includes('Another device is streaming')) {
         streamReclaimed = true;
     }
 
