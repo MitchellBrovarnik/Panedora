@@ -86,31 +86,39 @@ Panedora is built using a modern Electron stack, emphasizing security and separa
 
 ## Installation
 
-### Prerequisites
-*   [Node.js](https://nodejs.org/) (v16 or higher)
-*   A valid Pandora account (Pandora Plus or Premium required for full playback compatibility)
+### Download
+Download the latest installer for your platform from the [Panedora website](https://mitchellbrovarnik.github.io/Pandora-Glass/).
 
-### Setup Steps
-1. Clone the repository to your local machine:
+### Windows SmartScreen Notice
+> **Note:** Windows may show a SmartScreen warning saying **"Windows protected your PC"** when you run the installer. This is normal for apps from independent developers that haven't purchased a code signing certificate. To install:
+> 1. Click **"More info"**
+> 2. Click **"Run anyway"**
+>
+> This project is source-available — you can review the full source code right here to verify it's safe.
+
+### Requirements
+*   A valid Pandora account (Pandora Plus or Premium required for full playback compatibility)
+*   An active internet connection
+
+### Building from Source
+1. Clone the repository:
    ```bash
-   git clone https://github.com/MitchellBrovarnik/Panedora.git
-   cd Panedora
+   git clone https://github.com/MitchellBrovarnik/Pandora-Glass.git
+   cd Pandora-Glass
    ```
-2. Install the necessary dependencies:
+2. Install dependencies:
    ```bash
    npm install
    ```
-3. Start the application:
+3. Run in development mode:
    ```bash
    npm start
    ```
-
-## Creating a Production Build
-To package Panedora into a standalone executable, use `electron-packager` (ensure it is installed):
-```bash
-npx electron-packager . Panedora --platform=win32 --arch=x64 --out=dist
-```
-*(Replace `win32` and `x64` with your target platform and architecture.)*
+4. Package for your platform:
+   ```bash
+   npx electron-packager . Panedora --platform=win32 --arch=x64 --out=dist
+   ```
+   *(Replace `win32` and `x64` with your target platform and architecture.)*
 
 ## Usage
 
@@ -140,7 +148,7 @@ Panedora is designed with user privacy as a priority:
 
 ## License
 
-This project is licensed under the CC BY-NC-ND 4.0 License. See the LICENSE file for details.
+This project is **source-available** under the [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/) License. You are free to view and study the source code, but commercial use and derivative distribution are not permitted. See the LICENSE file for details.
 
 ## Disclaimer
 
