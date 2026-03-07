@@ -8,6 +8,9 @@ Panedora is a personal, educational, and experimental project created purely for
 
 A premium, immersive Pandora desktop client built with Electron. Panedora features a fully theme-driven Glassmorphism design system, persistent session management, and an enhanced playback experience that goes far beyond the standard Pandora web player.
 
+> [!IMPORTANT]
+> **Pandora Plus or Premium subscription required.** This application only works with an active Pandora Plus or Premium account. Free Pandora accounts cannot log in yet — free account support may be added in a future release. A paid subscription is required to access the API endpoints that Panedora currently relies on.
+
 > ### A Note to Developers
 > This project is source-available and intended for educational purposes. You are free to explore and learn from the code. However, under the CC BY-NC-ND 4.0 license, you may not distribute modified versions of this software. Additionally, to prevent abuse of the legacy Pandora API and maintain the integrity of subscription-tier checks, please do not modify or tamper with the backend logic (`pandora-api.js`, etc.).
 
@@ -87,42 +90,14 @@ Panedora is built using a modern Electron stack, emphasizing security and separa
 *   **Preload Script (`preload-ui.js`):** Establishes a secure IPC bridge using Electron's `contextBridge`. Context isolation is enabled, meaning the renderer has zero direct access to Node.js or Electron APIs — all privileged calls go through the explicitly exposed `window.api` surface.
 *   **Styling (`styles.css`):** Built entirely on CSS custom properties (variables) for the theme system. Employs CSS Grid, Flexbox, `backdrop-filter`, CSS animations, and a transparent/frameless window setup to achieve the Glassmorphism aesthetic.
 
-## Installation
-
-### Prerequisites
-*   [Node.js](https://nodejs.org/) (v16 or higher)
-*   A valid Pandora account (Pandora Plus or Premium required to login)
-
-### Setup Steps
-1. Clone the repository to your local machine:
-   ```bash
-   git clone https://github.com/MitchellBrovarnik/Panedora.git
-   cd Panedora
-   ```
-2. Install the necessary dependencies:
-   ```bash
-   npm install
-   ```
-3. Start the application:
-   ```bash
-   npm start
-   ```
-
 ## Automated Builds & Releases
 This project utilizes a GitHub Actions Continuous Integration (CI/CD) pipeline. Whenever a new version tag is published, the workflow automatically provisions Windows, macOS, and Linux runners to build the application and attaches the ready-to-use `.exe`, `.dmg`, and `.AppImage` installers to the [Releases](https://github.com/MitchellBrovarnik/Panedora/releases) page.
 
 You do **not** need to compile the application locally. Simply navigate to the Releases tab to download the platform-specific installer for your system.
 
-### Manual Local Build
-If you wish to test packaging entirely locally, you can use `electron-builder`:
-```bash
-npm run build:all
-```
-*(Compiled output will be generated in the `release/` directory.)*
-
 ## Usage
 
-1. **Sign In:** Launch the application and sign in using your Pandora credentials. An active internet connection is required.
+1. **Sign In:** Launch the application and sign in using your Pandora credentials. A Pandora Plus or Premium subscription is required — free accounts are not yet supported. An active internet connection is required.
 2. **Library Navigation:** Your stations populate the Home screen in two grids. Click any station card to begin playback. Use the Library page to browse and filter your full collection alphabetically.
 3. **Now Playing:** Click the album artwork in the footer player bar to open the full Now Playing view, which includes large artwork, track metadata, feedback buttons, and your Recently Played history.
 4. **Curating & History:**
