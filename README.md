@@ -87,38 +87,10 @@ Panedora is built using a modern Electron stack, emphasizing security and separa
 *   **Preload Script (`preload-ui.js`):** Establishes a secure IPC bridge using Electron's `contextBridge`. Context isolation is enabled, meaning the renderer has zero direct access to Node.js or Electron APIs — all privileged calls go through the explicitly exposed `window.api` surface.
 *   **Styling (`styles.css`):** Built entirely on CSS custom properties (variables) for the theme system. Employs CSS Grid, Flexbox, `backdrop-filter`, CSS animations, and a transparent/frameless window setup to achieve the Glassmorphism aesthetic.
 
-## Installation
-
-### Prerequisites
-*   [Node.js](https://nodejs.org/) (v16 or higher)
-*   A valid Pandora account (Pandora Plus or Premium required to login)
-
-### Setup Steps
-1. Clone the repository to your local machine:
-   ```bash
-   git clone https://github.com/MitchellBrovarnik/Panedora.git
-   cd Panedora
-   ```
-2. Install the necessary dependencies:
-   ```bash
-   npm install
-   ```
-3. Start the application:
-   ```bash
-   npm start
-   ```
-
 ## Automated Builds & Releases
 This project utilizes a GitHub Actions Continuous Integration (CI/CD) pipeline. Whenever a new version tag is published, the workflow automatically provisions Windows, macOS, and Linux runners to build the application and attaches the ready-to-use `.exe`, `.dmg`, and `.AppImage` installers to the [Releases](https://github.com/MitchellBrovarnik/Panedora/releases) page.
 
 You do **not** need to compile the application locally. Simply navigate to the Releases tab to download the platform-specific installer for your system.
-
-### Manual Local Build
-If you wish to test packaging entirely locally, you can use `electron-builder`:
-```bash
-npm run build:all
-```
-*(Compiled output will be generated in the `release/` directory.)*
 
 ## Usage
 
