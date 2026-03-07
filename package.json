@@ -2,6 +2,7 @@
     "name": "panedora",
     "version": "1.0.0",
     "description": "A premium Pandora client with a Spotify-inspired native interface",
+    "repository": "github:MitchellBrovarnik/Pandora-Glass",
     "main": "main.js",
     "scripts": {
         "start": "electron .",
@@ -10,7 +11,8 @@
         "build": "npm run prepare-dist && cd dist && npm install --omit=dev && cd .. && electron-builder --config electron-builder.config.js",
         "build:win": "npm run prepare-dist && cd dist && npm install --omit=dev && cd .. && electron-builder --win --config electron-builder.config.js",
         "build:mac": "npm run prepare-dist && cd dist && npm install --omit=dev && cd .. && electron-builder --mac --config electron-builder.config.js",
-        "build:linux": "npm run prepare-dist && cd dist && npm install --omit=dev && cd .. && electron-builder --linux --config electron-builder.config.js"
+        "build:linux": "npm run prepare-dist && cd dist && npm install --omit=dev && cd .. && electron-builder --linux --config electron-builder.config.js",
+        "build:all": "npm run prepare-dist && cd dist && npm install --omit=dev && cd .. && electron-builder -mwl --config electron-builder.config.js"
     },
     "keywords": [
         "pandora",
