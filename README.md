@@ -8,6 +8,9 @@ Panedora is a personal, educational, and experimental project created purely for
 
 A premium, immersive Pandora desktop client built with Electron. Panedora features a fully theme-driven Glassmorphism design system, persistent session management, and an enhanced playback experience that goes far beyond the standard Pandora web player.
 
+> [!IMPORTANT]
+> **Pandora Plus or Premium subscription required.** This application only works with an active Pandora Plus or Premium account. Free Pandora accounts cannot log in. A paid subscription is required to access the API endpoints that Panedora relies on.
+
 > ### A Note to Developers
 > This project is source-available and intended for educational purposes. You are free to explore and learn from the code. However, under the CC BY-NC-ND 4.0 license, you may not distribute modified versions of this software. Additionally, to prevent abuse of the legacy Pandora API and maintain the integrity of subscription-tier checks, please do not modify or tamper with the backend logic (`pandora-api.js`, etc.).
 
@@ -94,7 +97,7 @@ You do **not** need to compile the application locally. Simply navigate to the R
 
 ## Usage
 
-1. **Sign In:** Launch the application and sign in using your Pandora credentials. An active internet connection is required.
+1. **Sign In:** Launch the application and sign in using your Pandora credentials. A Pandora Plus or Premium subscription is required — free accounts are not supported. An active internet connection is required.
 2. **Library Navigation:** Your stations populate the Home screen in two grids. Click any station card to begin playback. Use the Library page to browse and filter your full collection alphabetically.
 3. **Now Playing:** Click the album artwork in the footer player bar to open the full Now Playing view, which includes large artwork, track metadata, feedback buttons, and your Recently Played history.
 4. **Curating & History:**
