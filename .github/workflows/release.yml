@@ -4,11 +4,11 @@ on:
   release:
     types: [published]
 
-permissions:
-  contents: write
-
 jobs:
   build:
+    permissions:
+      contents: write
+      packages: write
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
