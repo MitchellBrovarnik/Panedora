@@ -20,7 +20,7 @@
         "electron",
         "streaming"
     ],
-    "author": "",
+    "author": "Mitchell Brovarnik <mitchellbrovarnik@example.com>",
     "license": "CC-BY-NC-ND-4.0",
     "devDependencies": {
         "electron": "^28.0.0",
