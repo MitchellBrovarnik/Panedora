@@ -76,7 +76,7 @@ Your selected effect is saved and restored automatically on next launch.
 *   **Search:** Search for songs, artists, and stations. Results are organized into separate sections. Note that playing a specific song from search results is a work in progress.
 
 ### Robust Session Management
-*   **Secure Authentication:** Signs in directly with Pandora's official REST API, generating and managing the required auth tokens and CSRF tokens for all subsequent requests.
+*   **Secure Authentication:** Signs in directly with Pandora, generating and managing the required auth tokens and CSRF tokens for all subsequent requests.
 *   **Clean Sign Out:** A dedicated sign-out process permanently wipes session tokens, pauses active streams, and safely tears down the player state to prevent ghost playback or infinite reload loops.
 
 ## Technical Architecture
@@ -117,7 +117,7 @@ You do **not** need to compile the application locally. Simply navigate to the R
 ## Privacy and Security
 
 Panedora is designed with user privacy as a priority:
-*   **Direct Authentication:** Your credentials are used solely to authenticate with Pandora's official API. Your password is encrypted at rest using your operating system's secure keychain (Electron safeStorage).
+*   **Direct Authentication:** Your credentials are used solely to authenticate with Pandora. Your password is encrypted at rest using your operating system's secure keychain (Electron safeStorage).
 *   **Local Storage Only:** Authentication tokens and encrypted credentials are stored locally on your machine in your user data directory. All auth data is cleared on sign-out.
 *   **No Third-Party Tracking:** No personal data is collected or shared with any third-party services. The application communicates exclusively with Pandora's infrastructure.
 
