@@ -4,6 +4,9 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build on ${{ matrix.os }}
@@ -26,22 +29,35 @@ jobs:
 
       - name: Build Windows
         if: matrix.os == 'windows-latest'
-        run: npm run build:win
+        run: |
+          npm run prepare-dist
+          cd dist
+          npm install --omit=dev
+          cd ..
+          npx electron-builder --win --config electron-builder.config.js -p always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build macOS
         if: matrix.os == 'macos-latest'
-        run: npm run build:mac
+        run: |
+          npm run prepare-dist
+          cd dist
+          npm install --omit=dev
+          cd ..
+          npx electron-builder --mac --config electron-builder.config.js -p always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Linux
         if: matrix.os == 'ubuntu-latest'
-        # Need to install a library required for AppImage compilation
         run: |
           sudo apt-get update
           sudo apt-get install -y libarchive-tools
-          npm run build:linux
+          npm run prepare-dist
+          cd dist
+          npm install --omit=dev
+          cd ..
+          npx electron-builder --linux --config electron-builder.config.js -p always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
