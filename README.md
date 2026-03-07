@@ -108,12 +108,17 @@ Panedora is built using a modern Electron stack, emphasizing security and separa
    npm start
    ```
 
-## Creating a Production Build
-To package Panedora into a standalone executable, use `electron-packager` (ensure it is installed):
+## Automated Builds & Releases
+This project utilizes a GitHub Actions Continuous Integration (CI/CD) pipeline. Whenever a new version tag is published, the workflow automatically provisions Windows, macOS, and Linux runners to build the application and attaches the ready-to-use `.exe`, `.dmg`, and `.AppImage` installers to the [Releases](https://github.com/MitchellBrovarnik/Panedora/releases) page.
+
+You do **not** need to compile the application locally. Simply navigate to the Releases tab to download the platform-specific installer for your system.
+
+### Manual Local Build
+If you wish to test packaging entirely locally, you can use `electron-builder`:
 ```bash
-npx electron-packager . Panedora --platform=win32 --arch=x64 --out=dist
+npm run build:all
 ```
-*(Replace `win32` and `x64` with your target platform and architecture.)*
+*(Compiled output will be generated in the `release/` directory.)*
 
 ## Usage
 
