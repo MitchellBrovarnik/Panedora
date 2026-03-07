@@ -12,7 +12,7 @@ A premium, immersive Pandora desktop client built with Electron. Panedora featur
 > **Pandora Plus or Premium subscription required.** This application only works with an active Pandora Plus or Premium account. Free Pandora accounts cannot log in yet — free account support may be added in a future release. A paid subscription is required to access the API endpoints that Panedora currently relies on.
 
 > ### A Note to Developers
-> This project is source-available and intended for educational purposes. You are free to explore and learn from the code. However, under the CC BY-NC-ND 4.0 license, you may not distribute modified versions of this software. Additionally, to prevent abuse of the legacy Pandora API and maintain the integrity of subscription-tier checks, please do not modify or tamper with the backend logic (`pandora-api.js`, etc.).
+> This project is source-available and intended for educational purposes. You are free to explore and learn from the code. However, under the CC BY-NC-ND 4.0 license, you may not distribute modified versions of this software. Additionally, to prevent abuse of the legacy Pandora API, please do not modify or tamper with any of the application's backend logic.
 
 ## Recent Updates
 
