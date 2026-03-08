@@ -531,11 +531,11 @@ body::before {
     overflow: hidden;
 }
 
-.sidebar-logo svg {
+.sidebar-logo img {
     width: 28px;
     height: 28px;
     flex-shrink: 0;
-    color: var(--accent);
+    object-fit: contain;
 }
 
 .sidebar-logo h1 {
