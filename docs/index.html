@@ -203,23 +203,12 @@
                     <i class='bx bxl-windows'></i>
                     <span><strong>Windows users:</strong> SmartScreen may warn "Windows protected your PC" — this is normal for apps without a code signing certificate. Click <strong>"More info"</strong> then <strong>"Run anyway"</strong> to install. This project is <a href="https://github.com/MitchellBrovarnik/Pandora-Glass" style="color: var(--accent-color);">source-available on GitHub</a> so you can verify the code yourself.</span>
                 </div>
-                <div class="disclaimer-badge" style="margin-top: 0.75rem; text-align: left; flex-direction: column; align-items: flex-start;">
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <i class='bx bxl-apple' style="font-size: 1.5rem;"></i>
-                        <strong>macOS users</strong>
-                    </div>
-                    <div style="margin-top: 0.5rem;">
-                        If you see <strong>"Panedora is damaged and can't be opened"</strong>:
-                        <ol style="margin: 0.5rem 0 0 1.25rem; padding: 0; line-height: 2;">
-                            <li>Open <strong>Terminal</strong> (search for it in Spotlight)</li>
-                            <li>Run: <code style="background: rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 4px;">xattr -cr ~/Downloads/YOUR_FILE.dmg</code></li>
-                            <li>Replace <code style="background: rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 4px;">YOUR_FILE.dmg</code> with the name of the downloaded <code style="background: rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 4px;">.dmg</code> file</li>
-                            <li>Open the <code style="background: rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 4px;">.dmg</code> again — it should work now</li>
-                        </ol>
-                    </div>
-                    <div style="margin-top: 0.75rem; font-size: 0.9rem; opacity: 0.85;">
+                <div class="disclaimer-badge" style="margin-top: 0.75rem;">
+                    <i class='bx bxl-apple'></i>
+                    <span><strong>macOS users:</strong> If you see <strong>"Panedora is damaged and can't be opened"</strong>, open <strong>Terminal</strong> and run: <code style="background: rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 4px;">xattr -cr ~/Downloads/YOUR_FILE.dmg</code> (replace <code style="background: rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 4px;">YOUR_FILE.dmg</code> with the downloaded file's name), then re-open the .dmg.
+                        <br><br>
                         If you instead see <strong>"unidentified developer"</strong>, right-click the app → <strong>"Open"</strong> → click <strong>"Open"</strong> again.
-                    </div>
+                    </span>
                 </div>
             </div>
         </section>
