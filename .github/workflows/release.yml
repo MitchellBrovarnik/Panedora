@@ -8,7 +8,6 @@ jobs:
   build:
     permissions:
       contents: write
-      packages: write
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -40,9 +39,7 @@ jobs:
           cd dist
           npm install --omit=dev
           cd ..
-          npx electron-builder --win --config electron-builder.config.js -p always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          npx electron-builder --win --config electron-builder.config.js
 
       - name: Build macOS
         if: matrix.os == 'macos-latest'
@@ -51,9 +48,7 @@ jobs:
           cd dist
           npm install --omit=dev
           cd ..
-          npx electron-builder --mac --config electron-builder.config.js -p always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          npx electron-builder --mac --config electron-builder.config.js
 
       - name: Build Linux
         if: matrix.os == 'ubuntu-latest'
@@ -64,6 +59,10 @@ jobs:
           cd dist
           npm install --omit=dev
           cd ..
-          npx electron-builder --linux --config electron-builder.config.js -p always
+          npx electron-builder --linux --config electron-builder.config.js
+
+      - name: Upload artifacts to release
+        shell: bash
+        run: gh release upload "$GITHUB_REF_NAME" release/*.*  --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
