@@ -1,6 +1,6 @@
 {
     "name": "panedora",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "A premium Pandora client with a Spotify-inspired native interface",
     "repository": "github:MitchellBrovarnik/Pandora-Glass",
     "main": "main.js",
