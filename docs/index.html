@@ -205,7 +205,7 @@
                 </div>
                 <div class="disclaimer-badge" style="margin-top: 0.75rem;">
                     <i class='bx bxl-apple'></i>
-                    <span><strong>macOS users:</strong> Gatekeeper may block the app saying it's from an "unidentified developer." Right-click the app → <strong>"Open"</strong> → click <strong>"Open"</strong> again, or go to <strong>System Settings → Privacy & Security → "Open Anyway"</strong>.</span>
+                    <span><strong>macOS users:</strong> If you see <strong>"Panedora is damaged and can't be opened"</strong>, open <strong>Terminal</strong> and run: <code style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px;">xattr -cr ~/Downloads/Panedora-1.0.0-arm64.dmg</code> then re-open the .dmg. If you already moved it to Applications, run: <code style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px;">xattr -cr /Applications/Panedora.app</code> — replace the path with wherever Panedora is on your Mac. If you instead see <strong>"unidentified developer"</strong>, right-click the app → <strong>"Open"</strong> → click <strong>"Open"</strong> again, or go to <strong>System Settings → Privacy & Security → "Open Anyway"</strong>.</span>
                 </div>
             </div>
         </section>
