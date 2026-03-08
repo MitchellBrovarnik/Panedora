@@ -102,6 +102,13 @@ You do **not** need to compile the application locally. Simply navigate to the R
 >
 > This project is source-available — you can review the full source code right here to verify it's safe.
 
+### macOS Gatekeeper Notice
+> **Note:** macOS may block the app with a message saying **"Panedora can't be opened because it is from an unidentified developer"** or **"Apple could not verify"**. This is normal for apps that aren't distributed through the Mac App Store or signed with an Apple Developer certificate. To install:
+> 1. Right-click (or Control-click) the app and select **"Open"**
+> 2. Click **"Open"** in the dialog that appears
+>
+> Alternatively, go to **System Settings → Privacy & Security** and click **"Open Anyway"** next to the blocked app message.
+
 ## Usage
 
 1. **Sign In:** Launch the application and sign in using your Pandora credentials. A Pandora Plus or Premium subscription is required — free accounts are not yet supported. An active internet connection is required.
