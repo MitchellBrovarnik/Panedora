@@ -25,6 +25,7 @@ jobs:
           node-version: 20
 
       - name: Sync version from release tag
+        shell: bash
         run: |
           VERSION=${GITHUB_REF_NAME#v}
           npm version "$VERSION" --no-git-tag-version --allow-same-version
