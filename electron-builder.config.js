@@ -5,10 +5,6 @@ module.exports = {
         app: 'dist',
         output: 'release'
     },
-    publish: {
-        provider: 'github',
-        releaseType: 'release'
-    },
     files: ['**/*'],
     win: {
         target: 'nsis',

@@ -39,7 +39,7 @@ jobs:
           cd dist
           npm install --omit=dev
           cd ..
-          npx electron-builder --win --config electron-builder.config.js
+          npx electron-builder --win --config electron-builder.config.js -p never
 
       - name: Build macOS
         if: matrix.os == 'macos-latest'
@@ -48,7 +48,7 @@ jobs:
           cd dist
           npm install --omit=dev
           cd ..
-          npx electron-builder --mac --config electron-builder.config.js
+          npx electron-builder --mac --config electron-builder.config.js -p never
 
       - name: Build Linux
         if: matrix.os == 'ubuntu-latest'
@@ -59,7 +59,7 @@ jobs:
           cd dist
           npm install --omit=dev
           cd ..
-          npx electron-builder --linux --config electron-builder.config.js
+          npx electron-builder --linux --config electron-builder.config.js -p never
 
       - name: Upload artifacts to release
         shell: bash
