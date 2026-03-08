@@ -185,6 +185,20 @@ async function login(username, password) {
     return result;
 }
 
+async function restoreSavedSession() {
+    const creds = config.getCredentials();
+    if (!creds?.email || !creds?.password) {
+        return { success: false, error: 'No saved credentials found.' };
+    }
+
+    console.log('[Main] Attempting sign-in with saved credentials...');
+    const result = await login(creds.email, creds.password);
+    if (!result.success) {
+        console.error('[Main] Saved-credential sign-in failed:', result.error || 'Unknown error');
+    }
+    return result;
+}
+
 async function loadStations() {
     const stations = await api.getStations();
     if (stations === null) {
@@ -346,7 +360,7 @@ ipcMain.handle('APP:INIT', async () => {
     try {
         // Check if already logged in
         if (api.restoreAuth()) {
-           const isPaid = await api.verifySubscription();
+            const isPaid = await api.verifySubscription();
             if (!isPaid) {
                 api.logout();
                 sendLoginStatus(false);
@@ -357,10 +371,15 @@ ipcMain.handle('APP:INIT', async () => {
             sendLoginStatus(true);
             await loadStations();
             return { status: 'authenticated' };
-        } else {
-            sendLoginStatus(false);
-            return { status: 'needsLogin' };
         }
+
+        const restoreResult = await restoreSavedSession();
+        if (restoreResult.success) {
+            return { status: 'authenticated' };
+        }
+
+        sendLoginStatus(false);
+        return { status: 'needsLogin' };
     } catch (err) {
         console.error('[Main] APP:INIT error:', err);
         sendLoginStatus(false);
@@ -625,19 +644,14 @@ app.whenReady().then(() => {
 
         try {
             console.log('[Main] Session expired. Attempting auto-relogin...');
-            const creds = config.getCredentials();
-
-            if (creds && creds.email && creds.password) {
-                try {
-                    // login() already calls api.login and handles updating state and loading stations
-                    const result = await login(creds.email, creds.password);
-                    if (result.success) {
-                        console.log('[Main] Auto-relogin successful.');
-                        return true; // Relogin successful, return true for retry
-                    }
-                } catch (err) {
-                    console.error('[Main] Auto-relogin failed:', err);
+            try {
+                const result = await restoreSavedSession();
+                if (result.success) {
+                    console.log('[Main] Auto-relogin successful.');
+                    return true; // Relogin successful, return true for retry
                 }
+            } catch (err) {
+                console.error('[Main] Auto-relogin failed:', err);
             }
 
             // If we don't have credentials or relogin failed, fall back to manual logout
