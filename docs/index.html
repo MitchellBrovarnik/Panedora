@@ -32,6 +32,7 @@
                 <a href="#features" class="nav-link">Features</a>
                 <a href="#customization" class="nav-link">Customization</a>
                 <a href="#about" class="nav-link">About</a>
+                <a href="#privacy" class="nav-link">Privacy</a>
                 <a href="#download" class="nav-link btn btn-primary">Download</a>
                 <a href="https://github.com/MitchellBrovarnik/Panedora" target="_blank" class="nav-link"><i
                         class='bx bxl-github'
@@ -171,6 +172,32 @@
             </div>
         </section>
 
+        <section id="privacy" class="features reveal">
+            <div class="container">
+                <h2 class="section-title">Privacy &amp; Security</h2>
+                <div class="feature-grid">
+                    <div class="glass-panel feature-card">
+                        <div class="feature-icon"><i class='bx bx-lock-alt'></i></div>
+                        <h3>Direct Authentication</h3>
+                        <p>Your credentials are used solely to authenticate with Pandora. Your password is encrypted at
+                            rest using your operating system's secure keychain (Electron safeStorage).</p>
+                    </div>
+                    <div class="glass-panel feature-card">
+                        <div class="feature-icon"><i class='bx bx-shield'></i></div>
+                        <h3>Local Storage Only</h3>
+                        <p>Authentication tokens and encrypted credentials are stored locally on your machine in your
+                            user data directory. All auth data is fully cleared on sign-out.</p>
+                    </div>
+                    <div class="glass-panel feature-card">
+                        <div class="feature-icon"><i class='bx bx-no-entry'></i></div>
+                        <h3>No Third-Party Tracking</h3>
+                        <p>No personal data is collected or shared with any third-party services. The application
+                            communicates exclusively with Pandora's infrastructure.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <section id="download" class="download reveal">
             <div class="container">
                 <h2 class="section-title">Download Panedora</h2>
@@ -180,20 +207,20 @@
                         not yet supported, but may be in a future release.</span>
                 </div>
                 <div class="download-grid">
-                    <a href="https://github.com/MitchellBrovarnik/Panedora/releases/download/v1.0.0/Panedora-Setup-1.0.0.exe"
-                        class="glass-panel download-card">
+                    <a href="https://github.com/MitchellBrovarnik/Panedora/releases/latest"
+                        class="glass-panel download-card" aria-label="Download Panedora for Windows (opens GitHub releases page)">
                         <i class='bx bxl-windows'></i>
                         <h3>Windows</h3>
                         <span class="btn btn-primary download-btn">Download .exe</span>
                     </a>
-                    <a href="https://github.com/MitchellBrovarnik/Panedora/releases/download/v1.0.0/Panedora-1.0.0-arm64.dmg"
-                        class="glass-panel download-card">
+                    <a href="https://github.com/MitchellBrovarnik/Panedora/releases/latest"
+                        class="glass-panel download-card" aria-label="Download Panedora for macOS (opens GitHub releases page)">
                         <i class='bx bxl-apple'></i>
                         <h3>macOS</h3>
                         <span class="btn btn-primary download-btn">Download .dmg</span>
                     </a>
-                    <a href="https://github.com/MitchellBrovarnik/Panedora/releases/download/v1.0.0/Panedora-1.0.0.AppImage"
-                        class="glass-panel download-card">
+                    <a href="https://github.com/MitchellBrovarnik/Panedora/releases/latest"
+                        class="glass-panel download-card" aria-label="Download Panedora for Linux (opens GitHub releases page)">
                         <i class='bx bxl-tux'></i>
                         <h3>Linux</h3>
                         <span class="btn btn-primary download-btn">Download AppImage</span>
@@ -220,7 +247,7 @@
                 </a>
             </div>
             <div class="footer-right">
-                <p>A source-available, unofficial client for Pandora.</p>
+                <p>A <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" target="_blank" style="color: var(--accent-color); text-decoration: none;">source-available (CC BY-NC-ND 4.0)</a> unofficial client for Pandora.</p>
             </div>
         </div>
         <div class="container legal-jargon">
