@@ -89,4 +89,19 @@ document.addEventListener('DOMContentLoaded', () => {
             orb.style.transform = '';
         });
     });
+
+    // Fetch latest release and update download links
+    fetch('https://api.github.com/repos/MitchellBrovarnik/Panedora/releases/latest')
+        .then(res => res.json())
+        .then(release => {
+            const assets = release.assets || [];
+            const winAsset = assets.find(a => a.name.endsWith('.exe'));
+            const macAsset = assets.find(a => a.name.endsWith('.dmg'));
+            const linuxAsset = assets.find(a => a.name.endsWith('.AppImage'));
+
+            if (winAsset) document.getElementById('download-win').href = winAsset.browser_download_url;
+            if (macAsset) document.getElementById('download-mac').href = macAsset.browser_download_url;
+            if (linuxAsset) document.getElementById('download-linux').href = linuxAsset.browser_download_url;
+        })
+        .catch(() => {});
 });
