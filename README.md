@@ -109,13 +109,9 @@ You do **not** need to compile the application locally. Simply navigate to the R
 >
 > **If you see the "damaged" message**, open **Terminal** and run:
 > ```
-> xattr -cr ~/Downloads/Panedora-1.0.0-arm64.dmg
+> xattr -cr ~/Downloads/<the downloaded .dmg file>
 > ```
-> Then open the `.dmg` and drag Panedora to Applications as usual. If you already moved it to Applications, run:
-> ```
-> xattr -cr /Applications/Panedora.app
-> ```
-> **Note:** Replace the path above with wherever Panedora is located on your Mac (e.g. `~/Downloads/Panedora.app` if you haven't moved it).
+> Replace `<the downloaded .dmg file>` with the actual filename you downloaded (e.g. `Panedora-1.0.0-arm64.dmg`). Then open the `.dmg` again and drag Panedora to Applications as usual.
 >
 > **If you see the "unidentified developer" message**, try:
 > 1. Right-click (or Control-click) the app and select **"Open"**
