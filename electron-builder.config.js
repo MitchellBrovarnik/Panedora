@@ -21,7 +21,13 @@ module.exports = {
     },
     mac: {
         target: 'dmg',
-        icon: 'dist/assets/icon.icns'
+        icon: 'dist/assets/icon.icns',
+        identity: null,
+        hardenedRuntime: false,
+        gatekeeperAssess: false
+    },
+    dmg: {
+        writeUpdateInfo: false
     },
     linux: {
         target: ['AppImage', 'deb'],
