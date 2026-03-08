@@ -95,6 +95,13 @@ This project utilizes a GitHub Actions Continuous Integration (CI/CD) pipeline. 
 
 You do **not** need to compile the application locally. Simply navigate to the Releases tab to download the platform-specific installer for your system.
 
+### Windows SmartScreen Notice
+> **Note:** Windows may show a SmartScreen warning saying **"Windows protected your PC"** when you run the installer. This is normal for apps from independent developers that haven't purchased a code signing certificate. To install:
+> 1. Click **"More info"**
+> 2. Click **"Run anyway"**
+>
+> This project is source-available — you can review the full source code right here to verify it's safe.
+
 ## Usage
 
 1. **Sign In:** Launch the application and sign in using your Pandora credentials. A Pandora Plus or Premium subscription is required — free accounts are not yet supported. An active internet connection is required.
@@ -123,7 +130,7 @@ Panedora is designed with user privacy as a priority:
 
 ## License
 
-This project is licensed under the CC BY-NC-ND 4.0 License. See the LICENSE file for details.
+This project is **source-available** under the [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/) License. You are free to view and study the source code, but commercial use and derivative distribution are not permitted. See the LICENSE file for details.
 
 ## Disclaimer
 
