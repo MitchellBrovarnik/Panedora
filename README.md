@@ -105,11 +105,23 @@ You do **not** need to compile the application locally. Simply navigate to the R
 > This project is source-available — you can review the full source code right here to verify it's safe.
 
 ### macOS Gatekeeper Notice
-> **Note:** macOS may block the app with a message saying **"Panedora can't be opened because it is from an unidentified developer"** or **"Apple could not verify"**. This is normal for apps that aren't distributed through the Mac App Store or signed with an Apple Developer certificate. To install:
+> **Note:** macOS may block the app with a message saying **"Panedora is damaged and can't be opened"**, **"Panedora can't be opened because it is from an unidentified developer"**, or **"Apple could not verify"**. This is normal for apps that aren't distributed through the Mac App Store or signed with an Apple Developer certificate.
+>
+> **If you see the "damaged" message**, open **Terminal** and run:
+> ```
+> xattr -cr ~/Downloads/Panedora-1.0.0-arm64.dmg
+> ```
+> Then open the `.dmg` and drag Panedora to Applications as usual. If you already moved it to Applications, run:
+> ```
+> xattr -cr /Applications/Panedora.app
+> ```
+> **Note:** Replace the path above with wherever Panedora is located on your Mac (e.g. `~/Downloads/Panedora.app` if you haven't moved it).
+>
+> **If you see the "unidentified developer" message**, try:
 > 1. Right-click (or Control-click) the app and select **"Open"**
 > 2. Click **"Open"** in the dialog that appears
 >
-> Alternatively, go to **System Settings → Privacy & Security** and click **"Open Anyway"** next to the blocked app message.
+> Or go to **System Settings → Privacy & Security** and click **"Open Anyway"** next to the blocked app message.
 
 ## Usage
 
