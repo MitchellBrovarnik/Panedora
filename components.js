@@ -10,7 +10,7 @@ function createCard(image, title, subtitle, dataId) {
   return `
     <div class="card" id="${id}" data-id="${dataId || ''}" tabindex="0">
       <div class="card-image-container">
-        <img class="card-image" src="${image || placeholder}" alt="${title}">
+        <img class="card-image" src="${image || placeholder}" alt="${title}" loading="lazy">
         <button class="card-play-button" aria-label="Play ${title}">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
         </button>

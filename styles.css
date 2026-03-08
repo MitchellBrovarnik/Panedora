@@ -881,14 +881,19 @@ body::before {
 
 .card {
     background: var(--glass);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
     border: 1px solid var(--glass-border);
     border-radius: var(--r);
     padding: 16px;
     cursor: pointer;
     transition: transform 350ms var(--ease), border-color 350ms var(--ease), background 350ms var(--ease), box-shadow 350ms var(--ease);
     position: relative;
+    will-change: transform;
+}
+
+/* Only apply backdrop-filter in small grids (home page) to avoid GPU overload in library */
+.card-grid:not(#library-cards) .card {
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
 }
 
 .card:hover {
@@ -1864,8 +1869,8 @@ body::before {
     animation: fadeIn 400ms var(--ease) forwards;
 }
 
-/* Staggered card entry — only first 8 cards animate, rest appear instantly */
-.card-grid .card:nth-child(-n+8) {
+/* Staggered card entry — only for small grids (home), not the library */
+.card-grid:not(#library-cards) .card:nth-child(-n+8) {
     animation: fadeIn 450ms var(--ease) forwards;
 }
 
