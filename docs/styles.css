@@ -205,9 +205,15 @@ h1, h2, h3 {
 .logo-mark {
     width: 2.2rem;
     height: 2.2rem;
-    display: block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
-    object-fit: contain;
+    font-size: 1.2rem;
+    font-weight: 800;
+    line-height: 1;
+    color: #fff;
+    background: linear-gradient(135deg, var(--primary), #6a7dff);
     border-radius: 0.5rem;
 }
 
