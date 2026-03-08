@@ -203,18 +203,12 @@ h1, h2, h3 {
 }
 
 .logo-mark {
+    display: block;
     width: 2.2rem;
     height: 2.2rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
     flex-shrink: 0;
-    font-size: 1.2rem;
-    font-weight: 800;
-    line-height: 1;
-    color: #fff;
-    background: linear-gradient(135deg, var(--primary), #6a7dff);
     border-radius: 0.5rem;
+    object-fit: contain;
 }
 
 .nav-links {
@@ -559,7 +553,7 @@ footer {
         gap: 0;
     }
 
-    .nav-links .nav-link:not(.nav-github) {
+    .nav-links .nav-link {
         display: none;
     }
 
@@ -599,11 +593,6 @@ footer {
 
     .text-container {
         padding: 2.5rem 1.5rem;
-    }
-
-    .nav-links a:not(.btn) {
-        display: inline-flex;
-        font-size: 0.9rem;
     }
 
     .section-title {
