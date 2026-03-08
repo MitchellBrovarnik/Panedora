@@ -209,7 +209,7 @@ h1, h2, h3 {
     flex-shrink: 0;
     border-radius: 0.5rem;
     object-fit: contain;
-    margin-right: -0.7rem; /* compensates for ~30% total transparent padding in icon.png (16% left + 14% right) */
+    margin-right: -0.6rem; /* compensates for ~30% total transparent padding in icon.png (16% left + 14% right) */
 }
 
 .nav-links {
