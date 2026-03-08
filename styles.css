@@ -887,7 +887,7 @@ body::before {
     border-radius: var(--r);
     padding: 16px;
     cursor: pointer;
-    transition: all 350ms var(--ease);
+    transition: transform 350ms var(--ease), border-color 350ms var(--ease), background 350ms var(--ease), box-shadow 350ms var(--ease);
     position: relative;
 }
 
@@ -1864,10 +1864,9 @@ body::before {
     animation: fadeIn 400ms var(--ease) forwards;
 }
 
-/* Staggered card entry */
-.card-grid .card {
-    animation: fadeIn 450ms var(--ease) both;
-    opacity: 0;
+/* Staggered card entry — only first 8 cards animate, rest appear instantly */
+.card-grid .card:nth-child(-n+8) {
+    animation: fadeIn 450ms var(--ease) forwards;
 }
 
 .card-grid .card:nth-child(1) {
@@ -1900,10 +1899,6 @@ body::before {
 
 .card-grid .card:nth-child(8) {
     animation-delay: 350ms;
-}
-
-.card-grid .card:nth-child(n+9) {
-    animation-delay: 400ms;
 }
 
 /* Hide heart from player bar — feedback is now on Now Playing page */
