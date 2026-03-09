@@ -358,27 +358,20 @@ async function thumbDown() {
 // Initialize app
 ipcMain.handle('APP:INIT', async () => {
     try {
-        // Check if already logged in
-        if (api.restoreAuth()) {
-            const isPaid = await api.verifySubscription();
-            if (!isPaid) {
-                api.logout();
-                sendLoginStatus(false);
-                sendToUI('UI:ERROR', { message: 'Panedora requires a Pandora Premium or Plus subscription.' });
-                return { status: 'needsLogin' };
-            }
-
-            sendLoginStatus(true);
-            await loadStations();
-            return { status: 'authenticated' };
-        }
-
+        // Always do a fresh login with saved credentials on startup.
+        // Auth tokens expire between sessions, so restoring a stale token
+        // just causes 401s that trigger the relogin cascade anyway.
         const restoreResult = await restoreSavedSession();
         if (restoreResult.success) {
             return { status: 'authenticated' };
         }
 
+        // If restoreSavedSession failed (no credentials or login rejected),
+        // show the login screen. Don't wipe credentials — the user can retry.
         sendLoginStatus(false);
+        if (restoreResult.error) {
+            sendToUI('UI:ERROR', { message: restoreResult.error });
+        }
         return { status: 'needsLogin' };
     } catch (err) {
         console.error('[Main] APP:INIT error:', err);
@@ -654,9 +647,11 @@ app.whenReady().then(() => {
                 console.error('[Main] Auto-relogin failed:', err);
             }
 
-            // If we don't have credentials or relogin failed, fall back to manual logout
-            console.log('[Main] Auto-relogin not possible or failed. Logging out.');
-            api.logout();
+            // Relogin failed — clear tokens but KEEP saved credentials so the
+            // next app launch (or manual login) can still use them.
+            console.log('[Main] Auto-relogin failed. Clearing session tokens.');
+            config.clearTokens();
+            api.authToken = null;
             sendLoginStatus(false);
             return false;
         } finally {

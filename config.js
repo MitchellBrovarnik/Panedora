@@ -132,6 +132,12 @@ module.exports = {
         return token !== null && token !== undefined;
     },
 
+    // Clear only session tokens (keep credentials for auto-relogin on next launch)
+    clearTokens: () => {
+        setConfig('authToken', null);
+        setConfig('csrfToken', null);
+    },
+
     // Clear all data (logout) — full wipe
     clearAll: () => {
         setConfig('credentials', null);
