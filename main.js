@@ -645,9 +645,32 @@ app.whenReady().then(() => {
         try {
             console.log('[Main] Session expired. Attempting auto-relogin...');
             try {
-                const result = await restoreSavedSession();
+                // Re-authenticate without triggering a full UI re-render.
+                // login() calls sendLoginStatus(true) which flashes the UI and
+                // wipes the player state. Instead, just re-auth silently.
+                const creds = config.getCredentials();
+                if (!creds?.email || !creds?.password) {
+                    throw new Error('No saved credentials');
+                }
+                console.log('[Main] Attempting sign-in with saved credentials...');
+                const result = await api.login(creds.email, creds.password);
                 if (result.success) {
                     console.log('[Main] Auto-relogin successful.');
+
+                    // Refresh the playlist so audio URLs aren't expired
+                    if (currentStation) {
+                        const currentTrack = currentPlaylist[currentTrackIndex];
+                        console.log('[Main] Refreshing playlist for current station...');
+                        const playlistResult = await api.getPlaylist(currentStation.stationId, false, null, { skipRetry: true });
+                        if (playlistResult.tracks?.length > 0) {
+                            // Replace remaining tracks with fresh ones
+                            currentPlaylist = currentPlaylist.slice(0, currentTrackIndex).concat(playlistResult.tracks);
+                            // Stay on the first fresh track
+                            currentTrackIndex = Math.min(currentTrackIndex, currentPlaylist.length - 1);
+                            sendPlayerState(getCurrentState());
+                        }
+                    }
+
                     return true; // Relogin successful, return true for retry
                 }
             } catch (err) {
