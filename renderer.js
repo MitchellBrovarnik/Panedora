@@ -1692,6 +1692,7 @@ function initEventListeners() {
 function initAPIListeners() {
     // Manage a single Audio instance to prevent overlapping event listeners and track skipping
     let currentAudio = null;
+    let consecutiveErrors = 0; // Prevent chain-skipping on stale/expired URLs
 
     // Player state updates
     window.api.onState((state) => {
@@ -1731,6 +1732,15 @@ function initAPIListeners() {
                         return;
                     }
 
+                    consecutiveErrors++;
+
+                    // Stop chain-skipping after 3 consecutive errors (likely expired URLs)
+                    if (consecutiveErrors >= 3) {
+                        console.warn('[UI] Too many consecutive audio errors — stopping auto-skip. URLs may be expired.');
+                        consecutiveErrors = 0;
+                        return;
+                    }
+
                     // Only auto-skip if we are actually logged in and trying to play
                     if (AppState.isLoggedIn) {
                         setTimeout(() => window.api.player.next(), 2000);
@@ -1743,6 +1753,7 @@ function initAPIListeners() {
                 console.log('[UI] Loading new audio source');
                 currentAudio.src = state.audioURL;
                 currentAudio.play().then(() => {
+                    consecutiveErrors = 0; // Reset on successful play
 
                     // Web Audio API requires a user gesture. This is a safe place to init.
                     if (window.visualizer) {

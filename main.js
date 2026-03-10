@@ -26,6 +26,7 @@ let isMiniPlayer = false;
 let savedBounds = null; // Save window position/size before entering mini mode
 let isLoadingMoreTracks = false;
 let streamReclaimed = false;
+let isPaused = false; // Track pause state so we don't force-play on state updates
 
 // ============================================================================
 // Window Creation
@@ -158,7 +159,7 @@ function getCurrentState() {
         coverArt: PandoraAPI.getHighResArt(track?.albumArt),
         time: 0, // UI will track via audio element
         duration: track?.trackLength || 0,
-        isPlaying: !!(track?.audioURL), // Auto-play when we have a valid audio URL
+        isPlaying: !!(track?.audioURL) && !isPaused, // Respect pause state
         trackToken: track?.trackToken || null,
         audioURL: track?.audioURL || null,
         feedback: currentFeedback, // Send current feedback to UI
@@ -227,6 +228,7 @@ async function playStation(stationId, startingAtTrackId = null) {
     }
 
     currentTrackIndex = 0;
+    isPaused = false; // New station = start playing
 
     if (currentPlaylist.length > 0) {
         // Report track started
@@ -258,6 +260,7 @@ async function skipTrack() {
         return getCurrentState();
     }
 
+    isPaused = false; // Skipping implies intent to play
     currentTrackIndex++;
 
     // Prefetch when 2 tracks remain (fast-fail — no 12s retry for background fetches)
@@ -427,9 +430,13 @@ ipcMain.handle('PLAYER:CMD', async (event, { action, value }) => {
             await thumbDown();
             return { success: true };
         case 'toggle':
+            isPaused = !isPaused;
+            return { success: true, action };
         case 'play':
+            isPaused = false;
+            return { success: true, action };
         case 'pause':
-            // UI handles audio - just acknowledge
+            isPaused = true;
             return { success: true, action };
         case 'volume':
             return { success: true, volume: value };
