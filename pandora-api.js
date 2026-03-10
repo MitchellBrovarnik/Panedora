@@ -10,15 +10,13 @@ class PandoraAPI {
         this.baseUrl = 'www.pandora.com';
         this.apiPath = '/api';
         this.authToken = config.getAuthToken();
-        this.csrfToken = config.getCsrfToken();
         this.onSessionExpired = null; // Callback for main process
 
-        // Generate CSRF token if missing - Pandora API docs say client can generate their own
-        // The API just validates that the X-CsrfToken header matches the csrftoken cookie
-        if (!this.csrfToken) {
-            this.csrfToken = this.generateCsrfToken();
-            config.setCsrfToken(this.csrfToken);
-        }
+        // Always generate a fresh CSRF token on startup.
+        // Stale tokens from a previous session can cause Pandora to reject requests.
+        // The API just validates that the X-CsrfToken header matches the csrftoken cookie.
+        this.csrfToken = this.generateCsrfToken();
+        config.setCsrfToken(this.csrfToken);
     }
 
     /**
@@ -29,15 +27,15 @@ class PandoraAPI {
     }
 
     /**
-     * Make an API request
+     * Build request headers.
+     * Omits X-AuthToken for login endpoints — login authenticates via
+     * username/password in the body, and sending a stale token causes
+     * Pandora to reject the request after the token has expired.
      */
-    async request(endpoint, data = {}) {
-        const { net } = require('electron');
-        const url = `https://${this.baseUrl}${this.apiPath}${endpoint}`;
-
+    _buildHeaders(endpoint) {
+        const isLogin = endpoint === '/v1/auth/login';
         const headers = {
             'Content-Type': 'application/json',
-            'X-AuthToken': this.authToken || '',
             'X-CsrfToken': this.csrfToken || '',
             'User-Agent': `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${process.versions.chrome} Safari/537.36`,
             'Accept': 'application/json, text/plain, */*',
@@ -51,6 +49,20 @@ class PandoraAPI {
             'Sec-Fetch-Mode': 'cors',
             'Sec-Fetch-Site': 'same-origin'
         };
+        if (!isLogin) {
+            headers['X-AuthToken'] = this.authToken || '';
+        }
+        return headers;
+    }
+
+    /**
+     * Make an API request
+     */
+    async request(endpoint, data = {}) {
+        const { net } = require('electron');
+        const url = `https://${this.baseUrl}${this.apiPath}${endpoint}`;
+
+        const headers = this._buildHeaders(endpoint);
 
         const { session } = require('electron');
         const cookieSession = session.defaultSession;
@@ -140,22 +152,7 @@ class PandoraAPI {
      */
     async _requestInternal(url, endpoint, data) {
         const { net } = require('electron');
-        const headers = {
-            'Content-Type': 'application/json',
-            'X-AuthToken': this.authToken || '',
-            'X-CsrfToken': this.csrfToken || '',
-            'User-Agent': `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${process.versions.chrome} Safari/537.36`,
-            'Accept': 'application/json, text/plain, */*',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Origin': 'https://www.pandora.com',
-            'Referer': 'https://www.pandora.com/',
-            'sec-ch-ua': `"Not_A Brand";v="8", "Chromium";v="${process.versions.chrome.split('.')[0]}", "Google Chrome";v="${process.versions.chrome.split('.')[0]}"`,
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"Windows"',
-            'Sec-Fetch-Dest': 'empty',
-            'Sec-Fetch-Mode': 'cors',
-            'Sec-Fetch-Site': 'same-origin'
-        };
+        const headers = this._buildHeaders(endpoint);
 
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 30000);
