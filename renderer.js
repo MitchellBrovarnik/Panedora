@@ -1615,6 +1615,16 @@ function initEventListeners() {
         });
     }
 
+    // Toggle volume slider visibility in mini mode
+    const volumeBtn = document.getElementById('volume-btn');
+    if (volumeBtn) {
+        volumeBtn.addEventListener('click', () => {
+            if (document.body.classList.contains('mini-mode')) {
+                DOM.volumeSlider.classList.toggle('collapsed');
+            }
+        });
+    }
+
     // Custom title bar controls
     const titleMinBtn = document.getElementById('titlebar-minimize');
     const titleMaxBtn = document.getElementById('titlebar-maximize');
@@ -1911,8 +1921,13 @@ function initAPIListeners() {
 
     // Mini player mode toggle
     window.api.onMiniMode((data) => {
-
         document.body.classList.toggle('mini-mode', data.isMini);
+        // Collapse volume slider by default in mini mode, reset when leaving
+        if (data.isMini) {
+            DOM.volumeSlider.classList.add('collapsed');
+        } else {
+            DOM.volumeSlider.classList.remove('collapsed');
+        }
     });
 
     window.api.onError((data) => {

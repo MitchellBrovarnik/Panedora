@@ -119,9 +119,39 @@ body {
     color: white;
 }
 
-/* Mini Thumbs — hidden by default, shown in mini mode */
+/* Mini Thumbs — shown in the player footer */
 .mini-thumbs {
-    display: none;
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    margin-left: 4px;
+}
+
+.mini-thumb-btn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    color: var(--text-2);
+    transition: color 150ms ease, background 150ms ease;
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+.mini-thumb-btn:hover {
+    color: var(--accent);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.mini-thumb-btn.liked {
+    color: #1db954;
+}
+
+.mini-thumb-btn.disliked {
+    color: #e81123;
 }
 
 button {
@@ -2540,6 +2570,15 @@ body.mini-mode #lyrics-btn {
 body.mini-mode .volume-slider {
     display: block;
     width: 60px;
+    overflow: hidden;
+    transition: width 200ms ease, opacity 200ms ease;
+}
+
+body.mini-mode .volume-slider.collapsed {
+    width: 0;
+    opacity: 0;
+    padding: 0;
+    margin: 0;
 }
 
 body.mini-mode #volume-btn {
