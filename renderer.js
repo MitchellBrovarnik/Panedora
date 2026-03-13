@@ -102,6 +102,12 @@ function renderPage(page) {
         if (lyricsOverlay) lyricsOverlay.classList.remove('visible');
     }
 
+    // Hide footer thumbs when on Now Playing (they appear there instead)
+    const miniThumbs = document.getElementById('mini-thumbs');
+    if (miniThumbs) {
+        miniThumbs.style.display = page === 'nowplaying' ? 'none' : '';
+    }
+
     switch (page) {
         case 'home':
             renderHomePage();
