@@ -681,35 +681,8 @@ function applyEffectSpeed(speed) {
     const currentEffect = AppState.currentEffect || 'waves';
     if (currentEffect.startsWith('reactive-') || currentEffect === 'static') return;
 
-    const mult = 1 / speed; // higher speed = shorter duration
-    const container = document.getElementById('bg-effects');
-    if (!container) return;
-
-    // Apply scaled durations to all animated children
-    // Pause animations, update duration, then resume to avoid timeline jumps
-    const animated = [];
-    container.querySelectorAll('*').forEach(el => {
-        const cs = getComputedStyle(el);
-        const dur = cs.animationDuration;
-        if (dur && dur !== '0s' && !el.dataset.baseDuration) {
-            el.dataset.baseDuration = dur;
-        }
-        if (el.dataset.baseDuration) {
-            animated.push(el);
-            el.style.animationPlayState = 'paused';
-        }
-    });
-
-    // Force reflow so pause takes effect, then apply new durations and resume
-    void container.offsetWidth;
-    animated.forEach(el => {
-        const base = parseFloat(el.dataset.baseDuration);
-        el.style.animationDuration = (base * mult) + 's';
-    });
-    void container.offsetWidth;
-    animated.forEach(el => {
-        el.style.animationPlayState = 'running';
-    });
+    // Re-render the effect entirely so new durations apply from a fresh start
+    applyBgEffect(currentEffect);
 }
 
 const LYRICS_STYLES = {
@@ -918,9 +891,18 @@ function applyBgEffect(effectId) {
         }
     }
 
-    // Re-apply speed to the new effect elements
-    const savedSpeed = parseFloat(localStorage.getItem('panedora-effect-speed')) || 1;
-    requestAnimationFrame(() => applyEffectSpeed(savedSpeed));
+    // Apply speed scaling to newly created effect elements
+    const speedMult = 1 / (AppState.effectSpeed || parseFloat(localStorage.getItem('panedora-effect-speed')) || 1);
+    if (speedMult !== 1 && container && !effectId.startsWith('reactive-') && effectId !== 'static') {
+        requestAnimationFrame(() => {
+            container.querySelectorAll('*').forEach(el => {
+                const dur = getComputedStyle(el).animationDuration;
+                if (dur && dur !== '0s') {
+                    el.style.animationDuration = (parseFloat(dur) * speedMult) + 's';
+                }
+            });
+        });
+    }
 }
 
 function renderSettingsPage() {
