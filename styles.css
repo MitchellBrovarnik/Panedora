@@ -2626,9 +2626,12 @@ body.mini-mode #volume-btn svg {
     height: 18px;
 }
 
-/* Clickable buttons in draggable area */
+/* Clickable buttons and interactive containers in draggable area */
 body.mini-mode .player-footer button,
-body.mini-mode .player-footer input {
+body.mini-mode .player-footer input,
+body.mini-mode .volume-controls,
+body.mini-mode .control-buttons,
+body.mini-mode .mini-thumbs {
     -webkit-app-region: no-drag;
 }
 
