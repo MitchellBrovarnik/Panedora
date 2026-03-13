@@ -2392,7 +2392,6 @@ body.mini-mode .player-footer {
     border-radius: 12px;
     border-top: none;
     -webkit-app-region: drag;
-    justify-content: space-between;
     z-index: 5;
 }
 
@@ -2411,7 +2410,7 @@ body.mini-mode .volume-btn svg {
 
 /* Album Art */
 body.mini-mode .now-playing {
-    flex: 0 0 200px;
+    flex: 1;
     gap: 8px;
     overflow: hidden;
     position: relative;
@@ -2563,7 +2562,7 @@ body.mini-mode .volume-controls {
     display: flex;
     gap: 6px;
     align-items: center;
-    margin-left: 0;
+    margin-left: auto;
     position: relative;
     z-index: 10;
     background: rgba(15, 15, 20, 0.45);
