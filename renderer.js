@@ -1624,14 +1624,22 @@ function initEventListeners() {
     // Expand/collapse volume slider on hover in mini mode
     const volumeControls = document.querySelector('.volume-controls');
     if (volumeControls) {
+        let volumeCollapseTimer = null;
         volumeControls.addEventListener('mouseenter', () => {
             if (document.body.classList.contains('mini-mode')) {
+                if (volumeCollapseTimer) {
+                    clearTimeout(volumeCollapseTimer);
+                    volumeCollapseTimer = null;
+                }
                 DOM.volumeSlider.classList.remove('collapsed');
             }
         });
         volumeControls.addEventListener('mouseleave', () => {
             if (document.body.classList.contains('mini-mode')) {
-                DOM.volumeSlider.classList.add('collapsed');
+                volumeCollapseTimer = setTimeout(() => {
+                    DOM.volumeSlider.classList.add('collapsed');
+                    volumeCollapseTimer = null;
+                }, 300);
             }
         });
     }

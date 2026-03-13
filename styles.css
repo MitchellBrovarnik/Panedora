@@ -2371,7 +2371,7 @@ body.mini-mode .player-footer {
     height: 100vh;
     display: flex;
     align-items: center;
-    padding: 10px 14px;
+    padding: 4px 14px;
     background: transparent;
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
@@ -2572,6 +2572,23 @@ body.mini-mode .volume-slider {
     width: 60px;
     overflow: hidden;
     transition: width 200ms ease, opacity 200ms ease;
+}
+
+body.mini-mode .volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    background: white;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 6px var(--accent-glow);
+}
+
+body.mini-mode .volume-slider::-webkit-slider-runnable-track {
+    height: 4px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 2px;
 }
 
 body.mini-mode .volume-slider.collapsed {
