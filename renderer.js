@@ -681,8 +681,14 @@ function applyEffectSpeed(speed) {
     const currentEffect = AppState.currentEffect || 'waves';
     if (currentEffect.startsWith('reactive-') || currentEffect === 'static') return;
 
-    // Re-render the effect entirely so new durations apply from a fresh start
-    applyBgEffect(currentEffect);
+    // Use Web Animations API playbackRate — changes speed without jumping
+    const container = document.getElementById('bg-effects');
+    if (!container) return;
+    container.querySelectorAll('*').forEach(el => {
+        el.getAnimations().forEach(anim => {
+            anim.playbackRate = speed;
+        });
+    });
 }
 
 const LYRICS_STYLES = {
@@ -891,15 +897,14 @@ function applyBgEffect(effectId) {
         }
     }
 
-    // Apply speed scaling to newly created effect elements
-    const speedMult = 1 / (AppState.effectSpeed || parseFloat(localStorage.getItem('panedora-effect-speed')) || 1);
-    if (speedMult !== 1 && container && !effectId.startsWith('reactive-') && effectId !== 'static') {
+    // Apply saved speed via playbackRate on newly created elements
+    const speed = AppState.effectSpeed || parseFloat(localStorage.getItem('panedora-effect-speed')) || 1;
+    if (speed !== 1 && container && !effectId.startsWith('reactive-') && effectId !== 'static') {
         requestAnimationFrame(() => {
             container.querySelectorAll('*').forEach(el => {
-                const dur = getComputedStyle(el).animationDuration;
-                if (dur && dur !== '0s') {
-                    el.style.animationDuration = (parseFloat(dur) * speedMult) + 's';
-                }
+                el.getAnimations().forEach(anim => {
+                    anim.playbackRate = speed;
+                });
             });
         });
     }
