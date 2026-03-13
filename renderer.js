@@ -45,7 +45,8 @@ const AppState = {
     searchResults: null,
     searchQuery: '',
     isLoading: true,
-    isLoggedIn: false
+    isLoggedIn: false,
+    effectSpeed: 1
 };
 
 // ============================================================================
@@ -667,6 +668,35 @@ function loadSavedEffect() {
     } else {
         applyBgEffect('waves'); // Default fallback
     }
+    // Apply saved speed
+    const savedSpeed = parseFloat(localStorage.getItem('panedora-effect-speed')) || 1;
+    applyEffectSpeed(savedSpeed);
+}
+
+function applyEffectSpeed(speed) {
+    localStorage.setItem('panedora-effect-speed', speed);
+    AppState.effectSpeed = speed;
+
+    // Skip reactive effects and static — only scale non-reactive CSS animations
+    const currentEffect = AppState.currentEffect || 'waves';
+    if (currentEffect.startsWith('reactive-') || currentEffect === 'static') return;
+
+    const mult = 1 / speed; // higher speed = shorter duration
+    const container = document.getElementById('bg-effects');
+    if (!container) return;
+
+    // Apply scaled durations to all animated children
+    container.querySelectorAll('*').forEach(el => {
+        const cs = getComputedStyle(el);
+        const dur = cs.animationDuration;
+        if (dur && dur !== '0s' && !el.dataset.baseDuration) {
+            el.dataset.baseDuration = dur;
+        }
+        if (el.dataset.baseDuration) {
+            const base = parseFloat(el.dataset.baseDuration);
+            el.style.animationDuration = (base * mult) + 's';
+        }
+    });
 }
 
 const LYRICS_STYLES = {
@@ -875,6 +905,9 @@ function applyBgEffect(effectId) {
         }
     }
 
+    // Re-apply speed to the new effect elements
+    const savedSpeed = parseFloat(localStorage.getItem('panedora-effect-speed')) || 1;
+    requestAnimationFrame(() => applyEffectSpeed(savedSpeed));
 }
 
 function renderSettingsPage() {
@@ -938,6 +971,20 @@ function renderSettingsPage() {
         <h2 class="section-title">Background Effects</h2>
         <p class="settings-description">Make the background feel alive with animated effects.</p>
         <div class="theme-grid" style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));">${effectButtons}</div>
+        ${!currentEffect.startsWith('reactive-') && currentEffect !== 'static' ? `
+        <div class="effect-speed-control" style="margin-top: 20px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <label style="font-size: 13px; font-weight: 600; color: var(--text-1);">Animation Speed</label>
+            <span id="speed-label" style="font-size: 12px; color: var(--text-2);">${(parseFloat(localStorage.getItem('panedora-effect-speed')) || 1).toFixed(1)}x</span>
+          </div>
+          <input type="range" id="effect-speed-slider" min="0.2" max="3" step="0.1" value="${parseFloat(localStorage.getItem('panedora-effect-speed')) || 1}"
+            style="width: 100%; height: 4px; -webkit-appearance: none; appearance: none; background: rgba(255,255,255,0.1); border-radius: 2px; cursor: pointer; accent-color: var(--accent);">
+          <div style="display: flex; justify-content: space-between; margin-top: 4px;">
+            <span style="font-size: 10px; color: var(--text-3);">Slow</span>
+            <span style="font-size: 10px; color: var(--text-3);">Fast</span>
+          </div>
+        </div>
+        ` : ''}
       </section>
 
       <section class="settings-section">
@@ -973,6 +1020,17 @@ function renderSettingsPage() {
             renderSettingsPage();
         });
     });
+
+    // Effect speed slider
+    const speedSlider = document.getElementById('effect-speed-slider');
+    const speedLabel = document.getElementById('speed-label');
+    if (speedSlider) {
+        speedSlider.addEventListener('input', () => {
+            const speed = parseFloat(speedSlider.value);
+            if (speedLabel) speedLabel.textContent = speed.toFixed(1) + 'x';
+            applyEffectSpeed(speed);
+        });
+    }
 }
 
 function renderNowPlayingPage() {

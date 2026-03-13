@@ -1323,6 +1323,18 @@ body::before {
     box-shadow: 0 0 6px var(--accent-glow);
 }
 
+/* Effect speed slider */
+#effect-speed-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    background: var(--accent);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 8px var(--accent-glow);
+}
+
 /* ============================================================================
    Loading / Empty
    ============================================================================ */
