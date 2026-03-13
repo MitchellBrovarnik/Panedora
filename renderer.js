@@ -1680,9 +1680,22 @@ function initEventListeners() {
     }
 
     // Expand/collapse volume slider on hover in mini mode
+    // Uses pointer position checking to avoid glitchy collapse from layout shifts
     const volumeControls = document.querySelector('.volume-controls');
     if (volumeControls) {
         let volumeCollapseTimer = null;
+        const PAD = 12; // extra pixels around the capsule that count as "inside"
+
+        function isPointerOverVolume(e) {
+            const rect = volumeControls.getBoundingClientRect();
+            return (
+                e.clientX >= rect.left - PAD &&
+                e.clientX <= rect.right + PAD &&
+                e.clientY >= rect.top - PAD &&
+                e.clientY <= rect.bottom + PAD
+            );
+        }
+
         volumeControls.addEventListener('mouseenter', () => {
             if (document.body.classList.contains('mini-mode')) {
                 if (volumeCollapseTimer) {
@@ -1692,12 +1705,15 @@ function initEventListeners() {
                 DOM.volumeSlider.classList.remove('collapsed');
             }
         });
-        volumeControls.addEventListener('mouseleave', () => {
+
+        volumeControls.addEventListener('mouseleave', (e) => {
             if (document.body.classList.contains('mini-mode')) {
+                // If pointer is still within the padded zone, don't collapse
+                if (isPointerOverVolume(e)) return;
                 volumeCollapseTimer = setTimeout(() => {
                     DOM.volumeSlider.classList.add('collapsed');
                     volumeCollapseTimer = null;
-                }, 300);
+                }, 400);
             }
         });
     }
