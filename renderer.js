@@ -686,6 +686,8 @@ function applyEffectSpeed(speed) {
     if (!container) return;
 
     // Apply scaled durations to all animated children
+    // Pause animations, update duration, then resume to avoid timeline jumps
+    const animated = [];
     container.querySelectorAll('*').forEach(el => {
         const cs = getComputedStyle(el);
         const dur = cs.animationDuration;
@@ -693,9 +695,20 @@ function applyEffectSpeed(speed) {
             el.dataset.baseDuration = dur;
         }
         if (el.dataset.baseDuration) {
-            const base = parseFloat(el.dataset.baseDuration);
-            el.style.animationDuration = (base * mult) + 's';
+            animated.push(el);
+            el.style.animationPlayState = 'paused';
         }
+    });
+
+    // Force reflow so pause takes effect, then apply new durations and resume
+    void container.offsetWidth;
+    animated.forEach(el => {
+        const base = parseFloat(el.dataset.baseDuration);
+        el.style.animationDuration = (base * mult) + 's';
+    });
+    void container.offsetWidth;
+    animated.forEach(el => {
+        el.style.animationPlayState = 'running';
     });
 }
 
