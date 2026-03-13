@@ -2410,7 +2410,7 @@ body.mini-mode .volume-btn svg {
 
 /* Album Art */
 body.mini-mode .now-playing {
-    flex: 1;
+    flex: 1.5;
     gap: 8px;
     overflow: hidden;
     position: relative;
@@ -2522,9 +2522,9 @@ body.mini-mode .player-controls {
 body.mini-mode .control-buttons {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     background: rgba(15, 15, 20, 0.45);
-    padding: 6px 12px;
+    padding: 6px 8px;
     border-radius: 999px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
     border: 1px solid rgba(255, 255, 255, 0.05);
@@ -2560,7 +2560,7 @@ body.mini-mode .progress-container {
 body.mini-mode .volume-controls {
     flex: 0 0 auto;
     display: flex;
-    gap: 6px;
+    gap: 4px;
     align-items: center;
     margin-left: auto;
     position: relative;
