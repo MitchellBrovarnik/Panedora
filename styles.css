@@ -2584,6 +2584,7 @@ body.mini-mode .volume-slider {
     width: 60px;
     height: 12px;
     overflow: hidden;
+    background: transparent;
     transition: width 200ms ease, opacity 200ms ease;
 }
 
