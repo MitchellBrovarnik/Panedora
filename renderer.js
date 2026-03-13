@@ -1345,7 +1345,7 @@ function checkMarquee(el) {
     const parentWidth = el.parentElement.clientWidth;
     const textWidth = el.scrollWidth;
 
-    if (textWidth > parentWidth + 2) {
+    if (textWidth > parentWidth) {
         const overflow = textWidth - parentWidth;
         const duration = Math.max(5, overflow / 15); // ~15px/s scroll speed
         el.style.setProperty('--marquee-offset', `-${overflow + 16}px`);
@@ -1621,12 +1621,17 @@ function initEventListeners() {
         });
     }
 
-    // Toggle volume slider visibility in mini mode
-    const volumeBtn = document.getElementById('volume-btn');
-    if (volumeBtn) {
-        volumeBtn.addEventListener('click', () => {
+    // Expand/collapse volume slider on hover in mini mode
+    const volumeControls = document.querySelector('.volume-controls');
+    if (volumeControls) {
+        volumeControls.addEventListener('mouseenter', () => {
             if (document.body.classList.contains('mini-mode')) {
-                DOM.volumeSlider.classList.toggle('collapsed');
+                DOM.volumeSlider.classList.remove('collapsed');
+            }
+        });
+        volumeControls.addEventListener('mouseleave', () => {
+            if (document.body.classList.contains('mini-mode')) {
+                DOM.volumeSlider.classList.add('collapsed');
             }
         });
     }
