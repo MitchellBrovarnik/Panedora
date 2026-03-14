@@ -1746,9 +1746,9 @@ body::before {
 }
 
 .np-feedback-btn.liked {
-    color: var(--accent);
-    background: var(--accent-soft);
-    border-color: var(--accent);
+    color: #1db954;
+    background: rgba(29, 185, 84, 0.12);
+    border-color: #1db954;
 }
 
 .np-feedback-btn.disliked {
