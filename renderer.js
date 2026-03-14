@@ -1856,7 +1856,8 @@ function initAPIListeners() {
                     }
                 }).catch(e => console.error('[UI] Play error:', e));
 
-                // Reset feedback buttons on the Now Playing page and footer
+                // Reset feedback state and buttons for the new track
+                AppState.playerState.feedback = null;
                 document.getElementById('np-thumbup')?.classList.remove('liked');
                 document.getElementById('np-thumbdown')?.classList.remove('disliked');
                 document.getElementById('mini-thumb-up')?.classList.remove('liked');
@@ -2006,6 +2007,9 @@ function initAPIListeners() {
         // Collapse volume slider by default in mini mode, reset when leaving
         if (data.isMini) {
             DOM.volumeSlider.classList.add('collapsed');
+            // Restore mini thumbs (they may be hidden if we were on Now Playing page)
+            const miniThumbs = document.getElementById('mini-thumbs');
+            if (miniThumbs) miniThumbs.style.display = '';
         } else {
             DOM.volumeSlider.classList.remove('collapsed');
         }
