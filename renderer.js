@@ -1856,7 +1856,8 @@ function initAPIListeners() {
                     }
                 }).catch(e => console.error('[UI] Play error:', e));
 
-                // Reset feedback buttons on the Now Playing page and footer
+                // Reset feedback state and buttons for the new track
+                AppState.playerState.feedback = null;
                 document.getElementById('np-thumbup')?.classList.remove('liked');
                 document.getElementById('np-thumbdown')?.classList.remove('disliked');
                 document.getElementById('mini-thumb-up')?.classList.remove('liked');
