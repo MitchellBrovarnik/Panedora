@@ -125,6 +125,7 @@ body {
     gap: 4px;
     align-items: center;
     margin-left: 4px;
+    flex-shrink: 0;
 }
 
 .mini-thumb-btn {
@@ -1107,6 +1108,8 @@ body::before {
     display: flex;
     align-items: center;
     gap: 12px;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .now-playing-art {
@@ -1117,6 +1120,7 @@ body::before {
     cursor: pointer;
     transition: all 250ms var(--ease);
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    flex-shrink: 0;
 }
 
 .now-playing-art:hover {
@@ -1128,12 +1132,13 @@ body::before {
     display: flex;
     flex-direction: column;
     gap: 1px;
+    min-width: 0;
+    flex: 1;
 }
 
 .now-playing-title {
     font-size: 13px;
     font-weight: 600;
-    max-width: 200px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1142,7 +1147,6 @@ body::before {
 .now-playing-artist {
     font-size: 11px;
     color: var(--text-2);
-    max-width: 200px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1153,6 +1157,7 @@ body::before {
     color: var(--text-3);
     border-radius: 50%;
     transition: all 150ms var(--ease);
+    flex-shrink: 0;
 }
 
 .now-playing-heart:hover {
