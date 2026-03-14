@@ -1093,15 +1093,15 @@ function renderNowPlayingPage() {
                 </div>
 
                 <div class="np-feedback-row">
+                    <button class="np-feedback-btn" id="np-thumbup" aria-label="Thumbs Up" title="Thumbs Up">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
+                        </svg>
+                    </button>
                     <button class="np-feedback-btn" id="np-thumbdown" aria-label="Thumbs Down" title="Thumbs Down">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M17 2H7.28a2 2 0 0 0-2 1.7L3.9 12.7a2 2 0 0 0 2 2.3H10l-1 4a3 3 0 0 0 3 3l5-9"/>
                             <path d="M17 2v11h3a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2h-3z"/>
-                        </svg>
-                    </button>
-                    <button class="np-feedback-btn" id="np-thumbup" aria-label="Thumbs Up" title="Thumbs Up">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
                         </svg>
                     </button>
                 </div>
@@ -1856,9 +1856,11 @@ function initAPIListeners() {
                     }
                 }).catch(e => console.error('[UI] Play error:', e));
 
-                // Reset feedback buttons on the Now Playing page
+                // Reset feedback buttons on the Now Playing page and footer
                 document.getElementById('np-thumbup')?.classList.remove('liked');
                 document.getElementById('np-thumbdown')?.classList.remove('disliked');
+                document.getElementById('mini-thumb-up')?.classList.remove('liked');
+                document.getElementById('mini-thumb-down')?.classList.remove('disliked');
                 DOM.heartBtn?.classList.remove('liked');
             }
         } else if (state.audioURL === null && currentAudio) {
