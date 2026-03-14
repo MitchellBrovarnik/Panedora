@@ -34,32 +34,47 @@ jobs:
 
       - name: Build Windows
         if: matrix.os == 'windows-latest'
-        run: |
-          npm run prepare-dist
-          cd dist
-          npm install --omit=dev
-          cd ..
-          npx electron-builder --win --config electron-builder.config.js -p never
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 15
+          command: |
+            npm run prepare-dist
+            cd dist
+            npm install --omit=dev
+            cd ..
+            npx electron-builder --win --config electron-builder.config.js -p never
 
       - name: Build macOS
         if: matrix.os == 'macos-latest'
-        run: |
-          npm run prepare-dist
-          cd dist
-          npm install --omit=dev
-          cd ..
-          npx electron-builder --mac --config electron-builder.config.js -p never
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 15
+          command: |
+            npm run prepare-dist
+            cd dist
+            npm install --omit=dev
+            cd ..
+            npx electron-builder --mac --config electron-builder.config.js -p never
 
       - name: Build Linux
         if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libarchive-tools
-          npm run prepare-dist
-          cd dist
-          npm install --omit=dev
-          cd ..
-          npx electron-builder --linux --config electron-builder.config.js -p never
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 15
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y libarchive-tools
+            npm run prepare-dist
+            cd dist
+            npm install --omit=dev
+            cd ..
+            npx electron-builder --linux --config electron-builder.config.js -p never
 
       - name: Upload artifacts to release
         shell: bash
