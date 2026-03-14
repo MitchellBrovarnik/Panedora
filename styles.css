@@ -141,9 +141,14 @@ body {
     cursor: pointer;
 }
 
-.mini-thumb-btn:hover {
-    color: var(--accent);
-    background: rgba(255, 255, 255, 0.08);
+#mini-thumb-up:hover {
+    color: #1db954;
+    background: rgba(29, 185, 84, 0.12);
+}
+
+#mini-thumb-down:hover {
+    color: #e81123;
+    background: rgba(232, 17, 35, 0.12);
 }
 
 .mini-thumb-btn.liked {
@@ -1721,10 +1726,17 @@ body::before {
     padding: 8px;
 }
 
-.np-feedback-btn:hover {
-    background: var(--glass-hover);
-    border-color: var(--glass-border-hover);
-    color: var(--text-1);
+#np-thumbup:hover {
+    color: #1db954;
+    background: rgba(29, 185, 84, 0.12);
+    border-color: #1db954;
+    transform: scale(1.1);
+}
+
+#np-thumbdown:hover {
+    color: #e81123;
+    background: rgba(232, 17, 35, 0.12);
+    border-color: #e81123;
     transform: scale(1.1);
 }
 
@@ -2358,9 +2370,14 @@ body.mini-mode .mini-thumb-btn {
     -webkit-app-region: no-drag;
 }
 
-body.mini-mode .mini-thumb-btn:hover {
-    color: var(--accent);
-    background: rgba(255, 255, 255, 0.08);
+body.mini-mode #mini-thumb-up:hover {
+    color: #1db954;
+    background: rgba(29, 185, 84, 0.12);
+}
+
+body.mini-mode #mini-thumb-down:hover {
+    color: #e81123;
+    background: rgba(232, 17, 35, 0.12);
 }
 
 body.mini-mode .mini-thumb-btn.liked {
