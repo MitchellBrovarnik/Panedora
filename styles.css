@@ -2333,14 +2333,14 @@ body.mini-mode .mini-thumbs {
     display: flex;
     gap: 4px;
     align-items: center;
-    margin-left: 12px;
-    background: rgba(15, 15, 20, 0.45);
-    padding: 4px 8px;
-    border-radius: 999px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    margin-left: 8px;
+    background: none;
+    padding: 0;
+    border-radius: 0;
+    box-shadow: none;
+    border: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
 }
 
 body.mini-mode .mini-thumb-btn {
@@ -2392,7 +2392,7 @@ body.mini-mode .player-footer {
     border-radius: 12px;
     border-top: none;
     -webkit-app-region: drag;
-    gap: 5px;
+    gap: 3px;
     z-index: 5;
 }
 
