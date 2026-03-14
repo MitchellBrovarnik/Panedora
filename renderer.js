@@ -1727,11 +1727,11 @@ function initEventListeners() {
                     state.feedback = null;
                 }
             } else {
-                // Not liked — send thumb up
-                await window.api.player.thumbUp();
+                // Not liked — send thumb up (show immediate feedback)
                 miniThumbUp.classList.add('liked');
                 miniThumbDown?.classList.remove('disliked');
                 state.feedback = 'thumbUp';
+                await window.api.player.thumbUp();
             }
         });
     }
@@ -1747,11 +1747,11 @@ function initEventListeners() {
                     state.feedback = null;
                 }
             } else {
-                // Not disliked — send thumb down
-                await window.api.player.thumbDown();
+                // Not disliked — send thumb down (show immediate feedback, skip will reset for new track)
                 miniThumbDown.classList.add('disliked');
                 miniThumbUp?.classList.remove('liked');
                 state.feedback = 'thumbDown';
+                await window.api.player.thumbDown();
             }
         });
     }
