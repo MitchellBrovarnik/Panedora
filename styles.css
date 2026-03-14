@@ -2392,7 +2392,7 @@ body.mini-mode .player-footer {
     border-radius: 12px;
     border-top: none;
     -webkit-app-region: drag;
-    gap: 8px;
+    gap: 5px;
     z-index: 5;
 }
 
@@ -2432,8 +2432,7 @@ body.mini-mode .now-playing-info {
     min-width: 0;
     overflow: hidden;
     position: relative;
-    /* Soft dark gradient behind the text to guarantee contrast against white screens */
-    background: radial-gradient(ellipse at left center, rgba(0, 0, 0, 0.4) 0%, transparent 80%);
+    background: none;
     padding: 2px 0 2px 8px;
     margin-left: -8px;
     /* Offset the padding visually */
