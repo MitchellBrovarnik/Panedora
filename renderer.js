@@ -2007,6 +2007,9 @@ function initAPIListeners() {
         // Collapse volume slider by default in mini mode, reset when leaving
         if (data.isMini) {
             DOM.volumeSlider.classList.add('collapsed');
+            // Restore mini thumbs (they may be hidden if we were on Now Playing page)
+            const miniThumbs = document.getElementById('mini-thumbs');
+            if (miniThumbs) miniThumbs.style.display = '';
         } else {
             DOM.volumeSlider.classList.remove('collapsed');
         }
