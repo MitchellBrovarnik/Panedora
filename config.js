@@ -164,7 +164,15 @@ function decryptString(str) {
         }
     }
 
-    // Legacy: no prefix means plain text from an older version — migrate on read
+    // Legacy: no prefix — could be plain text OR a safeStorage blob saved
+    // before the "safe:" prefix was introduced.  Try safeStorage first.
+    if (safeStorage.isEncryptionAvailable()) {
+        try {
+            return safeStorage.decryptString(Buffer.from(str, 'base64'));
+        } catch (_) {
+            // Not a safeStorage blob — fall through to plain text
+        }
+    }
     return str;
 }
 
