@@ -39,6 +39,11 @@ function readConfig() {
 function writeConfig(config) {
     try {
         const configPath = getConfigPath();
+        // Ensure the userData directory exists (may not on first launch on macOS/Linux)
+        const dir = path.dirname(configPath);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
         fs.writeFileSync(configPath, JSON.stringify(config, null, 2), { encoding: 'utf8', mode: 0o600 });
     } catch (e) {
         console.error('[Config] Error writing config:', e);
@@ -65,7 +70,13 @@ function setConfig(key, value) {
 // Encrypt a string using Electron's safeStorage (OS keychain)
 function encryptString(str) {
     if (safeStorage.isEncryptionAvailable()) {
-        return safeStorage.encryptString(str).toString('base64');
+        try {
+            return safeStorage.encryptString(str).toString('base64');
+        } catch (e) {
+            // safeStorage can throw on unsigned macOS apps even when
+            // isEncryptionAvailable() returns true — fall through to plain text
+            console.warn('[Config] safeStorage.encryptString failed, storing without encryption:', e.message);
+        }
     }
     return str; // Fallback to plain text
 }

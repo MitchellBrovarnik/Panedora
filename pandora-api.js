@@ -211,7 +211,15 @@ class PandoraAPI {
 
                 this.authToken = response.authToken;
                 config.setAuthToken(response.authToken);
-                config.setCredentials(username, password);
+
+                // Save credentials for auto-relogin on next launch.
+                // Wrapped in try/catch so a config write failure doesn't
+                // break a successful login (e.g. safeStorage issues on macOS).
+                try {
+                    config.setCredentials(username, password);
+                } catch (e) {
+                    console.error('[API] Failed to save credentials:', e.message);
+                }
 
                 if (response.listenerId) {
                     config.setListenerId(response.listenerId);
