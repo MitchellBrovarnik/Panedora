@@ -5,6 +5,8 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+const os = require('os');
 const { app, safeStorage } = require('electron');
 
 // Storage file path
@@ -39,6 +41,11 @@ function readConfig() {
 function writeConfig(config) {
     try {
         const configPath = getConfigPath();
+        // Ensure the userData directory exists (may not on first launch on macOS/Linux)
+        const dir = path.dirname(configPath);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
         fs.writeFileSync(configPath, JSON.stringify(config, null, 2), { encoding: 'utf8', mode: 0o600 });
     } catch (e) {
         console.error('[Config] Error writing config:', e);
@@ -62,24 +69,102 @@ function setConfig(key, value) {
     writeConfig(config);
 }
 
-// Encrypt a string using Electron's safeStorage (OS keychain)
-function encryptString(str) {
-    if (safeStorage.isEncryptionAvailable()) {
-        return safeStorage.encryptString(str).toString('base64');
-    }
-    return str; // Fallback to plain text
+// ---------------------------------------------------------------------------
+// Encryption helpers
+// ---------------------------------------------------------------------------
+// Primary: Electron safeStorage (uses OS keychain — Keychain on macOS,
+//          DPAPI on Windows, libsecret on Linux).
+// Fallback: AES-256-GCM with a key derived from machine-specific values.
+//           Not as strong as an OS keychain, but the password is never stored
+//           in plain text — opening the config file only shows an encrypted blob.
+// ---------------------------------------------------------------------------
+
+// Derive a deterministic 256-bit key from machine-specific values.
+// The same machine + OS user will always produce the same key, but copying
+// the config file to another machine (or user) makes it useless.
+let _appKey = null;
+function getAppKey() {
+    if (_appKey) return _appKey;
+    const material = [
+        os.hostname(),
+        os.userInfo().username,
+        os.homedir(),
+        app.getPath('userData')
+    ].join('|');
+    _appKey = crypto.createHash('sha256').update(material).digest();
+    return _appKey;
 }
 
-// Decrypt a string using Electron's safeStorage
-function decryptString(str) {
+// AES-256-GCM encrypt → returns "iv:authTag:ciphertext" (all hex)
+function appEncrypt(str) {
+    const key = getAppKey();
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+    let encrypted = cipher.update(str, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    const tag = cipher.getAuthTag().toString('hex');
+    return iv.toString('hex') + ':' + tag + ':' + encrypted;
+}
+
+// AES-256-GCM decrypt ← expects "iv:authTag:ciphertext" (all hex)
+function appDecrypt(str) {
+    const parts = str.split(':');
+    if (parts.length !== 3) throw new Error('Invalid encrypted format');
+    const key = getAppKey();
+    const iv = Buffer.from(parts[0], 'hex');
+    const tag = Buffer.from(parts[1], 'hex');
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(tag);
+    let decrypted = decipher.update(parts[2], 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+}
+
+// Encrypt a string — prefer OS safeStorage, fall back to app-level AES
+function encryptString(str) {
+    // Try Electron safeStorage first (OS keychain)
     if (safeStorage.isEncryptionAvailable()) {
         try {
-            return safeStorage.decryptString(Buffer.from(str, 'base64'));
+            const encrypted = safeStorage.encryptString(str).toString('base64');
+            return 'safe:' + encrypted;
         } catch (e) {
-            // May be plain text from before encryption was enabled
-            return str;
+            console.warn('[Config] safeStorage.encryptString failed, using app encryption:', e.message);
         }
     }
+    // Fallback: AES-256-GCM with machine-derived key
+    return 'aes:' + appEncrypt(str);
+}
+
+// Decrypt a string — detects which method was used via prefix
+function decryptString(str) {
+    if (str.startsWith('safe:')) {
+        // Encrypted with safeStorage
+        const payload = str.slice(5);
+        if (safeStorage.isEncryptionAvailable()) {
+            try {
+                return safeStorage.decryptString(Buffer.from(payload, 'base64'));
+            } catch (e) {
+                // safeStorage key changed (e.g. unsigned app rebuild) —
+                // can't recover this password, user will need to re-login
+                console.warn('[Config] safeStorage.decryptString failed:', e.message);
+                return null;
+            }
+        }
+        // safeStorage not available now but was before — can't decrypt
+        return null;
+    }
+
+    if (str.startsWith('aes:')) {
+        // Encrypted with app-level AES
+        try {
+            return appDecrypt(str.slice(4));
+        } catch (e) {
+            console.warn('[Config] App decryption failed:', e.message);
+            return null;
+        }
+    }
+
+    // Legacy: no prefix means plain text from an older version — migrate on read
     return str;
 }
 
@@ -90,7 +175,9 @@ module.exports = {
         if (!creds) return null;
 
         if (creds.passwordEncrypted) {
-            return { email: creds.email, password: decryptString(creds.passwordEncrypted) };
+            const password = decryptString(creds.passwordEncrypted);
+            if (!password) return null; // Decryption failed — credentials are stale
+            return { email: creds.email, password };
         }
 
         // Migrate old plain-text "password" field to encrypted format
