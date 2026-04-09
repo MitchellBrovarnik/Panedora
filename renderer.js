@@ -1590,18 +1590,18 @@ function initEventListeners() {
 
     // Player controls
     DOM.playPauseBtn.addEventListener('click', () => {
-        window.api.player.toggle();
-        // Also toggle actual audio
         const audioEl = document.querySelector('audio');
         if (audioEl) {
+            // Just toggle the audio element; the 'play'/'pause' event listeners
+            // on the audio element will handle syncing UI and notifying main.
             if (audioEl.paused) {
                 audioEl.play().catch(e => console.error(e));
-                AppState.playerState.isPlaying = true;
             } else {
                 audioEl.pause();
-                AppState.playerState.isPlaying = false;
             }
-            updatePlayerUI(AppState.playerState);
+        } else {
+            // No audio element yet — just tell main to toggle
+            window.api.player.toggle();
         }
     });
     // DOM.prevBtn event listener moved down
@@ -1837,6 +1837,49 @@ function initAPIListeners() {
                 });
             }
 
+            // Sync the play/pause icon whenever the audio element's state changes
+            // (covers OS media keys, headphone buttons, etc.)
+            currentAudio.addEventListener('play', () => {
+                AppState.playerState.isPlaying = true;
+                updatePlayerUI({ isPlaying: true });
+                window.api.player.play();
+            });
+            currentAudio.addEventListener('pause', () => {
+                // Ignore pause events if the track just ended (the 'ended' handler takes over)
+                if (currentAudio.ended) return;
+                AppState.playerState.isPlaying = false;
+                updatePlayerUI({ isPlaying: false });
+                window.api.player.pause();
+            });
+
+            // Register OS media key handlers (skip, replay, play, pause)
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.setActionHandler('nexttrack', () => {
+                    if (rateLimitOk('skip')) window.api.player.next();
+                });
+                navigator.mediaSession.setActionHandler('previoustrack', () => {
+                    if (!rateLimitOk('prev')) return;
+                    if (currentAudio && currentAudio.currentTime > 3) {
+                        currentAudio.currentTime = 0;
+                        if (currentAudio.paused) {
+                            currentAudio.play().catch(e => console.error(e));
+                        }
+                    } else {
+                        window.api.player.prev();
+                    }
+                });
+                navigator.mediaSession.setActionHandler('play', () => {
+                    if (currentAudio && currentAudio.paused) {
+                        currentAudio.play().catch(e => console.error(e));
+                    }
+                });
+                navigator.mediaSession.setActionHandler('pause', () => {
+                    if (currentAudio && !currentAudio.paused) {
+                        currentAudio.pause();
+                    }
+                });
+            }
+
             // Only update source and play if the URL actually changed
             if (currentAudio.src !== state.audioURL) {
                 console.log('[UI] Loading new audio source');
@@ -1855,6 +1898,16 @@ function initAPIListeners() {
                         }
                     }
                 }).catch(e => console.error('[UI] Play error:', e));
+
+                // Update OS media session metadata (shows in Windows taskbar, lock screen, etc.)
+                if ('mediaSession' in navigator) {
+                    navigator.mediaSession.metadata = new MediaMetadata({
+                        title: state.track || 'Unknown Track',
+                        artist: state.artist || 'Unknown Artist',
+                        album: state.album || '',
+                        artwork: state.coverArt ? [{ src: state.coverArt, sizes: '500x500', type: 'image/jpeg' }] : []
+                    });
+                }
 
                 // Reset feedback state and buttons for the new track
                 AppState.playerState.feedback = null;
