@@ -1403,9 +1403,10 @@ function checkMarquee(el) {
     const parentWidth = el.parentElement.clientWidth;
     const textWidth = el.scrollWidth;
 
-    if (textWidth > parentWidth) {
+    // Use a small buffer (2px) so marginal overflow (1-2 clipped letters) still triggers scroll
+    if (textWidth > parentWidth - 2) {
         const overflow = textWidth - parentWidth;
-        const duration = Math.max(5, overflow / 15); // ~15px/s scroll speed
+        const duration = Math.max(3, overflow / 15); // ~15px/s scroll speed, 3s min for tiny overflows
         el.style.setProperty('--marquee-offset', `-${overflow + 16}px`);
         el.style.setProperty('--marquee-duration', `${duration}s`);
         el.classList.add('marquee');
