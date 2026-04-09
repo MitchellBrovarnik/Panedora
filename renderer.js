@@ -1835,49 +1835,48 @@ function initAPIListeners() {
                         setTimeout(() => window.api.player.next(), 2000);
                     }
                 });
-            }
-
-            // Sync the play/pause icon whenever the audio element's state changes
-            // (covers OS media keys, headphone buttons, etc.)
-            currentAudio.addEventListener('play', () => {
-                AppState.playerState.isPlaying = true;
-                updatePlayerUI({ isPlaying: true });
-                window.api.player.play();
-            });
-            currentAudio.addEventListener('pause', () => {
-                // Ignore pause events if the track just ended (the 'ended' handler takes over)
-                if (currentAudio.ended) return;
-                AppState.playerState.isPlaying = false;
-                updatePlayerUI({ isPlaying: false });
-                window.api.player.pause();
-            });
-
-            // Register OS media key handlers (skip, replay, play, pause)
-            if ('mediaSession' in navigator) {
-                navigator.mediaSession.setActionHandler('nexttrack', () => {
-                    if (rateLimitOk('skip')) window.api.player.next();
+                // Sync the play/pause icon whenever the audio element's state changes
+                // (covers OS media keys, headphone buttons, etc.)
+                currentAudio.addEventListener('play', () => {
+                    AppState.playerState.isPlaying = true;
+                    updatePlayerUI({ isPlaying: true });
+                    window.api.player.play();
                 });
-                navigator.mediaSession.setActionHandler('previoustrack', () => {
-                    if (!rateLimitOk('prev')) return;
-                    if (currentAudio && currentAudio.currentTime > 3) {
-                        currentAudio.currentTime = 0;
-                        if (currentAudio.paused) {
+                currentAudio.addEventListener('pause', () => {
+                    // Ignore pause events if the track just ended (the 'ended' handler takes over)
+                    if (currentAudio.ended) return;
+                    AppState.playerState.isPlaying = false;
+                    updatePlayerUI({ isPlaying: false });
+                    window.api.player.pause();
+                });
+
+                // Register OS media key handlers (skip, replay, play, pause)
+                if ('mediaSession' in navigator) {
+                    navigator.mediaSession.setActionHandler('nexttrack', () => {
+                        if (rateLimitOk('skip')) window.api.player.next();
+                    });
+                    navigator.mediaSession.setActionHandler('previoustrack', () => {
+                        if (!rateLimitOk('prev')) return;
+                        if (currentAudio && currentAudio.currentTime > 3) {
+                            currentAudio.currentTime = 0;
+                            if (currentAudio.paused) {
+                                currentAudio.play().catch(e => console.error(e));
+                            }
+                        } else {
+                            window.api.player.prev();
+                        }
+                    });
+                    navigator.mediaSession.setActionHandler('play', () => {
+                        if (currentAudio && currentAudio.paused) {
                             currentAudio.play().catch(e => console.error(e));
                         }
-                    } else {
-                        window.api.player.prev();
-                    }
-                });
-                navigator.mediaSession.setActionHandler('play', () => {
-                    if (currentAudio && currentAudio.paused) {
-                        currentAudio.play().catch(e => console.error(e));
-                    }
-                });
-                navigator.mediaSession.setActionHandler('pause', () => {
-                    if (currentAudio && !currentAudio.paused) {
-                        currentAudio.pause();
-                    }
-                });
+                    });
+                    navigator.mediaSession.setActionHandler('pause', () => {
+                        if (currentAudio && !currentAudio.paused) {
+                            currentAudio.pause();
+                        }
+                    });
+                }
             }
 
             // Only update source and play if the URL actually changed
