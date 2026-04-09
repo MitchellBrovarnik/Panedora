@@ -1923,11 +1923,11 @@ function initAPIListeners() {
             currentAudio.src = '';
         }
 
-        if (state.isPlaying && currentAudio && currentAudio.paused) {
-            currentAudio.play().catch(e => console.error('[UI] Play error:', e));
-        } else if (!state.isPlaying && currentAudio && !currentAudio.paused) {
-            currentAudio.pause();
-        }
+        // NOTE: Audio play/pause state is now managed entirely by the audio element's
+        // own 'play'/'pause' event listeners and the mediaSession handlers.
+        // We do NOT force-sync audio state from main's isPlaying here, as it causes
+        // race conditions with media key toggles (the IPC round-trip can let stale
+        // state re-toggle the audio before the new state arrives).
 
         // Update large artwork if on Now Playing page
         const largeArt = document.getElementById('np-large-art');
