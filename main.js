@@ -538,11 +538,17 @@ ipcMain.handle('CONTENT:PLAY_SHUFFLE', async () => {
     try {
         const shuffleStation = await api.getShuffleStation();
         if (shuffleStation && shuffleStation.stationId) {
+            // Update lastUpdated so it appears immediately in "Jump Back In"
+            shuffleStation.lastUpdated = new Date().toISOString();
+
             // Ensure the shuffle station is in our currentStations list so UI stays synced
-            if (!currentStations.find(s => s.stationId === shuffleStation.stationId)) {
+            const existingIdx = currentStations.findIndex(s => s.stationId === shuffleStation.stationId);
+            if (existingIdx === -1) {
                 currentStations.unshift(shuffleStation);
-                sendStations(currentStations);
+            } else {
+                currentStations[existingIdx].lastUpdated = shuffleStation.lastUpdated;
             }
+            sendStations(currentStations);
             const result = await playStation(shuffleStation.stationId);
             sendToUI('UI:LOADING', { isLoading: false });
             return result;
