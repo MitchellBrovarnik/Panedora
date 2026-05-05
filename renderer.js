@@ -410,7 +410,29 @@ function renderLibraryPage() {
         : sortedStations;
 
     let cardsHtml = '';
+
+    // Always pin the Shuffle Stations card to the top if it matches the filter
+    if (!filterQuery || 'shuffle'.includes(filterQuery.toLowerCase())) {
+        const shuffleIconUrl = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Crect fill='%23131C28' width='180' height='180'/%3E%3Cpath fill='%23ffffff' d='M65.4 56.5L34.1 25.2 25.6 33.7l31.3 31.3 8.5-8.5zM89 25.2l12.4 12.4L34.1 112.5 42.6 121 121 42.6V89h12V25.2H89zm2 56.5l-8.5 8.5 19.1 19.1L89 121h44v-63.5h-12V89l-12.4-12.4z'/%3E%3C/svg%3E";
+        cardsHtml += `
+            <div class="card" id="library-shuffle-card" tabindex="0">
+              <div class="card-image-container">
+                <img class="card-image" src="${shuffleIconUrl}" alt="Shuffle Stations" loading="lazy">
+                <button class="card-play-button" aria-label="Play Shuffle Stations">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                </button>
+              </div>
+              <div class="card-content">
+                <h3 class="card-title">Shuffle Stations</h3>
+                <p class="card-subtitle">Mix of your stations</p>
+              </div>
+            </div>`;
+    }
+
     filtered.forEach(station => {
+        // Skip rendering the quickmix/shuffle station if it's natively in the list
+        if (station.isShuffle || station.stationType === 'QUICKMIX' || station.name === 'Shuffle') return;
+
         cardsHtml += createCard(
             station.image,
             station.name,
@@ -456,10 +478,28 @@ function renderLibraryPage() {
     }
 
     // Attach click handlers
-    document.querySelectorAll('#library-cards .card').forEach((card, index) => {
+    const shuffleCard = document.getElementById('library-shuffle-card');
+    if (shuffleCard) {
+        shuffleCard.addEventListener('click', async () => {
+            const result = await window.api.content.playShuffle();
+            if (result && result.error) {
+                alert('Failed to shuffle stations: ' + result.error);
+            }
+        });
+    }
+
+    document.querySelectorAll('#library-cards .card:not(#library-shuffle-card)').forEach((card, index) => {
         card.addEventListener('click', () => {
-            if (filtered[index]) {
-                playStation(filtered[index]);
+            // Because we skipped native shuffle stations in rendering, the index maps directly to the filtered array
+            // only if we filter out the native shuffle stations from the filtered array first.
+            // Let's find the correct station by checking the card's title.
+            const titleElement = card.querySelector('.card-title');
+            if (titleElement) {
+                const stationName = titleElement.textContent;
+                const station = filtered.find(s => s.name === stationName);
+                if (station) {
+                    playStation(station);
+                }
             }
         });
     });
