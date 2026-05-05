@@ -1386,7 +1386,7 @@ function renderStationsList() {
 
     let html = `
       <div class="station-item special-action" id="shuffle-stations-btn" tabindex="0">
-        <svg viewBox="0 0 24 24" fill="currentColor" style="width: 16px; height: 16px; margin-right: 12px; opacity: 0.8;">
+        <svg viewBox="0 0 24 24" fill="currentColor" style="width: 20px; height: 20px; margin-right: 10px; opacity: 0.95; shape-rendering: geometricPrecision;">
             <path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/>
         </svg>
         <span class="station-name" style="font-weight: 500; color: var(--text-primary);">Shuffle Stations</span>
