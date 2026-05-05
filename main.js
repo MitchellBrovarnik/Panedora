@@ -533,6 +533,29 @@ ipcMain.handle('NAV:PLAY_URI', async (event, payload) => {
     return { error: 'Unknown URI type' };
 });
 
+ipcMain.handle('CONTENT:PLAY_SHUFFLE', async () => {
+    sendToUI('UI:LOADING', { isLoading: true });
+    try {
+        const shuffleStation = await api.getShuffleStation();
+        if (shuffleStation && shuffleStation.stationId) {
+            // Ensure the shuffle station is in our currentStations list so UI stays synced
+            if (!currentStations.find(s => s.stationId === shuffleStation.stationId)) {
+                currentStations.unshift(shuffleStation);
+                sendStations(currentStations);
+            }
+            const result = await playStation(shuffleStation.stationId);
+            sendToUI('UI:LOADING', { isLoading: false });
+            return result;
+        }
+        sendToUI('UI:LOADING', { isLoading: false });
+        return { error: 'Failed to fetch shuffle station.' };
+    } catch (e) {
+        console.error('[Main] Play shuffle error:', e);
+        sendToUI('UI:LOADING', { isLoading: false });
+        return { error: e.message || 'Error fetching shuffle station' };
+    }
+});
+
 // Search
 ipcMain.handle('CONTENT:SEARCH', async (event, query) => {
     const results = await api.search(query);

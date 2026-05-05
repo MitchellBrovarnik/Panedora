@@ -1344,8 +1344,18 @@ function renderStationsList() {
         return;
     }
 
-    let html = '';
+    let html = `
+      <div class="station-item special-action" id="shuffle-stations-btn" tabindex="0">
+        <svg viewBox="0 0 24 24" fill="currentColor" style="width: 16px; height: 16px; margin-right: 12px; opacity: 0.8;">
+            <path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/>
+        </svg>
+        <span class="station-name" style="font-weight: 500; color: var(--text-primary);">Shuffle Stations</span>
+      </div>
+    `;
     AppState.stations.forEach(station => {
+        // Skip rendering the quickmix/shuffle station if it's in the standard list, since we have a dedicated button
+        if (station.isShuffle || station.stationType === 'QUICKMIX' || station.name === 'Shuffle') return;
+        
         const isActive = AppState.playerState.track &&
             station.name.toLowerCase().includes(AppState.playerState.artist?.toLowerCase() || '');
         html += createStationListItem(station.name, station.id, station.type, isActive);
@@ -1353,8 +1363,24 @@ function renderStationsList() {
 
     DOM.stationsList.innerHTML = html;
 
+    // Attach click handler for Shuffle Stations
+    const shuffleBtn = document.getElementById('shuffle-stations-btn');
+    if (shuffleBtn) {
+        shuffleBtn.addEventListener('click', async () => {
+            // Provide immediate feedback
+            document.querySelectorAll('.station-item').forEach(el => el.classList.remove('active'));
+            shuffleBtn.classList.add('active');
+            
+            const result = await window.api.content.playShuffle();
+            if (result && result.error) {
+                alert('Failed to shuffle stations: ' + result.error);
+                shuffleBtn.classList.remove('active');
+            }
+        });
+    }
+
     // Attach click handlers
-    document.querySelectorAll('.station-item').forEach(item => {
+    document.querySelectorAll('.station-item:not(#shuffle-stations-btn)').forEach(item => {
         item.addEventListener('click', () => {
             const id = item.dataset.id;
             const station = AppState.stations.find(s => s.id === id);

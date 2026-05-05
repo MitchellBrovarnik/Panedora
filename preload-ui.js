@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld('api', {
     content: {
         getStations: () => ipcRenderer.invoke('APP:INIT'),
         playItem: (item) => ipcRenderer.invoke('NAV:PLAY_URI', { uri: `${item.type}:${item.id}`, ...item }),
+        playShuffle: () => ipcRenderer.invoke('CONTENT:PLAY_SHUFFLE'),
         search: (query) => ipcRenderer.invoke('CONTENT:SEARCH', query),
         removeStation: (id) => ipcRenderer.invoke('CONTENT:REMOVE_STATION', id),
         fetchLyrics: (artist, title) => ipcRenderer.invoke('CONTENT:FETCH_LYRICS', artist, title)

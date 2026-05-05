@@ -320,6 +320,18 @@ class PandoraAPI {
     }
 
     /**
+     * Get the Shuffle (QuickMix) station
+     */
+    async getShuffleStation() {
+        try {
+            return await this.request('/v1/station/shuffle', {});
+        } catch (error) {
+            console.error('[API] Failed to get shuffle station:', error);
+            return null;
+        }
+    }
+
+    /**
      * Create a new station from a seed (artist or track)
      */
     async createStation(musicToken) {
