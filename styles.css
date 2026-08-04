@@ -685,9 +685,30 @@ body::before {
 /* Station list */
 .sidebar-stations {
     flex: 1;
-    overflow-y: auto;
+    overflow-y: hidden;
     overflow-x: hidden;
     padding: 2px 8px 8px;
+}
+
+.sidebar:hover .sidebar-stations {
+    overflow-y: auto;
+}
+
+.sidebar-stations::-webkit-scrollbar {
+    width: 4px;
+}
+
+.sidebar-stations::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sidebar-stations::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
+.sidebar-stations::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.4);
 }
 
 .station-item {
