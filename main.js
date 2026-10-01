@@ -12,6 +12,8 @@ app.commandLine.appendSwitch('disable-gpu-disk-cache');
 
 const PandoraAPI = require('./pandora-api');
 const config = require('./config');
+const { PandoraVerification } = require('./pandora-verification');
+const verification = new PandoraVerification();
 
 let uiWindow = null;
 let api = null;
@@ -55,6 +57,7 @@ function createUIWindow() {
     }
 
     uiWindow.on('closed', () => {
+        verification.cancel();
         uiWindow = null;
     });
 }
@@ -664,6 +667,11 @@ ipcMain.handle('PLAYER:GET_MORE_TRACKS', async () => {
 app.whenReady().then(() => {
     // Initialize API
     api = new PandoraAPI();
+    api.onVerificationRequired = (challenge, blockedUrl) => {
+        if (!uiWindow || uiWindow.isDestroyed()) return false;
+        console.log('[Main] Pandora requires human verification. Opening challenge...');
+        return verification.show(challenge, blockedUrl, { parent: uiWindow, userAgent: api.getUserAgent() });
+    };
 
     // Handle session expiration
     let isRelogging = false;
@@ -702,6 +710,7 @@ app.whenReady().then(() => {
 
                     return true; // Relogin successful, return true for retry
                 }
+                sendToUI('UI:ERROR', { message: result.error });
             } catch (err) {
                 console.error('[Main] Auto-relogin failed:', err);
             }
@@ -733,8 +742,15 @@ app.on('window-all-closed', () => {
     }
 });
 
+app.on('before-quit', () => verification.cancel());
+
 // Handle certificate errors for development only
 app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
+    // Verification always requires a trusted Pandora connection, including dev.
+    if (verification.ownsWebContents(webContents)) {
+        callback(false);
+        return;
+    }
     if (!app.isPackaged) {
         event.preventDefault();
         callback(true);

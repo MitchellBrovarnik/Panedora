@@ -7,8 +7,10 @@ const DIST = path.join(__dirname, 'dist');
 const filesToCopy = [
     'main.js',
     'pandora-api.js',
+    'pandora-verification.js',
     'config.js',
     'preload-ui.js',
+    'preload-verification.js',
     'renderer.js',
     'visualizer.js',
     'components.js',

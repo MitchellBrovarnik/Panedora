@@ -5,6 +5,8 @@
     "repository": "github:MitchellBrovarnik/Pandora-Glass",
     "main": "main.js",
     "scripts": {
+        "test": "node --test tests/*.test.js",
+        "test:electron": "electron tests/electron-verification-smoke.js",
         "start": "electron .",
         "dev": "electron . --dev",
         "prepare-dist": "node build.js",
