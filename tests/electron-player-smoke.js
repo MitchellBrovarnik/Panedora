@@ -136,7 +136,10 @@ app.whenReady().then(async () => {
     require('../main');
     await waitFor(() => BrowserWindow.getAllWindows().length, 'main window');
     const win = BrowserWindow.getAllWindows()[0];
-    const run = script => win.webContents.executeJavaScript(script, true);
+    const run = async script => {
+        try { return await win.webContents.executeJavaScript(script, true); }
+        catch (error) { throw new Error('Renderer script failed: ' + script, { cause: error }); }
+    };
     const capture = async name => {
         // Wait for entry animations and a compositor frame, not just DOM changes.
         await run('new Promise(resolve => setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(resolve)), 500))');
@@ -324,7 +327,8 @@ app.whenReady().then(async () => {
     // Upgrade the same fixture account, then reload the modes through real IPC.
     premiumAccount = true;
     assert.equal((await run("window.api.auth.login('fixture@example.invalid', 'fixture-password')")).success, true);
-    await run("document.getElementById('np-back-btn').click(); document.getElementById('now-playing-art').click()");
+    // Sign-in returns the renderer to Home, so its expanded-player Back button is gone.
+    await run("document.getElementById('now-playing-art').click()");
     await waitFor(() => run("!!document.querySelector('#np-mode-option-5')"), 'eligible Artist Only');
     const reusedAudioURL = await run("document.querySelector('audio').src");
     const resumesBeforeMode = calls.filter(c => c.path.endsWith('/playbackResumed')).length;
