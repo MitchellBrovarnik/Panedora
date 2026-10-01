@@ -10,7 +10,7 @@ function modes(currentModeId = 0, extra = {}) {
         { id: 0, name: 'My Station', description: 'Your station.', available: true },
         { id: 1091989, name: 'Energy Boost', description: 'More energy <without markup>.', available: true },
         { id: 5, name: 'Artist Only', available: false, premiumOnly: true },
-        { id: 987654, name: 'Curated <Mix>', available: false }
+        { id: 987654, name: 'Curated <Mix>', available: true }
     ], ...extra };
 }
 
@@ -60,7 +60,7 @@ function setup(t) {
     return { window, ui, player, calls, node, open, select };
 }
 
-test('artwork opens tuning above history; only actual modes appear and unavailable options are disabled', async t => {
+test('artwork opens tuning above history with only available API options and escaped names', async t => {
     const s = setup(t);
     assert.equal(s.node('np-mode-select'), null);
     assert.equal(s.calls.length, 0);
@@ -68,10 +68,9 @@ test('artwork opens tuning above history; only actual modes appear and unavailab
     await tick();
     assert.deepEqual(s.calls, [['get', 'station-1']]);
     assert.equal(s.node('np-mode-select').value, '0');
-    assert.deepEqual(Array.from(s.node('np-mode-select').options, option => option.value), ['0', '1091989', '5', '987654']);
-    assert.equal(s.node('np-mode-select').options[2].disabled, true);
-    assert.match(s.node('np-mode-select').options[2].textContent, /Premium required/);
-    assert.match(s.node('np-mode-select').options[3].textContent, /Curated <Mix>/);
+    assert.deepEqual(Array.from(s.node('np-mode-select').options, option => option.value), ['0', '1091989', '987654']);
+    assert.match(s.node('np-mode-select').options[2].textContent, /Curated <Mix>/);
+    assert.match(s.node('np-mode-status').textContent, /switches to a new song/);
     assert.equal(s.window.document.querySelector('#np-station-tuning mix'), null);
     assert.equal(s.node('np-station-tuning').nextElementSibling.className, 'np-history');
     assert.equal(s.node('np-thumbup').classList.contains('liked'), true);
@@ -144,9 +143,53 @@ test('mode loading errors can be retried and stations without modes get no inven
     assert.equal(s.node('np-mode-select').disabled, false);
     assert.equal(s.node('np-mode-retry'), null);
     s.ui.update({ stationModes: modes(null, { available: false, modes: [] }) });
-    assert.equal(s.node('np-mode-select').disabled, true);
-    assert.equal(s.node('np-mode-select').options.length, 1, 'Only the disabled placeholder remains');
-    assert.match(s.node('np-mode-status').textContent, /does not offer modes/);
+    assert.equal(s.node('np-station-tuning').hidden, true);
+    assert.equal(s.node('np-mode-select'), null);
+});
+
+test('Artist Only appears only when the API offers it and marks it available, even if premium-only', async t => {
+    const s = setup(t);
+    s.open();
+    await tick();
+    assert.equal(s.window.document.querySelector('#np-mode-select option[value="5"]'), null);
+    const eligible = modes();
+    eligible.modes.find(mode => mode.id === 5).available = true;
+    s.ui.update({ stationModes: eligible });
+    assert.equal(s.window.document.querySelector('#np-mode-select option[value="5"]').disabled, false);
+    s.select(5);
+    await tick();
+    assert.deepEqual(s.calls.at(-1), ['set', 'station-1', 5]);
+    s.ui.update({ stationModes: modes(0, { modes: eligible.modes.filter(mode => mode.id !== 5) }) });
+    assert.equal(s.window.document.querySelector('#np-mode-select option[value="5"]'), null);
+});
+
+test('Shuffle hides tuning and sends no mode requests; switching back restores eligible options', async t => {
+    const s = setup(t);
+    s.ui.update({ isShuffle: true });
+    s.open();
+    await tick();
+    assert.equal(s.node('np-station-tuning').hidden, true);
+    assert.equal(s.node('np-mode-select'), null);
+    assert.equal(s.calls.length, 0);
+    s.ui.update({ isShuffle: false, stationId: 'station-2', stationModes: { status: 'idle' } });
+    await tick();
+    assert.deepEqual(s.calls, [['get', 'station-2']]);
+    assert.equal(s.node('np-station-tuning').hidden, false);
+    assert.equal(s.node('np-mode-select').value, '0');
+    s.ui.update({ isShuffle: true, stationId: 'shuffle', stationModes: { status: 'idle' } });
+    assert.equal(s.node('np-mode-select'), null, 'Previously rendered controls are removed');
+    assert.equal(s.calls.length, 1);
+});
+
+test('a station whose modes are all unavailable hides the tuning panel', async t => {
+    const s = setup(t);
+    s.player.getStationModes = async () => s.ui.update({ stationModes: modes(null, {
+        modes: [{ id: 5, name: 'Artist Only', available: false, premiumOnly: true }]
+    }) });
+    s.open();
+    await tick();
+    assert.equal(s.node('np-station-tuning').hidden, true);
+    assert.equal(s.node('np-mode-select'), null);
 });
 
 test('a stale request failure cannot replace another station’s modes; conflicts disable tuning', async t => {

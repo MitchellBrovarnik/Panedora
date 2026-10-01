@@ -41,14 +41,15 @@ app.whenReady().then(async () => {
     let rejectMode = false;
     let modesUnavailable = false;
     let modesFailed = false;
+    let artistOnlyAvailable = false;
     const modeData = () => ({
         interactiveRadioAvailable: !modesUnavailable,
         currentModeId: activeMode,
         availableModes: modesUnavailable ? [] : [
             { modeId: 0, modeName: 'My Station', modeDescription: 'The station shaped by your thumbs.', isModeAvailable: true },
             { modeId: 1091989, modeName: 'Energy Boost', modeDescription: 'A higher-energy mix from this station.', isModeAvailable: true },
-            { modeId: 5, modeName: 'Artist Only', isModeAvailable: false, isPremiumOnly: true },
-            { modeId: 987654, modeName: 'Curated <Mix>', isModeAvailable: false }
+            { modeId: 5, modeName: 'Artist Only', isModeAvailable: artistOnlyAvailable, isPremiumOnly: true },
+            { modeId: 987654, modeName: 'Curated <Mix>', isModeAvailable: true }
         ]
     });
     const calls = [];
@@ -81,12 +82,20 @@ app.whenReady().then(async () => {
                 return json({ authToken: 'fixture-token', config: { branding: 'PandoraPlus' } });
             case '/api/v1/station/getStations':
                 return json({ stations: [{ stationId: 'fixture-station', name: 'Fixture Station', art }] });
+            case '/api/v1/station/shuffle':
+                return json({ stationId: 'fixture-shuffle', name: 'Fixture Mix', art });
             case '/api/v1/search/fullSearch':
                 return json({ items: [{ type: 'TR', pandoraId: 'TR:fixture', songTitle: 'Fixture Song', artistName: 'Fixture Artist', albumArt: art }] });
-            case '/api/v1/playlist/getFragment':
-                return canStream ? json({ tracks: activeMode === 0 ? tracks : tracks.map(t => ({
-                    ...t, trackToken: 'tuned-' + t.trackToken, audioURL: t.audioURL.replace('audio-', 'tuned-audio-')
-                })) }) : json({ errorString: 'STREAM_VIOLATION' }, 429);
+            case '/api/v1/playlist/getFragment': {
+                let playlistTracks = activeMode === 0 ? tracks : tracks.map(t => ({
+                    ...t, trackToken: 'tuned-' + activeMode + '-' + t.trackToken,
+                    songTitle: 'Tuned ' + t.songTitle, audioURL: t.audioURL.replace('audio-', 'tuned-audio-')
+                }));
+                if (body.stationId === 'fixture-shuffle') {
+                    playlistTracks = playlistTracks.map(t => ({ ...t, trackToken: 'shuffle-' + t.trackToken }));
+                }
+                return canStream ? json({ tracks: playlistTracks }) : json({ errorString: 'STREAM_VIOLATION' }, 429);
+            }
             case '/api/v1/interactiveradio/getAvailableModesSimple':
                 return modesFailed ? json({ errorString: 'Unavailable' }, 503) : json(modeData());
             case '/api/v1/interactiveradio/setAndGetAvailableModes':
@@ -177,9 +186,8 @@ app.whenReady().then(async () => {
     assert.equal(await run("document.getElementById('np-thumbup').classList.contains('liked')"), true);
     assert.equal(await run("AppState.playerState.history[0].feedback"), 'liked');
 
-    // Tune through the real expanded-view selector. The current audio and its
-    // saved thumb must survive until Next, including a delayed mode response.
-    assert.equal(await run("document.querySelector('#np-mode-select option[value=\"5\"]').disabled"), true);
+    // Keep the current audio while pending, then switch immediately to the new mix.
+    assert.equal(await run("document.querySelector('#np-mode-select option[value=\"5\"]') === null"), true);
     assert.equal(await run("document.querySelector('#np-mode-select option[value=\"987654\"]').textContent.includes('Curated <Mix>')"), true);
     assert.equal(await run("document.querySelectorAll('#np-station-tuning mix').length"), 0);
     const audioBefore = await run("document.querySelector('audio').src");
@@ -189,12 +197,17 @@ app.whenReady().then(async () => {
     await waitFor(() => run("AppState.playerState.stationModes.changing"), 'pending tuning');
     assert.equal(await run("document.getElementById('np-mode-select').value"), '0');
     assert.equal(await run("document.getElementById('np-mode-select').disabled"), true);
+    assert.equal(await run("document.querySelector('audio').src"), audioBefore);
+    assert.equal(await run("document.querySelector('audio').currentTime >= 12"), true);
     finishMode();
     modeGate = null;
     await waitFor(() => run("!AppState.playerState.stationModes.changing && document.getElementById('np-mode-select').value === '1091989'"), 'verified tuning');
-    assert.equal(await run("document.querySelector('audio').src"), audioBefore);
-    assert.equal(await run("document.querySelector('audio').currentTime >= 12"), true);
+    await waitFor(() => run("AppState.playerState.trackToken === 'tuned-1091989-fixture-track-1' && !document.querySelector('audio').paused"), 'immediate tuned playback');
+    assert.notEqual(await run("document.querySelector('audio').src"), audioBefore);
+    assert.equal(await run("document.querySelector('audio').currentTime < 10"), true);
     assert.equal(await run("document.getElementById('np-thumbup').classList.contains('liked')"), true);
+    assert.equal(await run("document.querySelector('.history-title').textContent"), 'Fixture Song 2');
+    assert.equal(await run("document.getElementById('np-large-title').textContent"), 'Tuned Fixture Song 1');
     const fragments = calls.filter(c => c.path.endsWith('/getFragment'));
     assert.equal(fragments[fragments.length - 1].body.isStationStart, false);
     assert.deepEqual(calls.find(c => c.path.endsWith('/setAndGetAvailableModes')).body, { stationId: 'fixture-station', modeId: 1091989 });
@@ -209,8 +222,7 @@ app.whenReady().then(async () => {
     await waitFor(() => run("!AppState.playerState.stationModes.changing && !!AppState.playerState.stationModes.error"), 'rejected mode');
     assert.equal(await run("document.getElementById('np-mode-select').value"), '1091989');
     assert.match(await run("document.getElementById('np-mode-status').textContent"), /did not enable/);
-    await run('window.api.player.next()');
-    await waitFor(() => run("AppState.playerState.trackToken === 'tuned-fixture-track-1'"), 'fresh tuned track');
+    assert.equal(await run('AppState.playerState.trackToken'), 'tuned-1091989-fixture-track-1', 'A rejection must not interrupt the song');
 
     modesFailed = true;
     await run("document.getElementById('np-mode-retry').click()");
@@ -218,11 +230,32 @@ app.whenReady().then(async () => {
     modesFailed = false;
     await run("document.getElementById('np-mode-retry').click()");
     await waitFor(() => run("!document.getElementById('np-mode-select').disabled"), 'mode retry');
+
+    artistOnlyAvailable = true;
+    rejectMode = false;
+    await run("document.getElementById('np-back-btn').click(); document.getElementById('now-playing-art').click()");
+    await waitFor(() => run("!!document.querySelector('#np-mode-select option[value=\"5\"]')"), 'eligible Artist Only');
+    const reusedAudioURL = await run("document.querySelector('audio').src");
+    await run("document.querySelector('audio').currentTime = 12; document.getElementById('np-mode-select').value = '5'; document.getElementById('np-mode-select').dispatchEvent(new Event('change'))");
+    await waitFor(() => run("AppState.playerState.trackToken === 'tuned-5-fixture-track-1' && !document.querySelector('audio').paused"), 'Artist Only playback');
+    assert.equal(await run("document.querySelector('audio').src"), reusedAudioURL);
+    assert.equal(await run("document.querySelector('audio').currentTime < 10"), true, 'A fresh track token restarts even a reused audio URL');
+
     modesUnavailable = true;
     await run("document.getElementById('np-back-btn').click(); document.getElementById('now-playing-art').click()");
     await waitFor(() => run("AppState.playerState.stationModes.status === 'ready' && !AppState.playerState.stationModes.available"), 'station without modes');
-    assert.equal(await run("document.getElementById('np-mode-select').disabled"), true);
-    assert.match(await run("document.getElementById('np-mode-status').textContent"), /does not offer modes/);
+    assert.equal(await run("document.getElementById('np-station-tuning').hidden && !document.getElementById('np-mode-select')"), true);
+
+    modesUnavailable = false;
+    const modeRequestsBeforeShuffle = calls.filter(c => c.path.includes('interactiveradio')).length;
+    await run('window.api.content.playShuffle()');
+    await run("document.getElementById('now-playing-art').click()");
+    assert.equal(await run('AppState.playerState.isShuffle'), true);
+    assert.equal(await run("getComputedStyle(document.getElementById('np-station-tuning')).display"), 'none');
+    assert.equal(await run("document.getElementById('np-mode-select') === null"), true);
+    assert.equal(calls.filter(c => c.path.includes('interactiveradio')).length, modeRequestsBeforeShuffle);
+    await waitFor(() => run("!document.querySelector('audio').paused"), 'Shuffle audio');
+    await capture('shuffle-without-tuning');
 
     // A later conflict must stop already buffered audio before asking again.
     canStream = false;
@@ -231,7 +264,7 @@ app.whenReady().then(async () => {
     await waitFor(() => run("document.querySelector('audio').paused"), 'buffered audio stopped');
     prompts[2].resolve({ response: 1 });
     assert.equal(calls.filter(c => c.path.endsWith('/playbackResumed') && c.body.forceActive).length, 1);
-    console.log('Native player smoke test passed: device takeover, saved thumbs, expanded station modes, verified changes, queue replacement, mode failures and retry.');
+    console.log('Native player smoke test passed: device takeover, saved thumbs, immediate mode changes, Artist Only eligibility, Shuffle exclusion, mode failures and retry.');
     console.log('Screenshots: ' + testData);
     clearTimeout(deadline);
     app.quit();

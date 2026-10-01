@@ -128,7 +128,7 @@ You do **not** need to compile the application locally. Simply navigate to the R
 4. **Curating & History:**
    *   Use the **Thumbs Up** / **Thumbs Down** buttons to inform Pandora's algorithm of your preferences.
    *   Review your recently played tracks in the panel on the right side of the Now Playing page. Click **Undo** on any disliked track to remove the negative feedback from your Pandora account.
-   *   Click the artwork in the play bar to open the expanded song/history view. Use **Tune your station** above Recently Played to choose from Pandora's available modes. Confirmed changes apply to upcoming songs while the current song continues.
+   *   Click the artwork in the play bar to open the expanded song/history view. Use **Tune your station** above Recently Played to choose from Pandora's available modes. Once the new mode and its songs are confirmed, playback switches to the first new song. Failed changes leave the current song playing; a paused player stays paused.
 5. **Lyrics:** Click the **Lyrics** button in the player footer to display synchronized, scrolling lyrics over the Now Playing page.
 6. **Mini Player:** Click the **Mini Player** button to collapse the app into a compact floating bar that stays on top of all other windows, including fullscreen games.
 7. **Themes, Effects & Settings:** Click the **Settings** gear in the sidebar to choose a Color Theme, Background Effect, and Lyrics Highlight Style.
@@ -136,7 +136,7 @@ You do **not** need to compile the application locally. Simply navigate to the R
 
 ## Known Issues
 
-*   **Station Mode Availability:** Modes vary by station and subscription. Unavailable modes are disabled; stations such as Shuffle may offer no modes. Errors are shown if Pandora rejects a change or the active mode cannot be confirmed.
+*   **Station Mode Availability:** The dropdown shows only modes Pandora marks available for your station and account, including Artist Only when eligible. The tuning panel is hidden for Shuffle and stations with no available modes. Errors are shown if Pandora rejects a change or the active mode cannot be confirmed.
 *   **Search Functionality:** The search tab is a work in progress. Searching for a specific song may not play that exact track.
 
 ## Privacy and Security

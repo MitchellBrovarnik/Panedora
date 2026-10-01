@@ -1201,8 +1201,8 @@ function renderNowPlayingPage() {
 let stationModesRequest = null;
 
 async function requestStationModes() {
-    const { stationId, stationLoading, streamBlocked, stationModes } = AppState.playerState;
-    if (AppState.currentPage !== 'nowplaying' || !stationId || stationLoading || streamBlocked ||
+    const { stationId, isShuffle, stationLoading, streamBlocked, stationModes } = AppState.playerState;
+    if (AppState.currentPage !== 'nowplaying' || !stationId || isShuffle || stationLoading || streamBlocked ||
         stationModes?.changing || stationModes?.status === 'loading' || stationModesRequest?.stationId === stationId) return;
     const request = { stationId };
     stationModesRequest = request;
@@ -1221,14 +1221,22 @@ async function requestStationModes() {
 function renderStationModes() {
     const panel = document.getElementById('np-station-tuning');
     if (!panel || AppState.currentPage !== 'nowplaying') return;
-    const { stationId, stationName, stationLoading, streamBlocked } = AppState.playerState;
+    const { stationId, stationName, isShuffle, stationLoading, streamBlocked } = AppState.playerState;
     const state = AppState.playerState.stationModes || { status: 'idle' };
-    const modes = state.modes || [];
+    const modes = (state.modes || []).filter(mode => mode.available);
+    panel.hidden = !stationId || isShuffle ||
+        (state.status === 'ready' && !state.error && (!state.available || !modes.length));
+    if (panel.hidden) {
+        panel.replaceChildren();
+        panel.dataset.modeMarkup = '';
+        panel.removeAttribute('aria-busy');
+        return;
+    }
     const current = modes.find(mode => mode.id === state.currentModeId);
     const loading = state.status === 'idle' || state.status === 'loading';
     const disabled = !stationId || stationLoading || streamBlocked || loading ||
         state.changing || state.status !== 'ready' || !state.available;
-    let message = 'Changes apply to upcoming songs.';
+    let message = 'Changing modes switches to a new song.';
     if (!stationId) message = 'Play a station to see its modes.';
     else if (stationLoading) message = 'Loading station…';
     else if (streamBlocked) message = 'Resume playback here to tune this station.';
@@ -1238,8 +1246,7 @@ function renderStationModes() {
     else if (!state.available) message = 'Pandora does not offer modes for this station.';
     const placeholder = loading ? 'Loading modes…' : 'Select a mode';
     const options = (current ? '' : `<option value="" selected disabled>${placeholder}</option>`) +
-        modes.map(mode => `<option value="${mode.id}" ${mode.id === state.currentModeId ? 'selected' : ''}
-            ${mode.available ? '' : 'disabled'}>${escapeHtml(mode.name)}${mode.available ? '' : mode.premiumOnly ? ' — Premium required' : ' — Unavailable'}</option>`).join('');
+        modes.map(mode => `<option value="${mode.id}" ${mode.id === state.currentModeId ? 'selected' : ''}>${escapeHtml(mode.name)}</option>`).join('');
     const markup = `
         <h3 class="tune-title" id="np-tuning-title">Tune your station</h3>
         <p class="station-tuning-name">${escapeHtml(stationName || 'Current station')}</p>
@@ -1884,6 +1891,7 @@ function initEventListeners() {
 function initAPIListeners() {
     // Manage a single Audio instance to prevent overlapping event listeners and track skipping
     let currentAudio = null;
+    let currentAudioToken = null;
     let consecutiveErrors = 0; // Prevent chain-skipping on stale/expired URLs
 
     // Player state updates
@@ -1985,9 +1993,11 @@ function initAPIListeners() {
                 }
             }
 
-            // Only update source and play if the URL actually changed
-            if (currentAudio.src !== state.audioURL) {
+            // A new playlist entry may reuse the same audio URL. Start that entry
+            // at the beginning, while ordinary state updates preserve position.
+            if (currentAudio.src !== state.audioURL || currentAudioToken !== state.trackToken) {
                 console.log('[UI] Loading new audio source');
+                currentAudioToken = state.trackToken;
                 currentAudio.src = state.audioURL;
                 if (state.isPlaying !== false) currentAudio.play().then(() => {
                     consecutiveErrors = 0; // Reset on successful play

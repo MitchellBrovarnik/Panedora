@@ -147,12 +147,19 @@ function sendPlayerState(state) {
     sendToUI('UI:PLAYER_STATE', state);
 }
 
+function isShuffleStation(station) {
+    return station?.isShuffle === true || station?.isQuickMix === true ||
+        station?.stationType === 'QUICKMIX' ||
+        ['Shuffle', 'QuickMix', 'Shuffle Stations'].includes(station?.name);
+}
+
 function sendStations(stations) {
     // Transform to match expected format
     const formatted = stations.map(s => ({
         id: s.stationId,
         stationId: s.stationId,
         name: s.name,
+        isShuffle: isShuffleStation(s),
         type: 'station',
         image: PandoraAPI.getHighResArt(s.art),
         lastUpdated: s.lastPlayed || s.lastUpdated || s.dateCreated
@@ -170,6 +177,7 @@ function getCurrentState() {
         album: track?.albumTitle || null,
         stationName: currentStation?.name || null,
         stationId: currentStation?.stationId || null,
+        isShuffle: isShuffleStation(currentStation),
         stationLoading,
         stationModes: { ...stationModes, changing: stationModeChange?.generation === playbackGeneration },
         coverArt: PandoraAPI.getHighResArt(track?.albumArt),
@@ -409,12 +417,13 @@ async function playStation(stationId, startingAtTrackId = null) {
 function skipTrack() {
     if (streamReclaimed || stationLoading) return Promise.resolve(getCurrentState());
     if (skipOperation?.generation === playbackGeneration) return skipOperation.promise;
-    const operation = { generation: playbackGeneration, pauseRevision };
+    const operation = { generation: playbackGeneration, pauseRevision, track: currentPlaylist[currentTrackIndex] };
     skipOperation = operation;
     operation.promise = (async () => {
         // A natural song ending during a mode change must wait for the fresh mix.
         if (stationModeChange?.generation === operation.generation) await stationModeChange.promise;
-        if (operation.generation !== playbackGeneration || streamReclaimed) return getCurrentState();
+        if (operation.generation !== playbackGeneration || streamReclaimed ||
+            currentPlaylist[currentTrackIndex] !== operation.track) return getCurrentState();
         return advanceTrack(operation.generation, operation.pauseRevision);
     })().finally(() => {
         if (skipOperation === operation) skipOperation = null;
@@ -456,7 +465,7 @@ async function advanceTrack(generation, requestedPauseRevision) {
 
 // Modes are loaded only when the expanded song/history view requests them.
 async function loadStationModes(stationId) {
-    if (!currentStation || stationId !== currentStation.stationId || stationLoading || streamReclaimed) {
+    if (!currentStation || isShuffleStation(currentStation) || stationId !== currentStation.stationId || stationLoading || streamReclaimed) {
         return { success: false };
     }
     if (stationModeChange?.generation === playbackGeneration) return { success: false };
@@ -490,7 +499,7 @@ async function loadStationModes(stationId) {
 }
 
 function changeStationMode(stationId, modeId) {
-    if (!currentStation || stationId !== currentStation.stationId || stationLoading || streamReclaimed ||
+    if (!currentStation || isShuffleStation(currentStation) || stationId !== currentStation.stationId || stationLoading || streamReclaimed ||
         stationModeChange?.generation === playbackGeneration || stationModes.status !== 'ready') {
         return Promise.resolve({ success: false, error: 'Wait for the station to be ready, then try again.' });
     }
@@ -505,8 +514,8 @@ function changeStationMode(stationId, modeId) {
     stationModesRead = null;
     isLoadingMoreTracks = false;
     stationModes = { ...stationModes, error: null };
-    // Invalidate pre-change requests and discard only upcoming songs. Keeping the
-    // current track preserves its playback position, saved thumb and history.
+    // Discard the old queue immediately, but keep the current audio until the
+    // requested mode and a fresh playable track have both been confirmed.
     currentPlaylist = currentPlaylist.slice(0, currentTrackIndex + 1);
     sendPlayerState(getCurrentState());
     const isCurrent = () => operation.generation === playbackGeneration && !streamReclaimed;
@@ -549,13 +558,22 @@ function changeStationMode(stationId, modeId) {
                 return { success: false };
             }
             const keptMode = confirmed.currentModeId === modeId;
+            const nextTrack = playlist.tracks?.[0];
+            const canAdvance = !!(keptMode && !playlist.error && nextTrack?.audioURL && nextTrack?.trackToken);
             stationModes = {
                 ...confirmed, status: 'ready',
                 error: !keptMode ? 'Pandora did not keep that mode active. Choose another available mode.'
-                    : playlist.error || (!playlist.tracks?.length ? 'The mode changed, but upcoming songs could not be loaded. Try Next again.' : null)
+                    : playlist.error || (!canAdvance ? 'The mode changed, but a new song could not be loaded. Try Next again.' : null)
             };
-            if (playlist.tracks?.length) currentPlaylist.push(...playlist.tracks);
-            return { success: keptMode };
+            if (canAdvance) {
+                currentTrackIndex = currentPlaylist.length;
+                currentPlaylist.push(...playlist.tracks);
+                // Switch once, preserving the latest pause/play choice. A Next
+                // waiting on this operation must not skip this fresh song too.
+                rememberTrack(nextTrack);
+                api.trackStarted(stationId, nextTrack.trackToken);
+            }
+            return { success: canAdvance, error: stationModes.error };
         } catch {
             if (isCurrent()) stationModes = { ...emptyStationModes(), status: 'error', error: 'Could not confirm the station mode. Please try again.' };
             return { success: false };
@@ -593,8 +611,7 @@ async function setTrackFeedback(isPositive) {
         histItem.feedback = isPositive ? 'liked' : 'disliked';
         histItem.feedbackId = track.feedbackId;
     }
-    // A mode change invalidates playlists but retains this exact track object.
-    // Its pending thumbs-down should still advance once the fresh mix is ready.
+    // A delayed thumbs-down must never skip a different song after a mode change.
     if (!isPositive && currentPlaylist[currentTrackIndex] === track) {
         await skipTrack();
     } else sendPlayerState(getCurrentState());
@@ -795,6 +812,8 @@ ipcMain.handle('CONTENT:PLAY_SHUFFLE', async () => {
     try {
         const shuffleStation = await api.getShuffleStation();
         if (shuffleStation && shuffleStation.stationId) {
+            // This endpoint identifies Shuffle even when its response omits flags.
+            shuffleStation.isShuffle = true;
             // Update lastUpdated so it appears immediately in "Jump Back In"
             shuffleStation.lastUpdated = new Date().toISOString();
 
@@ -803,7 +822,7 @@ ipcMain.handle('CONTENT:PLAY_SHUFFLE', async () => {
             if (existingIdx === -1) {
                 currentStations.unshift(shuffleStation);
             } else {
-                currentStations[existingIdx].lastUpdated = shuffleStation.lastUpdated;
+                currentStations[existingIdx] = { ...currentStations[existingIdx], ...shuffleStation };
             }
             sendStations(currentStations);
             const result = await playStation(shuffleStation.stationId);
