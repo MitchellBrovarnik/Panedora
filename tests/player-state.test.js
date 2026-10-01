@@ -111,7 +111,7 @@ test('confirmed tuning immediately plays the first fresh song and resumes previo
     }
 });
 
-test('a paused mode change waits for resume approval and respects a later pause', async () => {
+test('a paused mode change waits for approval and starts the new song regardless of pauses on the old song', async () => {
     for (const pauseAgain of [false, true]) {
         const s = setup();
         s.seed([track(1, 'current')]);
@@ -132,9 +132,12 @@ test('a paused mode change waits for resume approval and respects a later pause'
         approve({ success: true });
         assert.equal((await changing).success, true);
         assert.equal(s.getCurrentState().trackToken, 'new');
-        assert.equal(s.getCurrentState().isPlaying, !pauseAgain);
+        assert.equal(s.getCurrentState().isPlaying, true);
         assert.deepEqual(s.calls.filter(call => call[0] === 'resume'), [['resume', false]]);
-        assert.equal(s.calls.filter(call => call[0] === 'pause').length, pauseAgain ? 2 : 1);
+        assert.equal(s.calls.filter(call => call[0] === 'pause').length, 1);
+        await s.pausePlayer();
+        assert.equal(s.getCurrentState().isPlaying, false, 'Pause applies normally to the new song');
+        assert.equal(s.getCurrentState().trackToken, 'new');
     }
 });
 
@@ -220,7 +223,7 @@ test('a confirmed mode can start its first song when the station had no current 
     assert.equal(s.getCurrentState().trackToken, 'first');
 });
 
-test('a mode switch waits for read-back confirmation and never undoes a pause while waiting', async () => {
+test('a mode switch waits for confirmation and starts the new song even if the old song was paused while waiting', async () => {
     const s = setup();
     s.seed([track(1, 'current')]);
     await s.loadStationModes('station-1');
@@ -235,7 +238,8 @@ test('a mode switch waits for read-back confirmation and never undoes a pause wh
     confirm(modes(1091989));
     await changing;
     assert.equal(s.getCurrentState().trackToken, 'new');
-    assert.equal(s.getCurrentState().isPlaying, false);
+    assert.equal(s.getCurrentState().isPlaying, true);
+    assert.deepEqual(s.calls.filter(call => call[0] === 'resume'), [['resume', false]]);
 });
 
 test('Shuffle is identified from metadata or its endpoint and never requests station modes', async () => {
@@ -328,7 +332,7 @@ test('a song ending waits for tuning; repeated changes and prefetch are blocked 
     complete(modes(1091989));
     await Promise.all([changing, ended]);
     assert.equal(s.getCurrentState().trackToken, 'tuned');
-    assert.equal(s.getCurrentState().isPlaying, false, 'A later pause must win');
+    assert.equal(s.getCurrentState().isPlaying, true, 'Completing the mode change starts the new song');
     assert.deepEqual(s.started, [['station-1', 'tuned']], 'The pending Next must not double-advance');
 });
 

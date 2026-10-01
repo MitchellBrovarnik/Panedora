@@ -128,7 +128,7 @@ You do **not** need to compile the application locally. Simply navigate to the R
 4. **Curating & History:**
    *   Use the **Thumbs Up** / **Thumbs Down** buttons to inform Pandora's algorithm of your preferences.
    *   Review your recently played tracks in the panel on the right side of the Now Playing page. Click **Undo** on any disliked track to remove the negative feedback from your Pandora account.
-   *   Click the artwork in the play bar to open the expanded song/history view. Use **Tune your station** above Recently Played to choose from Pandora's available modes. Once the new mode and its songs are confirmed, playback switches to the first new song and resumes even if it was paused. Failed changes keep the current song and its playback state; a new pause pressed while the change is loading is respected.
+   *   Click the artwork in the play bar to open the expanded song/history view. Use **Tune your station** above Recently Played to choose from Pandora's available modes. Once the new mode and its songs are confirmed, playback switches to the first new song and resumes even if it was paused. Failed changes keep the current song and its playback state. Pause works normally once the new song starts.
 5. **Lyrics:** Click the **Lyrics** button in the player footer to display synchronized, scrolling lyrics over the Now Playing page.
 6. **Mini Player:** Click the **Mini Player** button to collapse the app into a compact floating bar that stays on top of all other windows, including fullscreen games.
 7. **Themes, Effects & Settings:** Click the **Settings** gear in the sidebar to choose a Color Theme, Background Effect, and Lyrics Highlight Style.

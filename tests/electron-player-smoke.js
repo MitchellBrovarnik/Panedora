@@ -247,16 +247,23 @@ app.whenReady().then(async () => {
     assert.equal(calls.filter(c => c.path.endsWith('/playbackResumed')).at(-1).body.forceActive, false);
     assert.equal(await run("document.querySelector('audio').paused"), true);
     assert.equal(await run('AppState.playerState.trackToken'), 'tuned-1091989-fixture-track-1');
+    // Pausing the old song while the mode is still changing must not cancel
+    // playback of the new mode's first song once approval arrives.
+    await run('window.api.player.pause()');
     approveModeResume();
     resumeGate = null;
     await waitFor(() => run("AppState.playerState.trackToken === 'tuned-5-fixture-track-1' && !document.querySelector('audio').paused"), 'Artist Only playback');
     assert.equal(await run("document.querySelector('audio').src"), reusedAudioURL);
     assert.equal(await run("document.querySelector('audio').currentTime < 10"), true, 'A fresh track token restarts even a reused audio URL');
 
+    await run("document.querySelector('audio').pause()");
+    await waitFor(() => run('!AppState.playerState.isPlaying'), 'normal pause of the new song');
+
     modesUnavailable = true;
     await run("document.getElementById('np-back-btn').click(); document.getElementById('now-playing-art').click()");
     await waitFor(() => run("AppState.playerState.stationModes.status === 'ready' && !AppState.playerState.stationModes.available"), 'station without modes');
     assert.equal(await run("document.getElementById('np-station-tuning').hidden && !document.getElementById('np-mode-select')"), true);
+    assert.equal(await run("document.querySelector('audio').paused"), true, 'The new song stays paused through subsequent state updates');
 
     modesUnavailable = false;
     const modeRequestsBeforeShuffle = calls.filter(c => c.path.includes('interactiveradio')).length;

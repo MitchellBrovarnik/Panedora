@@ -509,7 +509,7 @@ function changeStationMode(stationId, modeId) {
     }
     if (stationModes.currentModeId === modeId) return Promise.resolve({ success: true });
 
-    const operation = { generation: ++playbackGeneration, pauseRevision };
+    const operation = { generation: ++playbackGeneration };
     stationModeChange = operation;
     stationModesRead = null;
     isLoadingMoreTracks = false;
@@ -566,7 +566,7 @@ function changeStationMode(stationId, modeId) {
                     : playlist.error || (!canAdvance ? 'The mode changed, but a new song could not be loaded. Try Next again.' : null)
             };
             if (canAdvance) {
-                if (isPaused && operation.pauseRevision === pauseRevision) {
+                if (isPaused) {
                     // Changing modes requests playback, but resuming still needs
                     // Pandora's approval and must never silently take over a device.
                     const resumed = await api.playbackResumed(false);
@@ -579,16 +579,12 @@ function changeStationMode(stationId, modeId) {
                         stationModes.error = resumed.error || 'The mode changed, but playback could not resume. Please try Play again.';
                         return { success: false, error: stationModes.error };
                     }
-                    // A pause pressed after choosing the mode still wins, even
-                    // when Pandora acknowledges the resume request late.
-                    if (operation.pauseRevision !== pauseRevision && isPaused) {
-                        await api.playbackPaused(stationId, currentPlaylist[currentTrackIndex]?.trackToken);
-                        if (!isCurrent()) return { success: false };
-                    }
                 }
                 currentTrackIndex = currentPlaylist.length;
                 currentPlaylist.push(...playlist.tracks);
-                if (operation.pauseRevision === pauseRevision) isPaused = false;
+                // Starting the new mode starts its song, regardless of the old
+                // song's pause state. Pause works normally on the new song.
+                isPaused = false;
                 // A Next waiting on this operation must not skip this fresh song too.
                 rememberTrack(nextTrack);
                 api.trackStarted(stationId, nextTrack.trackToken);
