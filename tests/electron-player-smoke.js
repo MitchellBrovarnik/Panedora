@@ -157,9 +157,7 @@ app.whenReady().then(async () => {
     const savedTakeoverTheme = await run('document.documentElement.style.cssText');
     await run("Object.entries({'--bg-base':'#0a0a0a','--accent':'rgb(132,115,133)','--accent-soft':'rgba(132,115,133,.15)','--accent-glow':'rgba(132,115,133,.5)','--accent-grad':'linear-gradient(135deg, rgb(132,115,133), #000000)'}).forEach(([key, value]) => document.documentElement.style.setProperty(key, value))");
     await capture('device-takeover-adaptive');
-    await run("const legacy = document.createElement('style'); legacy.id = 'legacy-button-preview'; legacy.textContent = '.stream-dialog-primary {border-color: var(--glass-border-hover); box-shadow: 0 4px 18px var(--accent-glow)}'; document.head.append(legacy)");
-    await capture('device-takeover-adaptive-before');
-    await run("document.getElementById('legacy-button-preview').remove(); document.documentElement.style.cssText = " + JSON.stringify(savedTakeoverTheme));
+    await run('document.documentElement.style.cssText = ' + JSON.stringify(savedTakeoverTheme));
     assert.equal(calls.filter(c => c.path.endsWith('/playbackResumed')).length, 0);
     await run("document.getElementById('stream-keep-listening').click()");
     await waitFor(() => run('AppState.playerState.streamBlocked && !AppState.isLoading'), 'declined takeover');
