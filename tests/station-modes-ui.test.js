@@ -44,6 +44,7 @@ function setup(t) {
     ui.state.isLoggedIn = true;
     ui.state.isLoading = false;
     ui.update({
+        playbackGeneration: 1,
         stationId: 'station-1', stationName: 'Fixture Radio', track: 'Current Song',
         trackToken: 'current', feedback: 'thumbUp', isPlaying: true,
         stationModes: { status: 'idle' }
@@ -207,4 +208,25 @@ test('a stale request failure cannot replace another station’s modes; conflict
     s.ui.update({ streamBlocked: true });
     assert.equal(s.node('np-mode-select').disabled, true);
     assert.match(s.node('np-mode-status').textContent, /Resume playback here/);
+});
+
+test('restarting the same station loads fresh modes without waiting for an old request', async t => {
+    const s = setup(t);
+    let rejectOld;
+    let reads = 0;
+    s.player.getStationModes = async () => {
+        reads++;
+        if (reads === 1) return new Promise((resolve, reject) => { rejectOld = reject; });
+        s.ui.update({ stationModes: modes(1091989) });
+    };
+    s.open();
+    s.ui.update({ playbackGeneration: 2, stationModes: { status: 'idle' } });
+    await tick();
+    const readsBeforeOldFinished = reads;
+    rejectOld(new Error('Obsolete station session'));
+    await tick();
+    assert.equal(readsBeforeOldFinished, 2, 'The new station session must not be blocked by an old mode request');
+    assert.equal(s.node('np-mode-select').value, '1091989');
+    assert.equal(s.node('np-mode-select').disabled, false);
+    assert.equal(s.node('np-mode-retry'), null);
 });

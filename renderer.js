@@ -1201,15 +1201,17 @@ function renderNowPlayingPage() {
 let stationModesRequest = null;
 
 async function requestStationModes() {
-    const { stationId, isShuffle, stationLoading, streamBlocked, stationModes } = AppState.playerState;
+    const { stationId, playbackGeneration, isShuffle, stationLoading, streamBlocked, stationModes } = AppState.playerState;
     if (AppState.currentPage !== 'nowplaying' || !stationId || isShuffle || stationLoading || streamBlocked ||
-        stationModes?.changing || stationModes?.status === 'loading' || stationModesRequest?.stationId === stationId) return;
-    const request = { stationId };
+        stationModes?.changing || stationModes?.status === 'loading' ||
+        (stationModesRequest?.stationId === stationId && stationModesRequest?.generation === playbackGeneration)) return;
+    const request = { stationId, generation: playbackGeneration };
     stationModesRequest = request;
     try {
         await window.api.player.getStationModes(stationId);
     } catch {
-        if (stationModesRequest === request && AppState.playerState.stationId === stationId) {
+        if (stationModesRequest === request && AppState.playerState.stationId === stationId &&
+            AppState.playerState.playbackGeneration === playbackGeneration) {
             AppState.playerState.stationModes = { status: 'error', error: 'Could not load station modes. Please try again.' };
             renderStationModes();
         }
@@ -1544,7 +1546,10 @@ function checkMarquee(el) {
     }
 }
 function updatePlayerUI(state) {
-    if (state.stationId !== undefined && state.stationId !== AppState.playerState.stationId) stationModesRequest = null;
+    if ((state.stationId !== undefined && state.stationId !== AppState.playerState.stationId) ||
+        (state.playbackGeneration !== undefined && state.playbackGeneration !== AppState.playerState.playbackGeneration)) {
+        stationModesRequest = null;
+    }
     AppState.playerState = { ...AppState.playerState, ...state };
     if (AppState.currentPage === 'nowplaying') {
         renderStationModes();

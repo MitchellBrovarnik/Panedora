@@ -42,6 +42,7 @@ app.whenReady().then(async () => {
     let modesUnavailable = false;
     let modesFailed = false;
     let artistOnlyAvailable = false;
+    let loseModeResponse = false;
     const modeData = () => ({
         interactiveRadioAvailable: !modesUnavailable,
         currentModeId: activeMode,
@@ -101,6 +102,7 @@ app.whenReady().then(async () => {
             case '/api/v1/interactiveradio/setAndGetAvailableModes':
                 if (modeGate) await modeGate;
                 if (!rejectMode) activeMode = body.modeId;
+                if (loseModeResponse) return json({ errorString: 'Response lost after applying mode' }, 504);
                 return json(modeData());
             case '/api/v1/station/playbackResumed':
                 if (body.forceActive) canStream = true;
@@ -193,6 +195,7 @@ app.whenReady().then(async () => {
     const audioBefore = await run("document.querySelector('audio').src");
     let finishMode;
     modeGate = new Promise(resolve => { finishMode = resolve; });
+    loseModeResponse = true;
     await run("document.querySelector('audio').currentTime = 12; document.getElementById('np-mode-select').value = '1091989'; document.getElementById('np-mode-select').dispatchEvent(new Event('change'))");
     await waitFor(() => run("AppState.playerState.stationModes.changing"), 'pending tuning');
     assert.equal(await run("document.getElementById('np-mode-select').value"), '0');
@@ -203,6 +206,8 @@ app.whenReady().then(async () => {
     modeGate = null;
     await waitFor(() => run("!AppState.playerState.stationModes.changing && document.getElementById('np-mode-select').value === '1091989'"), 'verified tuning');
     await waitFor(() => run("AppState.playerState.trackToken === 'tuned-1091989-fixture-track-1' && !document.querySelector('audio').paused"), 'immediate tuned playback');
+    loseModeResponse = false;
+    assert.equal(await run('AppState.playerState.stationModes.error'), null, 'Confirmed read-back must recover a lost setter response');
     assert.notEqual(await run("document.querySelector('audio').src"), audioBefore);
     assert.equal(await run("document.querySelector('audio').currentTime < 10"), true);
     assert.equal(await run("document.getElementById('np-thumbup').classList.contains('liked')"), true);
@@ -249,7 +254,10 @@ app.whenReady().then(async () => {
     assert.equal(await run('AppState.playerState.trackToken'), 'tuned-1091989-fixture-track-1');
     // Pausing the old song while the mode is still changing must not cancel
     // playback of the new mode's first song once approval arrives.
+    await run('void window.api.player.play()');
     await run('window.api.player.pause()');
+    assert.equal(calls.filter(c => c.path.endsWith('/playbackResumed')).length, resumesBeforeMode + 1,
+        'Play during a mode change must not send a duplicate resume request');
     approveModeResume();
     resumeGate = null;
     await waitFor(() => run("AppState.playerState.trackToken === 'tuned-5-fixture-track-1' && !document.querySelector('audio').paused"), 'Artist Only playback');

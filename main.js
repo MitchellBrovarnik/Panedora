@@ -177,6 +177,7 @@ function getCurrentState() {
         album: track?.albumTitle || null,
         stationName: currentStation?.name || null,
         stationId: currentStation?.stationId || null,
+        playbackGeneration,
         isShuffle: isShuffleStation(currentStation),
         stationLoading,
         stationModes: { ...stationModes, changing: stationModeChange?.generation === playbackGeneration },
@@ -283,6 +284,13 @@ function showStreamConflict(stationId, generation = playbackGeneration) {
 
 async function resumePlayer() {
     if (stationLoading) return { success: false };
+    if (stationModeChange?.generation === playbackGeneration) {
+        // The mode change owns loading and resuming its new song. A concurrent
+        // Play must not resume the old song or race a second approval request.
+        const changing = stationModeChange;
+        await changing.promise;
+        return { success: changing.generation === playbackGeneration && !streamReclaimed && !isPaused };
+    }
     if (!currentStation) return { success: false, error: 'Select a station first.' };
     if (streamReclaimed) {
         await showStreamConflict(currentStation.stationId);
@@ -421,7 +429,11 @@ function skipTrack() {
     skipOperation = operation;
     operation.promise = (async () => {
         // A natural song ending during a mode change must wait for the fresh mix.
-        if (stationModeChange?.generation === operation.generation) await stationModeChange.promise;
+        if (stationModeChange?.generation === operation.generation) {
+            const result = await stationModeChange.promise;
+            // A failed resume must stay paused even if Next was queued meanwhile.
+            if (!result.success && isPaused) return getCurrentState();
+        }
         if (operation.generation !== playbackGeneration || streamReclaimed ||
             currentPlaylist[currentTrackIndex] !== operation.track) return getCurrentState();
         return advanceTrack(operation.generation, operation.pauseRevision);
@@ -532,11 +544,18 @@ function changeStationMode(stationId, modeId) {
                 // back the actual mode; never keep an optimistic selection.
                 const actual = result.modes ? result : await api.getStationModes(stationId);
                 if (!isCurrent()) return { success: false };
-                stationModes = actual.modes
-                    ? { ...actual, status: 'ready', error: result.error }
-                    : { ...emptyStationModes(), status: 'error', error: result.error };
-                if (actual.streamConflict) await showStreamConflict(stationId, operation.generation);
-                return { success: false };
+                if (actual.streamConflict) {
+                    await showStreamConflict(stationId, operation.generation);
+                    return { success: false };
+                }
+                if (!actual.success || actual.currentModeId !== modeId) {
+                    stationModes = actual.modes
+                        ? { ...actual, status: 'ready', error: result.error }
+                        : { ...emptyStationModes(), status: 'error', error: result.error };
+                    return { success: false };
+                }
+                // The response was lost but Pandora confirms the requested mode.
+                // Continue through the same fresh-song and verification checks.
             }
 
             // Continue the existing station, rather than starting it again (which

@@ -159,6 +159,49 @@ test('failed mode changes and denied resumes leave an already paused song untouc
     }
 });
 
+test('Play during a mode change waits for the new song instead of resuming the old one in parallel', async () => {
+    const s = setup();
+    s.seed([track(1, 'current')]);
+    await s.pausePlayer();
+    await s.loadStationModes('station-1');
+    let finishMode;
+    const resumes = [];
+    s.api.setStationMode = async () => new Promise(resolve => { finishMode = resolve; });
+    s.api.getStationModes = async () => modes(1091989);
+    s.api.getPlaylist = async () => ({ tracks: [track(0, 'new')] });
+    s.api.playbackResumed = async force => new Promise(resolve => { resumes.push({ force, resolve }); });
+    const changing = s.changeStationMode('station-1', 1091989);
+    const play = s.resumePlayer();
+    await tick();
+    const prematureResumes = resumes.length;
+    finishMode(modes(1091989));
+    await tick();
+    for (const resume of resumes) resume.resolve({ success: true });
+    await Promise.all([changing, play]);
+    assert.equal(prematureResumes, 0, 'Play must not resume the old song while its replacement is loading');
+    assert.deepEqual(resumes.map(resume => resume.force), [false], 'Mode switching owns one normal resume request');
+    assert.equal(s.getCurrentState().trackToken, 'new');
+    assert.equal(s.getCurrentState().isPlaying, true);
+});
+
+test('a Next queued during a failed mode resume cannot start unapproved audio', async () => {
+    const s = setup();
+    s.seed([track(1, 'current')]);
+    await s.pausePlayer();
+    await s.loadStationModes('station-1');
+    s.api.getPlaylist = async () => ({ tracks: [track(0, 'new')] });
+    let finishResume;
+    s.api.playbackResumed = async () => new Promise(resolve => { finishResume = resolve; });
+    const changing = s.changeStationMode('station-1', 1091989);
+    await tick();
+    const next = s.skipTrack();
+    finishResume({ success: false, error: 'Resume denied' });
+    await Promise.all([changing, next]);
+    assert.equal(s.getCurrentState().trackToken, 'current');
+    assert.equal(s.getCurrentState().isPlaying, false);
+    assert.equal(s.started.length, 0);
+});
+
 test('resuming through a mode change still asks before device takeover', async () => {
     const s = setup();
     s.seed([track(1, 'current')]);
@@ -277,20 +320,23 @@ test('a rejected change and a mode reset during playlist fetch never display the
     }
 });
 
-test('lost setter responses read back actual state; failed verification clears the unconfirmed mode', async () => {
+test('lost setter responses recover from confirmed read-back; failed verification clears the unconfirmed mode', async () => {
     const s = setup();
     s.seed([track()]);
     await s.loadStationModes('station-1');
     s.api.setStationMode = async () => ({ success: false, error: 'Timed out' });
     s.api.getStationModes = async () => modes(1091989);
-    assert.equal((await s.changeStationMode('station-1', 1091989)).success, false);
+    s.api.getPlaylist = async () => ({ tracks: [track(0, 'recovered-mode-song')] });
+    assert.equal((await s.changeStationMode('station-1', 1091989)).success, true);
     assert.equal(s.getCurrentState().stationModes.currentModeId, 1091989, 'Read-back is authoritative even after a lost response');
+    assert.equal(s.getCurrentState().trackToken, 'recovered-mode-song');
+    assert.equal(s.getCurrentState().stationModes.error, null);
     s.api.setStationMode = async () => modes(0);
     s.api.getStationModes = async () => ({ success: false, error: 'Offline' });
     await s.changeStationMode('station-1', 0);
     assert.equal(s.getCurrentState().stationModes.currentModeId, null);
     assert.equal(s.getCurrentState().stationModes.status, 'error');
-    assert.equal(s.getCurrentState().trackToken, 'track-1');
+    assert.equal(s.getCurrentState().trackToken, 'recovered-mode-song');
 });
 
 test('a delayed pre-change playlist cannot overwrite tuning', async () => {
