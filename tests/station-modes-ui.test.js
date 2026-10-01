@@ -263,7 +263,7 @@ test('mode loading errors can be retried and stations without modes get no inven
     assert.equal(s.node('np-mode-select'), null);
 });
 
-test('Artist Only appears only when the API offers it and marks it available, even if premium-only', async t => {
+test('Artist Only appears only when the API confirms station and account eligibility', async t => {
     const s = setup(t);
     s.open();
     await tick();

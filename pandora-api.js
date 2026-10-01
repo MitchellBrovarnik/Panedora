@@ -10,6 +10,8 @@ class PandoraAPI {
         this.baseUrl = 'www.pandora.com';
         this.apiPath = '/api';
         this.authToken = config.getAuthToken();
+        // Stored tokens alone do not prove a Premium subscription.
+        this.premiumAuthToken = null;
         this.onSessionExpired = null; // Callback for main process
         this.onVerificationRequired = null;
 
@@ -160,6 +162,7 @@ class PandoraAPI {
      * Login with username/password
      */
     async login(username, password) {
+        this.premiumAuthToken = null;
         try {
             const response = await this.request('/v1/auth/login', {
                 username,
@@ -179,6 +182,7 @@ class PandoraAPI {
                 }
 
                 this.authToken = response.authToken;
+                this.premiumAuthToken = PandoraAPI.hasPremiumSubscription(response) ? response.authToken : null;
                 config.setAuthToken(response.authToken);
 
                 // Save credentials for auto-relogin on next launch.
@@ -266,11 +270,25 @@ class PandoraAPI {
         return false;
     }
 
+    static hasPremiumSubscription(response) {
+        const cfg = response?.config || {};
+        // Plus and free accounts must not gain Premium modes through ad-free
+        // flags, audio quality, or a temporary rewarded-access session.
+        if (!response?.authToken || cfg.branding === 'PandoraPlus' || cfg.branding === 'Pandora') return false;
+        return cfg.branding === 'PandoraPremium' ||
+            (Array.isArray(cfg.flags) && cfg.flags.includes('onDemand'));
+    }
+
+    hasPremiumAccess() {
+        return !!this.premiumAuthToken && this.premiumAuthToken === this.authToken;
+    }
+
     /**
      * Clear local auth state and logout
      */
     logout() {
         this.authToken = null;
+        this.premiumAuthToken = null;
         this.csrfToken = this.generateCsrfToken();
         config.clearAll();
     }
@@ -327,7 +345,7 @@ class PandoraAPI {
 
     // Interactive radio uses its own endpoints. Mode IDs must come from Pandora,
     // including curated/mood modes; a menu position is not a mode ID.
-    static parseStationModes(response) {
+    static parseStationModes(response, premiumAccess = false) {
         const data = response?.result || response;
         if (response?.stat === 'fail' || response?.errorCode ||
             (!Array.isArray(data?.availableModes) && data?.interactiveRadioAvailable !== false)) {
@@ -343,12 +361,14 @@ class PandoraAPI {
             const id = modeId(mode?.modeId);
             if (id === null || seen.has(id) || typeof mode?.modeName !== 'string' || !mode.modeName.trim()) return [];
             seen.add(id);
+            // Artist Only requires Premium even if its restriction flag is omitted.
+            const premiumOnly = mode.isPremiumOnly === true || id === 5 || mode.modeName.trim().toLowerCase() === 'artist only';
             return [{
                 id,
                 name: mode.modeName,
                 description: typeof mode.modeDescription === 'string' ? mode.modeDescription : '',
-                available: mode.isModeAvailable === true,
-                premiumOnly: mode.isPremiumOnly === true
+                available: mode.isModeAvailable === true && (!premiumOnly || premiumAccess === true),
+                premiumOnly
             }];
         });
         return {
@@ -363,7 +383,7 @@ class PandoraAPI {
         try {
             const response = await this.request('/v1/interactiveradio/getAvailableModesSimple', { stationId });
             if (PandoraAPI.isStreamConflict(response)) throw response;
-            return PandoraAPI.parseStationModes(response);
+            return PandoraAPI.parseStationModes(response, this.hasPremiumAccess());
         } catch (error) {
             return {
                 success: false,
@@ -378,11 +398,32 @@ class PandoraAPI {
             return { success: false, error: 'Choose a mode offered by this station.' };
         }
         try {
+            // Re-read Pandora's offered modes so a stale menu or direct IPC call
+            // cannot select an unavailable mode.
+            const offered = await this.getStationModes(stationId);
+            if (!offered.success) return offered;
+            const selected = offered.modes.find(mode => mode.id === modeId);
+            if (!offered.available || !selected?.available) {
+                return { ...offered, success: false, error: 'Choose a mode available for your station and subscription.' };
+            }
+            if (selected.premiumOnly) {
+                // Re-confirm the subscription before every Premium-only change,
+                // including an account downgraded since the menu was loaded.
+                this.premiumAuthToken = null;
+                const creds = config.getCredentials();
+                if (!creds?.email || !creds?.password) {
+                    return { success: false, error: 'Sign in again to confirm your Pandora Premium subscription.' };
+                }
+                const login = await this.login(creds.email, creds.password);
+                if (!login.success || !this.hasPremiumAccess()) {
+                    return { success: false, error: 'This mode requires a verified Pandora Premium subscription.' };
+                }
+            }
             const response = await this.request('/v1/interactiveradio/setAndGetAvailableModes', { stationId, modeId });
             if (PandoraAPI.isStreamConflict(response)) throw response;
-            const result = PandoraAPI.parseStationModes(response);
+            const result = PandoraAPI.parseStationModes(response, this.hasPremiumAccess());
             // Pandora can return HTTP 200 while silently keeping the old mode.
-            if (result.currentModeId !== modeId) {
+            if (result.currentModeId !== modeId || !result.modes.some(mode => mode.id === modeId && mode.available)) {
                 return { ...result, success: false, error: 'Pandora did not enable that mode. Choose another available mode.' };
             }
             return result;
@@ -543,6 +584,7 @@ class PandoraAPI {
      * Returns true if paid, false if free/unknown.
      */
     async verifySubscription() {
+        this.premiumAuthToken = null;
         try {
             const creds = config.getCredentials();
             if (!creds?.email || !creds?.password) {
@@ -562,6 +604,7 @@ class PandoraAPI {
 
             // Update the auth token (it may have changed)
             this.authToken = response.authToken;
+            this.premiumAuthToken = PandoraAPI.hasPremiumSubscription(response) ? response.authToken : null;
             config.setAuthToken(response.authToken);
 
             return this._checkLoginSubscription(response);
@@ -577,6 +620,7 @@ class PandoraAPI {
      */
     restoreAuth() {
         this.authToken = config.getAuthToken();
+        this.premiumAuthToken = null;
         this.csrfToken = config.getCsrfToken();
         return this.isAuthenticated();
     }

@@ -42,6 +42,7 @@ app.whenReady().then(async () => {
     let modesUnavailable = false;
     let modesFailed = false;
     let artistOnlyAvailable = false;
+    let premiumAccount = false;
     let loseModeResponse = false;
     const modeData = () => ({
         interactiveRadioAvailable: !modesUnavailable,
@@ -88,7 +89,9 @@ app.whenReady().then(async () => {
         calls.push({ path: url.pathname, body });
         switch (url.pathname) {
             case '/api/v1/auth/login':
-                return json({ authToken: 'fixture-token', config: { branding: 'PandoraPlus' } });
+                return json({ authToken: 'fixture-token', config: premiumAccount
+                    ? { branding: 'PandoraPremium', flags: ['onDemand'] }
+                    : { branding: 'PandoraPlus' } });
             case '/api/v1/station/getStations':
                 return json({ stations: fixtureStations });
             case '/api/v1/station/removeStation':
@@ -312,6 +315,15 @@ app.whenReady().then(async () => {
 
     artistOnlyAvailable = true;
     rejectMode = false;
+    await run("document.getElementById('np-back-btn').click(); document.getElementById('now-playing-art').click()");
+    await waitFor(() => run("AppState.playerState.stationModes.status === 'ready'"), 'Plus station modes');
+    assert.equal(await run("!!document.querySelector('#np-mode-option-5')"), false, 'Plus must not display Artist Only even on an eligible station');
+    const changesBeforeBlockedMode = calls.filter(c => c.path.endsWith('/setAndGetAvailableModes')).length;
+    assert.equal((await run("window.api.player.setStationMode('fixture-station', 5)")).success, false);
+    assert.equal(calls.filter(c => c.path.endsWith('/setAndGetAvailableModes')).length, changesBeforeBlockedMode);
+    // Upgrade the same fixture account, then reload the modes through real IPC.
+    premiumAccount = true;
+    assert.equal((await run("window.api.auth.login('fixture@example.invalid', 'fixture-password')")).success, true);
     await run("document.getElementById('np-back-btn').click(); document.getElementById('now-playing-art').click()");
     await waitFor(() => run("!!document.querySelector('#np-mode-option-5')"), 'eligible Artist Only');
     const reusedAudioURL = await run("document.querySelector('audio').src");
