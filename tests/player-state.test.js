@@ -110,6 +110,29 @@ test('a repeated playlist conflict after takeover stays paused without another p
     assert.equal(s.getCurrentState().isPlaying, false);
 });
 
+test('a late pre-takeover playlist conflict cannot stop successfully reclaimed playback', async () => {
+    const s = setup();
+    s.seed([track()]);
+    let finishOldRequest;
+    let requests = 0;
+    s.api.getPlaylist = async () => {
+        if (++requests === 1) return new Promise(resolve => { finishOldRequest = resolve; });
+        return { tracks: [track(1, 'reclaimed-track')] };
+    };
+    const oldRequest = s.handlers.get('PLAYER:GET_MORE_TRACKS')();
+    const choice = s.showStreamConflict('station-1');
+    s.dialogs[0].resolve({ response: 0 });
+    await choice;
+    finishOldRequest({ tracks: [], streamConflict: true });
+    await tick();
+    // Clean up the unexpected dialog on the unfixed implementation before asserting.
+    if (s.dialogs[1]) s.dialogs[1].resolve({ response: 1 });
+    await oldRequest;
+    assert.equal(s.dialogs.length, 1);
+    assert.equal(s.getCurrentState().trackToken, 'reclaimed-track');
+    assert.equal(s.getCurrentState().isPlaying, true);
+});
+
 test('an old popup cannot reclaim playback after switching stations', async () => {
     const s = setup();
     s.seed([track()]);
@@ -119,6 +142,25 @@ test('an old popup cannot reclaim playback after switching stations', async () =
     await pending;
     assert.equal(s.getCurrentState().stationId, 'station-2');
     assert.deepEqual(s.calls, []);
+});
+
+test('a conflict on the newly selected station gets its own choice after an old popup closes', async () => {
+    const s = setup();
+    s.seed([track()]);
+    const oldPrompt = s.showStreamConflict('station-1');
+    s.playlists.push({ tracks: [], streamConflict: true }, { tracks: [track(1)] });
+    const nextStation = s.playStation('station-2');
+    await tick();
+    s.dialogs[0].resolve({ response: 0 });
+    await oldPrompt;
+    await tick();
+    assert.deepEqual(s.calls, [], 'The old choice must not reclaim the new station');
+    assert.equal(s.dialogs.length, 2);
+    s.dialogs[1].resolve({ response: 0 });
+    await nextStation;
+    assert.equal(s.getCurrentState().stationId, 'station-2');
+    assert.equal(s.getCurrentState().isPlaying, true);
+    assert.deepEqual(s.calls, [['resume', true]]);
 });
 
 test('an old popup cannot reclaim playback after sign-out', async () => {
@@ -177,6 +219,49 @@ test('saved ratings are authoritative and an already liked song is not submitted
     assert.equal(s.getCurrentState().feedback, 'thumbUp');
     await s.thumbUp();
     assert.deepEqual(s.calls, []);
+});
+
+test('REST playlist ratings highlight historical likes on first load and skip without re-submitting', async () => {
+    const s = setup();
+    const restTrack = (rating, token) => {
+        const item = track(0, token);
+        delete item.songRating;
+        return { ...item, rating };
+    };
+    s.playlists.push({ tracks: [restTrack(1, 'rest-1'), restTrack('1', 'rest-2'), restTrack(0, 'rest-3')] });
+    await s.playStation('station-1');
+    assert.equal(s.getCurrentState().feedback, 'thumbUp');
+    assert.equal(s.getCurrentState().history[0].feedback, 'liked');
+    await s.thumbUp();
+    await s.handlers.get('PLAYER:CMD')({}, { action: 'next' });
+    assert.equal(s.getCurrentState().feedback, 'thumbUp');
+    assert.equal(s.getCurrentState().history[1].feedback, 'liked');
+    await s.thumbUp();
+    assert.deepEqual(s.calls, []);
+});
+
+test('REST rating takes precedence over the legacy field and confirmed undo clears both', async () => {
+    const s = setup();
+    s.seed([{ ...track(1), rating: -1, feedbackId: 'rest-feedback' }]);
+    assert.equal(s.getCurrentState().feedback, 'thumbDown');
+    assert.equal(s.getCurrentState().history[0].feedback, 'disliked');
+    const result = await s.handlers.get('PLAYER:UNDO_FEEDBACK')({}, { trackToken: 'track-1' });
+    assert.equal(result.success, true);
+    assert.equal(s.getCurrentState().feedback, null);
+    await s.thumbUp();
+    assert.equal(s.getCurrentState().feedback, 'thumbUp');
+    assert.deepEqual(s.calls, [['deleteFeedback', 'rest-feedback'], ['addFeedback']]);
+});
+
+test('a failed write preserves a saved REST rating and its history', async () => {
+    const s = setup();
+    s.seed([{ ...track(0), rating: 1, feedbackId: 'rest-feedback' }]);
+    s.api.addFeedback = async () => ({ success: false });
+    s.api.deleteFeedback = async () => ({ success: false });
+    assert.equal((await s.thumbDown()).success, false);
+    assert.equal((await s.handlers.get('PLAYER:UNDO_FEEDBACK')({}, { trackToken: 'track-1' })).success, false);
+    assert.equal(s.getCurrentState().feedback, 'thumbUp');
+    assert.equal(s.getCurrentState().history[0].feedback, 'liked');
 });
 
 test('a failed thumb write does not change the track rating or history', async () => {

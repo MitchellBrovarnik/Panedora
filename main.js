@@ -147,7 +147,7 @@ function sendStations(stations) {
 
 function getCurrentState() {
     const track = currentPlaylist[currentTrackIndex];
-    const currentFeedback = feedbackForRating(track?.songRating);
+    const currentFeedback = feedbackForTrack(track);
 
     return {
         track: track?.songTitle || null,
@@ -169,15 +169,17 @@ function getCurrentState() {
     };
 }
 
-function feedbackForRating(rating) {
-    if (Number(rating) === 1) return 'thumbUp';
-    if (Number(rating) === -1) return 'thumbDown';
+function feedbackForTrack(track) {
+    // REST playlists use rating; older playlist formats use songRating.
+    const rating = Number(track?.rating ?? track?.songRating);
+    if (rating === 1) return 'thumbUp';
+    if (rating === -1) return 'thumbDown';
     return null;
 }
 
 function rememberTrack(track) {
     if (!track || songHistory[songHistory.length - 1]?.trackToken === track.trackToken) return;
-    const feedback = feedbackForRating(track.songRating);
+    const feedback = feedbackForTrack(track);
     songHistory.push({
         songTitle: track.songTitle,
         artistName: track.artistName,
@@ -195,7 +197,11 @@ function showStreamConflict(stationId, generation = playbackGeneration) {
     streamReclaimed = true;
     isPaused = true;
     sendPlayerState(getCurrentState());
-    if (streamPrompt) return streamPrompt.promise;
+    if (streamPrompt) {
+        if (streamPrompt.generation === generation) return streamPrompt.promise;
+        // A prior station's dialog cannot make the choice for this station.
+        return streamPrompt.promise.then(() => showStreamConflict(stationId, generation));
+    }
     if (!uiWindow || uiWindow.isDestroyed()) return Promise.resolve();
 
     const prompt = { generation };
@@ -228,6 +234,8 @@ function showStreamConflict(stationId, generation = playbackGeneration) {
                 sendToUI('UI:ERROR', { message: result.error || 'No tracks available. Please try playing the station again.' });
                 return;
             }
+            // Discard playlist responses requested before this successful takeover.
+            playbackGeneration++;
             currentPlaylist = result.tracks;
             currentTrackIndex = 0;
             streamReclaimed = false;
@@ -417,13 +425,14 @@ async function setTrackFeedback(isPositive) {
     const track = currentPlaylist[currentTrackIndex];
     if (!track?.trackToken) return { success: false, error: 'No track selected.' };
     const rating = isPositive ? 1 : -1;
-    if (Number(track.songRating) === rating) return { success: true };
+    if (feedbackForTrack(track) === (isPositive ? 'thumbUp' : 'thumbDown')) return { success: true };
     const generation = playbackGeneration;
     const result = await api.addFeedback(track.trackToken, isPositive);
     if (!result.success) {
         sendPlayerState(getCurrentState());
         return { success: false, error: 'Could not save your thumb. Please try again.' };
     }
+    track.rating = rating;
     track.songRating = rating;
     track.feedbackId = result.feedbackId || null;
     const histItem = songHistory.find(h => h.trackToken === track.trackToken);
@@ -543,7 +552,7 @@ ipcMain.handle('PLAYER:UNDO_FEEDBACK', async (event, { trackToken }) => {
     }
     const result = await api.deleteFeedback(feedbackId);
     if (result.success) {
-        if (track) { track.songRating = 0; track.feedbackId = null; }
+        if (track) { track.rating = 0; track.songRating = 0; track.feedbackId = null; }
         if (histItem) { histItem.feedback = null; histItem.feedbackId = null; }
         sendPlayerState(getCurrentState());
     }

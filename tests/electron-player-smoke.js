@@ -35,6 +35,7 @@ function silentWav() {
 
 app.whenReady().then(async () => {
     let canStream = false;
+    let resumeGate = null;
     const calls = [];
     const prompts = [];
     const art = [{ size: 500, url: 'https://fixture.invalid/art.svg' }];
@@ -43,7 +44,7 @@ app.whenReady().then(async () => {
         trackToken: 'fixture-track-' + n, songTitle: 'Fixture Song ' + n,
         artistName: 'Fixture Artist', albumTitle: 'Fixture Album', albumArt: art,
         audioURL: 'https://fixture.invalid/audio-' + n + '.wav', trackLength: 60,
-        songRating: n === 1 ? 1 : n === 2 ? '1' : 0
+        rating: n === 1 ? 1 : n === 2 ? '1' : 0
     }));
     dialog.showMessageBox = (parent, options) => new Promise(resolve => prompts.push({ parent, options, resolve }));
     const json = (value, status = 200) => new Response(JSON.stringify(value), {
@@ -71,6 +72,7 @@ app.whenReady().then(async () => {
                 return canStream ? json({ tracks }) : json({ errorString: 'STREAM_VIOLATION' }, 429);
             case '/api/v1/station/playbackResumed':
                 if (body.forceActive) canStream = true;
+                else if (resumeGate) await resumeGate;
                 return canStream ? json({}) : json({ errorString: 'STREAM_VIOLATION' }, 429);
             case '/api/v1/station/playbackPaused':
             case '/api/v1/station/trackStarted':
@@ -136,8 +138,14 @@ app.whenReady().then(async () => {
     const pauses = calls.filter(c => c.path.endsWith('/playbackPaused')).length;
     await run("document.querySelector('audio').pause()");
     await waitFor(() => calls.filter(c => c.path.endsWith('/playbackPaused')).length > pauses, 'normal pause notification');
-    await run("document.querySelector('audio').play()");
+    let approveResume;
+    resumeGate = new Promise(resolve => { approveResume = resolve; });
+    await run("document.getElementById('play-pause-btn').click()");
     await waitFor(() => calls.some(c => c.path.endsWith('/playbackResumed') && !c.body.forceActive), 'normal resume notification');
+    assert.equal(await run("document.querySelector('audio').paused"), true, 'Buffered audio must wait for Pandora to approve resume');
+    approveResume();
+    resumeGate = null;
+    await waitFor(() => run("!document.querySelector('audio').paused"), 'approved resume audio');
     assert.equal(await run('AppState.playerState.feedback'), 'thumbUp');
     await run('window.api.player.next()');
     await waitFor(() => run("AppState.playerState.trackToken === 'fixture-track-2' && !document.querySelector('audio').paused"), 'next saved thumb');
@@ -151,7 +159,7 @@ app.whenReady().then(async () => {
     await waitFor(() => run("document.querySelector('audio').paused"), 'buffered audio stopped');
     prompts[2].resolve({ response: 1 });
     assert.equal(calls.filter(c => c.path.endsWith('/playbackResumed') && c.body.forceActive).length, 1);
-    console.log('Native player smoke test passed: both listening choices, mini Play recovery, buffered audio stop, search images, saved thumbs, normal pause/resume.');
+    console.log('Native player smoke test passed: both listening choices, mini Play recovery, buffered audio stop, search images, saved REST thumbs, approved pause/resume.');
     console.log('Screenshots: ' + testData);
     clearTimeout(deadline);
     app.quit();

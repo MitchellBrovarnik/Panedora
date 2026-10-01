@@ -1655,10 +1655,9 @@ function initEventListeners() {
         if (AppState.playerState.streamBlocked || !AppState.playerState.audioURL) {
             window.api.player.play();
         } else if (audioEl) {
-            // Just toggle the audio element; the 'play'/'pause' event listeners
-            // on the audio element will handle syncing UI and notifying main.
             if (audioEl.paused) {
-                audioEl.play().catch(e => console.error(e));
+                // Wait for Pandora's resume approval before playing buffered audio.
+                window.api.player.play();
             } else {
                 audioEl.pause();
             }
@@ -1701,9 +1700,7 @@ function initEventListeners() {
             // If more than 3 sec in, restart current track
             audioEl.currentTime = 0;
             if (audioEl.paused) {
-                audioEl.play().catch(e => console.error(e));
-                AppState.playerState.isPlaying = true;
-                updatePlayerUI(AppState.playerState);
+                window.api.player.play();
             }
         } else {
             // Otherwise go to previous track
@@ -1879,7 +1876,7 @@ function initAPIListeners() {
                         if (currentAudio && currentAudio.currentTime > 3) {
                             currentAudio.currentTime = 0;
                             if (currentAudio.paused) {
-                                currentAudio.play().catch(e => console.error(e));
+                                window.api.player.play();
                             }
                         } else {
                             window.api.player.prev();
@@ -1889,7 +1886,7 @@ function initAPIListeners() {
                         if (AppState.playerState.streamBlocked) {
                             window.api.player.play();
                         } else if (currentAudio && currentAudio.paused) {
-                            currentAudio.play().catch(e => console.error(e));
+                            window.api.player.play();
                         }
                     });
                     navigator.mediaSession.setActionHandler('pause', () => {
