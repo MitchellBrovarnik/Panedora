@@ -25,7 +25,8 @@ A premium, immersive Pandora desktop client built with Electron. Panedora featur
 ## Recent Updates
 
 *   **Tune Your Station:** Choose and apply Pandora's available station modes directly in the expanded Now Playing view, with immediate playback of the new mix.
-*   **Themed Confirmations & Station Highlighting:** Device takeover and station removal use dialogs that match the app's theme. The sidebar follows the actual playing station or Shuffle.
+*   **Device Takeover:** If Pandora is playing on another device, choose **Let me listen** in Panedora's themed prompt to switch playback here, or **Let them listen** to keep Panedora paused.
+*   **Themed Station Removal & Station Highlighting:** Station removal uses a confirmation that matches the app's theme. The sidebar follows the actual playing station or Shuffle.
 *   **Mini Player Transparency & Contrast:** Rewrote the Mini Player window logic to achieve true OS-level transparency. Introduced localized frosted glass "pill" containers and soft radial gradients to ensure readability at any size.
 *   **Always-on-Top Mini Player:** Built a compact, floating Mini Player mode that stays on top of other windows (even borderless fullscreen games), providing instant access to playback controls, thumbnail art, and feedback buttons without leaving your current application.
 *   **Live Lyrics:** Added a comprehensive lyrics fetching system that seamlessly presents synchronized, time-coded lyrics overlaid on the Now Playing screen, complete with auto-scrolling and a highlighted active line.
@@ -87,7 +88,7 @@ Your selected effect is saved and restored automatically on next launch.
 
 ### Robust Session Management
 *   **Secure Authentication:** Signs in directly with Pandora, generating and managing the required auth tokens and CSRF tokens for all subsequent requests.
-*   **Pandora Verification:** If Pandora requests a human check during sign-in, a small modal displays its CAPTCHA. Complete the check to retry sign-in automatically, or close the modal to cancel. The verification and API requests share Electron's cookie session.
+*   **Pandora Verification (Experimental):** Human-check support is implemented for sign-in, with a separate CAPTCHA window and automatic retry after completion. It has been tested with simulated challenges; verification against a live Pandora CAPTCHA still needs confirmation.
 *   **Clean Sign Out:** A dedicated sign-out process permanently wipes session tokens, pauses active streams, and safely tears down the player state to prevent ghost playback or infinite reload loops.
 
 ## Technical Architecture
