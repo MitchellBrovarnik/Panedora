@@ -40,12 +40,17 @@ function setup(t) {
             return { success: true };
         }
     };
+    const events = {};
     window.api = { player, window: {}, content: {} };
+    for (const name of ['State', 'Collection', 'SearchResults', 'LoginStatus', 'MiniMode', 'Error']) {
+        window.api['on' + name] = listener => { events[name] = listener; };
+    }
     window.eval(fs.readFileSync(path.join(root, 'components.js'), 'utf8') + '\n' +
         fs.readFileSync(path.join(root, 'renderer.js'), 'utf8') + `
         document.removeEventListener('DOMContentLoaded', init);
         window.testUI = { state: AppState, update: updatePlayerUI, render: renderPage, renderStations: renderStationsList };
         initEventListeners();
+        initAPIListeners();
     `);
     const ui = window.testUI;
     ui.state.isLoggedIn = true;
@@ -64,8 +69,87 @@ function setup(t) {
         node('np-mode-select').click();
         node('np-mode-option-' + value).click();
     };
-    return { window, ui, player, calls, node, open, select };
+    return { window, ui, player, calls, node, open, select, events };
 }
+
+test('Home reconciles collection changes immediately and preserves unchanged cards, focus and scroll', t => {
+    const s = setup(t);
+    const stations = Array.from({ length: 8 }, (_, index) => ({
+        id: 'home-' + index, name: 'Radio ' + index, type: 'station',
+        lastUpdated: new Date(2025, 0, 8 - index).toISOString()
+    }));
+    const ids = container => Array.from(container.querySelectorAll('.card'), card => card.dataset.id);
+    s.events.Collection(stations);
+    const recent = s.node('home-recent');
+    const more = s.node('home-more');
+    const firstCard = recent.firstElementChild;
+    firstCard.focus();
+    s.node('main-scroll').scrollTop = 120;
+    s.events.Collection(structuredClone(stations));
+    assert.equal(s.node('home-recent'), recent);
+    assert.equal(recent.firstElementChild, firstCard);
+    assert.equal(recent.children.length, 6, 'An unchanged refresh must not detach the cards');
+    assert.equal(more.children.length, 2);
+    assert.equal(s.window.document.activeElement, firstCard);
+    assert.equal(s.node('main-scroll').scrollTop, 120);
+
+    const promotedCard = more.firstElementChild;
+    s.events.Collection(stations.filter(station => station.id !== 'home-1'));
+    assert.deepEqual(ids(recent), ['home-0', 'home-2', 'home-3', 'home-4', 'home-5', 'home-6']);
+    assert.equal(recent.lastElementChild, promotedCard, 'Reuse a card promoted from the second grid');
+    assert.deepEqual(ids(more), ['home-7']);
+    s.events.Collection(stations.slice(0, 2));
+    assert.equal(more.children.length, 0);
+    assert.equal(s.node('home-more-section').style.display, 'none');
+    s.events.Collection([]);
+    assert.equal(recent.querySelector('.card'), null);
+    assert.match(recent.textContent, /No stations found/);
+
+    s.ui.render('search');
+    const searchView = s.node('page-content').firstElementChild;
+    s.events.Collection(stations);
+    assert.equal(s.node('page-content').firstElementChild, searchView);
+    s.ui.render('home');
+    assert.equal(s.node('home-recent').children.length, 6);
+});
+
+test('playing a Home or sidebar station immediately reorders recent cards and survives a stale collection refresh', t => {
+    const s = setup(t);
+    let now = Date.UTC(2026, 0, 1);
+    const NativeDate = s.window.Date;
+    s.window.Date = class extends NativeDate {
+        constructor(...args) { super(...(args.length ? args : [now])); }
+    };
+    const stations = Array.from({ length: 8 }, (_, index) => ({
+        id: 'home-' + index, name: 'Radio ' + index, type: 'station',
+        lastUpdated: new Date(2025, 0, 8 - index).toISOString()
+    }));
+    s.window.api.content.playItem = station => s.calls.push(['play', station.id]);
+    s.events.Collection(structuredClone(stations));
+    const recent = s.node('home-recent');
+    const more = s.node('home-more');
+    const selected = more.lastElementChild;
+    const displaced = recent.lastElementChild;
+    selected.focus();
+    s.node('main-scroll').scrollTop = 120;
+    selected.click();
+    assert.deepEqual(s.calls, [['play', 'home-7']]);
+    assert.equal(recent.firstElementChild, selected);
+    assert.equal(more.firstElementChild, displaced);
+    assert.equal(s.window.document.activeElement, selected);
+    assert.equal(s.node('main-scroll').scrollTop, 120);
+    assert.equal(recent.children.length + more.children.length, 8);
+    s.events.Collection(structuredClone(stations));
+    assert.equal(recent.firstElementChild, selected, 'Delayed server dates must not undo the selection');
+    selected.click();
+    assert.equal(recent.children.length, 6, 'Replaying the newest card must leave the grid intact');
+
+    now += 1000;
+    s.node('stations-list').querySelector('[data-id="home-2"]').click();
+    assert.equal(recent.firstElementChild.dataset.id, 'home-2');
+    assert.deepEqual(s.calls.at(-1), ['play', 'home-2']);
+    assert.equal(s.node('home-recent'), recent, 'Keep the Home view mounted');
+});
 
 test('artwork opens tuning above history with only available API options and escaped names', async t => {
     const s = setup(t);

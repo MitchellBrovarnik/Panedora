@@ -231,40 +231,25 @@ function updateHomeGrids() {
     const moreSection = document.getElementById('home-more-section');
     if (!recentContainer) return;
 
-    // Sort stations by lastUpdated for "Jump Back In"
-    const recentStations = [...AppState.stations]
-        .sort((a, b) => new Date(b.lastUpdated || 0) - new Date(a.lastUpdated || 0))
-        .slice(0, 6);
-
-    // A second batch for "More from Your Collection"
-    const moreStations = [...AppState.stations]
-        .sort((a, b) => new Date(b.lastUpdated || 0) - new Date(a.lastUpdated || 0))
-        .slice(6, 12);
+    const sortedStations = [...AppState.stations]
+        .sort((a, b) => new Date(b.lastUpdated || 0) - new Date(a.lastUpdated || 0));
+    const recentStations = sortedStations.slice(0, 6);
+    const moreStations = sortedStations.slice(6, 12);
+    const cardMap = new Map(Array.from(
+        document.querySelectorAll('#home-recent .card, #home-more .card'),
+        card => [card.dataset.id, card]
+    ));
+    const focusedElement = document.activeElement;
 
     // Helper to update a container's children without destroying elements that just moved
     function updateGridNodes(container, stationsArray) {
         if (!container) return;
 
-        // Convert to map for easy lookup
-        const existingCards = Array.from(container.querySelectorAll('.card'));
-        const cardMap = {};
-        existingCards.forEach(card => cardMap[card.dataset.id] = card);
+        const orderedCards = stationsArray.map(station => {
+            const dataId = String(station.id || station.stationId);
+            let card = cardMap.get(dataId);
 
-        // Build new arrangement
-        const newFragment = document.createDocumentFragment();
-        let hasChanges = existingCards.length !== stationsArray.length;
-
-        stationsArray.forEach((station, index) => {
-            const dataId = station.id || station.stationId;
-            let card = cardMap[dataId];
-
-            if (card) {
-                // Card exists, check if it moved
-                if (existingCards[index] !== card) {
-                    hasChanges = true;
-                }
-                newFragment.appendChild(card);
-            } else {
+            if (!card) {
                 // Completely new card
                 let img = station.image || null;
                 let title = station.name;
@@ -277,18 +262,25 @@ function updateHomeGrids() {
 
                 const temp = document.createElement('div');
                 temp.innerHTML = createCard(img, title, station.type === 'playlist' ? 'Playlist' : 'Station', dataId);
-                const newCard = temp.firstElementChild;
-                newCard.addEventListener('click', () => playStation(station));
-                newFragment.appendChild(newCard);
-                hasChanges = true;
+                card = temp.firstElementChild;
+                card.addEventListener('click', () => {
+                    const current = AppState.stations.find(s => String(s.id || s.stationId) === dataId);
+                    if (current) playStation(current);
+                });
             }
+            return card;
         });
 
-        // Only touch the DOM if something actually changed order or items
-        if (hasChanges) {
-            container.innerHTML = '';
-            container.appendChild(newFragment);
-        }
+        // Leave unchanged cards attached; move existing cards between either grid.
+        const retained = new Set(orderedCards);
+        Array.from(container.children).forEach(child => {
+            if (!retained.has(child)) child.remove();
+        });
+        orderedCards.forEach((card, index) => {
+            if (container.children[index] !== card) {
+                container.insertBefore(card, container.children[index] || null);
+            }
+        });
     }
 
     // Fallback if empty
@@ -306,6 +298,10 @@ function updateHomeGrids() {
             moreContainer.innerHTML = '';
             moreSection.style.display = 'none';
         }
+    }
+    if (focusedElement?.isConnected && focusedElement.closest('#home-recent, #home-more') &&
+        document.activeElement !== focusedElement) {
+        focusedElement.focus({ preventScroll: true });
     }
 }
 
@@ -1250,8 +1246,7 @@ function renderStationModes() {
     const options = modes.map(mode => `
         <button class="station-mode-option" id="np-mode-option-${mode.id}" type="button" role="option"
             data-mode-id="${mode.id}" tabindex="-1" aria-selected="${mode.id === state.currentModeId}">
-            <span class="station-mode-option-copy"><span class="station-mode-option-name">${escapeHtml(mode.name)}</span>
-                ${mode.description ? `<span class="station-mode-option-description">${escapeHtml(mode.description)}</span>` : ''}</span>
+            <span class="station-mode-option-name">${escapeHtml(mode.name)}</span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>
         </button>`).join('');
     const markup = `
@@ -1857,10 +1852,12 @@ async function handleThumb(isPositive) {
 // ============================================================================
 
 function playStation(station) {
-    // Update lastUpdated locally so Home page "Jump Back In" reflects this on next visit
-    const match = AppState.stations.find(s => s.id === station.id || s.name === station.name);
+    // Reflect the selection immediately without rebuilding Home or resetting scroll.
+    const id = station.id || station.stationId;
+    const match = AppState.stations.find(s => (s.id || s.stationId) === id);
     if (match) {
         match.lastUpdated = new Date().toISOString();
+        if (AppState.currentPage === 'home') updateHomeGrids();
     }
 
     window.api.content.playItem(station);
@@ -2275,16 +2272,19 @@ function initAPIListeners() {
     // Collection/stations data
     window.api.onCollection((data) => {
         console.log('[UI] Received collection data:', data);
-        AppState.stations = data || [];
+        // Pandora's collection can lag behind a station just selected locally.
+        const previousDates = new Map(AppState.stations.map(station => [station.id, station.lastUpdated]));
+        AppState.stations = (data || []).map(station => {
+            const previous = previousDates.get(station.id);
+            return new Date(previous || 0) > new Date(station.lastUpdated || 0)
+                ? { ...station, lastUpdated: previous } : station;
+        });
         AppState.isLoading = false;
         renderStationsList();
 
         if (AppState.currentPage === 'home') {
-            // Only update the home page automatically if it has no station cards (e.g. fresh login)
-            const recentContainer = document.getElementById('home-recent');
-            if (recentContainer && recentContainer.querySelectorAll('.card').length === 0 && AppState.stations.length > 0) {
-                updateHomeGrids();
-            }
+            if (document.getElementById('home-recent')) updateHomeGrids();
+            else renderHomePage();
         } else if (AppState.currentPage === 'library') {
             renderPage('library');
         }

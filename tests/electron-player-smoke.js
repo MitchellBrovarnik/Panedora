@@ -48,7 +48,12 @@ app.whenReady().then(async () => {
         currentModeId: activeMode,
         availableModes: modesUnavailable ? [] : [
             { modeId: 0, modeName: 'My Station', modeDescription: 'The station shaped by your thumbs.', isModeAvailable: true },
+            { modeId: 1, modeName: 'Crowd Faves', isModeAvailable: true },
+            { modeId: 2, modeName: 'Discovery', isModeAvailable: true },
+            { modeId: 3, modeName: 'Deep Cuts', isModeAvailable: true },
+            { modeId: 4, modeName: 'Newly Released', isModeAvailable: true },
             { modeId: 1091989, modeName: 'Energy Boost', modeDescription: 'A higher-energy mix from this station.', isModeAvailable: true },
+            { modeId: 1091990, modeName: 'Relax', isModeAvailable: true },
             { modeId: 5, modeName: 'Artist Only', isModeAvailable: artistOnlyAvailable, isPremiumOnly: true },
             { modeId: 987654, modeName: 'Curated <Mix>', isModeAvailable: true }
         ]
@@ -322,7 +327,14 @@ app.whenReady().then(async () => {
     await waitFor(() => run("!document.getElementById('stream-conflict-dialog').open"), 'Escape keeps this player paused');
     assert.equal(calls.filter(c => c.path.endsWith('/playbackResumed') && c.body.forceActive).length, 1);
 
-    await run("renderPage('home'); document.querySelector('[data-id=\"removable-station\"] .delete-btn').click()");
+    canStream = true;
+    await run("renderPage('home'); document.querySelector('#home-recent [data-id=\"removable-station\"]').click()");
+    await waitFor(() => run("AppState.playerState.stationId === 'removable-station' && !AppState.playerState.stationLoading"), 'Home station playback');
+    assert.equal(await run("document.querySelector('#home-recent .card').dataset.id"), 'removable-station');
+    await run("document.querySelector('#home-recent [data-id=\"fixture-station\"]').click()");
+    await waitFor(() => run("AppState.playerState.stationId === 'fixture-station' && !AppState.playerState.stationLoading"), 'Home station switch');
+    assert.equal(await run("document.querySelector('#home-recent .card').dataset.id"), 'fixture-station');
+    await run("document.querySelector('#stations-list [data-id=\"removable-station\"] .delete-btn').click()");
     await waitFor(() => run("document.getElementById('station-remove-dialog').open"), 'themed station removal');
     assert.equal(await run('document.activeElement.id'), 'station-remove-cancel');
     assert.equal(await run("document.getElementById('station-remove-name').textContent"), 'Thunder (Live/Acoustic) Radio');
@@ -335,9 +347,12 @@ app.whenReady().then(async () => {
     await run("document.querySelector('[data-id=\"removable-station\"] .delete-btn').click(); document.getElementById('station-remove-confirm').click()");
     await waitFor(() => run("!document.getElementById('station-remove-error').hidden"), 'inline removal error');
     assert.equal(await run("document.getElementById('station-remove-dialog').open && !document.getElementById('station-remove-confirm').disabled"), true);
+    assert.equal(await run("!!document.querySelector('#home-recent [data-id=\"removable-station\"]')"), true, 'Failed removal keeps the Home card');
     removalFailed = false;
     await run("document.getElementById('station-remove-confirm').click()");
     await waitFor(() => run("!document.getElementById('station-remove-dialog').open && !AppState.stations.some(station => station.id === 'removable-station')"), 'confirmed removal');
+    assert.equal(await run("document.querySelector('#home-recent [data-id=\"removable-station\"]') === null"), true, 'Sidebar removal updates Home without navigation');
+    assert.equal(await run("document.querySelector('#home-recent .card').dataset.id"), 'fixture-station');
     assert.equal(await run("!!document.querySelector('[data-id=\"fixture-station\"]')"), true);
     assert.equal(calls.filter(c => c.path.endsWith('/removeStation')).length, 2);
     assert.equal(calls.filter(c => c.path.endsWith('/removeStation')).every(c => c.body.stationId === 'removable-station'), true);

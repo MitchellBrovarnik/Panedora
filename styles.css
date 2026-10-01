@@ -1892,8 +1892,8 @@ body::before {
     justify-content: space-between;
     gap: 12px;
     width: 100%;
-    min-height: 46px;
-    padding: 11px 14px;
+    min-height: 38px;
+    padding: 8px 12px;
     border: 1px solid var(--glass-border-hover);
     border-radius: var(--r-sm);
     background: var(--glass-hover);
@@ -1922,9 +1922,9 @@ body::before {
 .station-mode-select[aria-expanded="true"] svg { transform: rotate(180deg); }
 
 .station-mode-menu {
-    margin-top: 8px;
-    padding: 5px;
-    max-height: min(340px, 45vh);
+    margin-top: 6px;
+    padding: 4px;
+    max-height: min(282px, 45vh);
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-width: thin;
@@ -1939,8 +1939,8 @@ body::before {
     align-items: center;
     gap: 12px;
     width: 100%;
-    min-height: 42px;
-    padding: 10px;
+    min-height: 32px;
+    padding: 6px 10px;
     border-radius: 8px;
     text-align: left;
     color: var(--text-2);
@@ -1951,9 +1951,7 @@ body::before {
 .station-mode-option:hover,
 .station-mode-option:focus-visible { background: var(--glass-hover); color: var(--text-1); }
 .station-mode-option[aria-selected="true"] { background: var(--accent-soft); color: var(--text-1); }
-.station-mode-option-copy { flex: 1; min-width: 0; }
-.station-mode-option-name { display: block; font-weight: 500; overflow-wrap: anywhere; }
-.station-mode-option-description { display: block; margin-top: 3px; color: var(--text-2); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
+.station-mode-option-name { flex: 1; min-width: 0; font-weight: 500; overflow-wrap: anywhere; }
 .station-mode-option svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--accent); opacity: 0; }
 .station-mode-option[aria-selected="true"] svg { opacity: 1; }
 .station-mode-option:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
@@ -2030,7 +2028,12 @@ body::before {
 .stream-dialog button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .stream-dialog button:disabled { opacity: 0.55; cursor: default; }
 
-.station-remove-dialog .stream-dialog-icon { background: rgba(239, 68, 68, 0.1); color: #f99a9a; }
+.station-remove-dialog { width: min(360px, calc(100vw - 32px)); padding: 20px; border-radius: var(--r); }
+.station-remove-dialog h2 { padding-right: 22px; font-size: 18px; }
+.station-remove-dialog .stream-dialog-copy p { margin-top: 8px; line-height: 1.5; }
+.station-remove-dialog .stream-dialog-close { top: 12px; right: 12px; }
+.station-remove-dialog .stream-dialog-actions { gap: 8px; margin-top: 18px; }
+.station-remove-dialog .stream-dialog-actions button { padding: 8px 12px; }
 .station-remove-dialog strong { color: var(--text-1); font-weight: 500; overflow-wrap: anywhere; }
 .station-remove-dialog .station-remove-error { color: #f9a8a8; }
 .station-remove-confirm { background: linear-gradient(135deg, #b8354a, #d74754); color: #fff; box-shadow: 0 4px 18px rgba(215, 71, 84, 0.15); }
