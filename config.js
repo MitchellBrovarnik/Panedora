@@ -213,6 +213,24 @@ module.exports = {
     getListenerId: () => getConfig().listenerId,
     setListenerId: (id) => setConfig('listenerId', id),
 
+    // Shuffle is not always returned in Pandora's regular station collection.
+    // Keep only its display/identity data, scoped to the saved account.
+    getRememberedShuffle: () => {
+        const stored = getConfig();
+        const account = stored.credentials?.email?.trim().toLowerCase();
+        const shuffle = stored.shuffleStation;
+        if (!account || shuffle?.account !== account || !shuffle.stationId) return null;
+        return { stationId: shuffle.stationId, name: 'Shuffle Stations', isShuffle: true, lastPlayed: shuffle.lastPlayed };
+    },
+    rememberShuffle: (station) => {
+        const account = getConfig().credentials?.email?.trim().toLowerCase();
+        if (!account || !station?.stationId) return;
+        setConfig('shuffleStation', {
+            account, stationId: station.stationId,
+            lastPlayed: station.lastPlayed || station.lastUpdated || station.dateCreated || null
+        });
+    },
+
     // Check if logged in
     isLoggedIn: () => {
         const token = getConfig().authToken;
@@ -231,5 +249,6 @@ module.exports = {
         setConfig('authToken', null);
         setConfig('csrfToken', null);
         setConfig('listenerId', null);
+        setConfig('shuffleStation', null);
     }
 };

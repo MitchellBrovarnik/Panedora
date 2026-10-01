@@ -17,7 +17,7 @@ function modes(currentModeId = 0) {
     ] };
 }
 
-function setup() {
+function setup(config = { getRememberedShuffle: () => null, rememberShuffle() {} }) {
     const handlers = new Map();
     const prompts = [];
     const messages = [];
@@ -53,7 +53,7 @@ function setup() {
         api = testApi;
         uiWindow = testWindow;
         currentStations = [{stationId:'station-1'}, {stationId:'station-2'}];
-        module.exports = { playStation, showStreamConflict, getCurrentState, thumbUp, thumbDown, pausePlayer, resumePlayer, loadStationModes, changeStationMode, skipTrack,
+        module.exports = { loadStations, playStation, showStreamConflict, getCurrentState, thumbUp, thumbDown, pausePlayer, resumePlayer, loadStationModes, changeStationMode, skipTrack,
             seed: (tracks, station = {}) => { currentStations[0] = { ...currentStations[0], ...station }; currentStation = currentStations[0]; currentPlaylist = tracks; currentTrackIndex = 0; isPaused = false; tracks.forEach(rememberTrack); }
         };`;
     vm.runInNewContext(source, {
@@ -61,7 +61,7 @@ function setup() {
         require: name => {
             if (name === 'electron') return electron;
             if (name === './pandora-api') return { getHighResArt: () => null };
-            if (name === './config') return {};
+            if (name === './config') return config;
             if (name === './pandora-verification') return { PandoraVerification: class { cancel() {} } };
             return require(name);
         },
@@ -71,6 +71,67 @@ function setup() {
     });
     return { ...module.exports, api, handlers, prompts, window, messages, calls, started, playlists };
 }
+
+test('Shuffle survives a new app session and collection refreshes when Pandora omits it', async () => {
+    let remembered = null;
+    const config = { getRememberedShuffle: () => remembered && { ...remembered }, rememberShuffle: station => { remembered = { ...station }; } };
+    const first = setup(config);
+    first.api.getShuffleStation = async () => ({ stationId: 'shuffle-1', name: 'My Mix', lastPlayed: '2020-01-01T00:00:00.000Z' });
+    await first.handlers.get('CONTENT:PLAY_SHUFFLE')();
+    assert.equal(remembered.isShuffle, true);
+    assert.ok(new Date(remembered.lastPlayed) > new Date('2020-01-01'));
+
+    const restarted = setup(config);
+    restarted.api.getStations = async () => [{ stationId: 'station-1', name: 'First Radio' }];
+    for (let i = 0; i < 2; i++) {
+        await restarted.loadStations();
+        const collection = restarted.messages.filter(message => message.name === 'UI:COLLECTION_DATA').at(-1).data;
+        assert.deepEqual(Array.from(collection, station => station.id), ['station-1', 'shuffle-1']);
+        assert.equal(collection[1].isShuffle, true);
+        assert.equal(collection[1].lastUpdated, remembered.lastPlayed);
+    }
+    assert.equal(restarted.getCurrentState().isPlaying, false, 'Restoring Home must not start playback');
+    assert.equal(restarted.started.length, 0);
+});
+
+test('restored Shuffle cards resolve a fresh station and do not duplicate a server QuickMix entry', async () => {
+    let remembered = { stationId: 'old-shuffle', isShuffle: true, lastPlayed: '2025-01-01T00:00:00.000Z' };
+    const config = { getRememberedShuffle: () => ({ ...remembered }), rememberShuffle: station => { remembered = { ...station }; } };
+    const s = setup(config);
+    s.api.getStations = async () => [{ stationId: 'station-1' }, { stationId: 'server-shuffle', stationType: 'QUICKMIX', lastPlayed: '2020-01-01T00:00:00.000Z' }];
+    await s.loadStations();
+    assert.equal(remembered.stationId, 'server-shuffle');
+    assert.equal(remembered.lastPlayed, '2025-01-01T00:00:00.000Z');
+    const collection = () => s.messages.filter(message => message.name === 'UI:COLLECTION_DATA').at(-1).data;
+    assert.equal(collection().filter(station => station.isShuffle).length, 1);
+    let shuffleRequests = 0;
+    const playlistRequests = [];
+    s.api.getShuffleStation = async () => { shuffleRequests++; return { stationId: 'fresh-shuffle', name: 'Fresh Mix' }; };
+    s.api.getPlaylist = async id => { playlistRequests.push(id); return { tracks: [track()] }; };
+    await s.handlers.get('NAV:PLAY_URI')({}, { uri: 'station:server-shuffle' });
+    assert.equal(shuffleRequests, 1);
+    assert.deepEqual(playlistRequests, ['fresh-shuffle']);
+    assert.equal(s.getCurrentState().isShuffle, true);
+    assert.equal(remembered.stationId, 'fresh-shuffle');
+    assert.deepEqual(Array.from(collection().filter(station => station.isShuffle), station => station.id), ['fresh-shuffle']);
+    s.api.getShuffleStation = async () => null;
+    assert.ok((await s.handlers.get('CONTENT:PLAY_SHUFFLE')()).error);
+    assert.equal(remembered.stationId, 'fresh-shuffle', 'A failed request preserves the remembered entry');
+});
+
+test('a delayed Shuffle response cannot restore its card or start playback after logout', async () => {
+    let remembered = null;
+    const s = setup({ getRememberedShuffle: () => remembered, rememberShuffle: station => { remembered = station; } });
+    let finish;
+    s.api.getShuffleStation = () => new Promise(resolve => { finish = resolve; });
+    const pending = s.handlers.get('CONTENT:PLAY_SHUFFLE')();
+    await s.handlers.get('AUTH:LOGOUT')();
+    finish({ stationId: 'old-account-shuffle' });
+    await pending;
+    assert.equal(remembered, null);
+    assert.equal(s.getCurrentState().stationId, null);
+    assert.equal(s.started.length, 0);
+});
 
 test('modes load on request, preserve zero, and reject unavailable or arbitrary selections', async () => {
     const s = setup();

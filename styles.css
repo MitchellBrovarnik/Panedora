@@ -1859,14 +1859,16 @@ body::before {
 }
 
 .station-tuning {
-    padding: 18px;
+    padding: 14px 16px;
     border: 1px solid var(--glass-border);
     border-radius: var(--r-lg);
     background: var(--glass);
 }
 
+.station-tuning .tune-title { margin-bottom: 6px; }
+
 .station-tuning-name {
-    margin-bottom: 16px;
+    margin-bottom: 10px;
     color: var(--text-1);
     font-size: 15px;
     font-weight: 600;
@@ -1875,7 +1877,7 @@ body::before {
 
 .station-mode-label {
     display: block;
-    margin-bottom: 7px;
+    margin-bottom: 5px;
     color: var(--text-2);
     font-size: 12px;
 }
@@ -1974,7 +1976,7 @@ body::before {
 
 .station-mode-description,
 .station-mode-status {
-    margin-top: 10px;
+    margin-top: 6px;
     color: var(--text-2);
     font-size: 12px;
     line-height: 1.5;
@@ -2012,8 +2014,6 @@ body::before {
 }
 
 .stream-dialog::backdrop { background: rgba(4, 4, 12, 0.55); backdrop-filter: blur(7px); }
-.stream-dialog-icon { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 20px; border-radius: 15px; background: var(--accent-soft); color: var(--accent); }
-.stream-dialog-icon svg { width: 28px; height: 28px; }
 .stream-dialog h2 { padding-right: 6px; font-size: 22px; font-weight: 600; line-height: 1.3; letter-spacing: -0.4px; }
 .stream-dialog-copy p { margin-top: 12px; font-size: 13px; line-height: 1.65; color: var(--text-2); }
 .stream-dialog-copy .stream-dialog-status { color: var(--accent); }
@@ -2041,8 +2041,6 @@ body::before {
 .station-remove-confirm:not(:disabled):hover { filter: brightness(1.12); }
 
 body.mini-mode .stream-dialog[open] { display: flex; align-items: center; gap: 10px; width: calc(100vw - 8px); max-width: none; max-height: calc(100vh - 8px); margin: auto; padding: 9px 12px; border-radius: 16px; }
-body.mini-mode .stream-dialog-icon { flex-shrink: 0; width: 30px; height: 30px; margin: 0; border-radius: 9px; }
-body.mini-mode .stream-dialog-icon svg { width: 21px; height: 21px; }
 body.mini-mode .stream-dialog-copy { flex: 1; min-width: 0; }
 body.mini-mode .stream-dialog h2 { padding: 0; font-size: 12px; letter-spacing: 0; }
 body.mini-mode .stream-dialog-copy p { margin-top: 3px; font-size: 10px; line-height: 1.3; }

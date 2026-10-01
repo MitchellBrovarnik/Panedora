@@ -393,6 +393,18 @@ app.whenReady().then(async () => {
     assert.equal(await run("!!document.querySelector('[data-id=\"fixture-station\"]')"), true);
     assert.equal(calls.filter(c => c.path.endsWith('/removeStation')).length, 2);
     assert.equal(calls.filter(c => c.path.endsWith('/removeStation')).every(c => c.body.stationId === 'removable-station'), true);
+    assert.equal(await run("!!document.querySelector('#home-recent [data-id=\"fixture-shuffle\"]')"), true, 'Collection refresh after removal preserves Shuffle');
+    const shuffleRequests = calls.filter(c => c.path.endsWith('/station/shuffle')).length;
+    await new Promise(resolve => {
+        win.webContents.once('did-finish-load', resolve);
+        win.webContents.reload();
+    });
+    await waitFor(() => run("AppState.isLoggedIn && !!document.querySelector('#home-recent [data-id=\"fixture-shuffle\"]')"), 'Shuffle restored in Home at initialization');
+    assert.equal(calls.filter(c => c.path.endsWith('/station/shuffle')).length, shuffleRequests, 'Restore the card without requesting Shuffle playback');
+    await run("document.querySelector('#home-recent [data-id=\"fixture-shuffle\"]').click()");
+    await waitFor(() => run("AppState.playerState.isShuffle && !AppState.playerState.stationLoading"), 'restored Home Shuffle card plays');
+    assert.equal(calls.filter(c => c.path.endsWith('/station/shuffle')).length, shuffleRequests + 1);
+    assert.equal(await run("document.querySelectorAll('#home-recent [data-id=\"fixture-shuffle\"]').length"), 1);
     console.log('Native player smoke test passed: device takeover, saved thumbs, immediate mode changes and approved auto-resume, Artist Only eligibility, Shuffle exclusion, mode failures and retry.');
     console.log('Screenshots: ' + testData);
     clearTimeout(deadline);

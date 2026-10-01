@@ -401,6 +401,19 @@ async function loadStations() {
     if (stations === null) {
         return null;
     }
+    const rememberedShuffle = config.getRememberedShuffle();
+    const shuffle = stations.find(station => isShuffleStation(station) ||
+        (rememberedShuffle && station.stationId === rememberedShuffle.stationId));
+    if (shuffle) {
+        shuffle.isShuffle = true;
+        const serverDate = shuffle.lastPlayed || shuffle.lastUpdated || shuffle.dateCreated;
+        if (new Date(rememberedShuffle?.lastPlayed || 0) > new Date(serverDate || 0)) {
+            shuffle.lastPlayed = rememberedShuffle.lastPlayed;
+        }
+        config.rememberShuffle(shuffle);
+    } else if (rememberedShuffle) {
+        stations.push(rememberedShuffle);
+    }
     currentStations = stations;
     sendStations(currentStations);
     return currentStations;
@@ -815,6 +828,9 @@ ipcMain.handle('NAV:PLAY_URI', async (event, payload) => {
         );
 
         if (existingStation) {
+            // Resolve a fresh Shuffle station through its endpoint, including
+            // Home cards restored from a previous app session.
+            if (isShuffleStation(existingStation)) return playShuffle();
             const result = await playStation(existingStation.stationId);
             sendToUI('UI:LOADING', { isLoading: false });
             return result;
@@ -864,23 +880,21 @@ ipcMain.handle('NAV:PLAY_URI', async (event, payload) => {
     return { error: 'Unknown URI type' };
 });
 
-ipcMain.handle('CONTENT:PLAY_SHUFFLE', async () => {
+async function playShuffle() {
+    const generation = playbackGeneration;
     sendToUI('UI:LOADING', { isLoading: true });
     try {
         const shuffleStation = await api.getShuffleStation();
+        if (generation !== playbackGeneration) return getCurrentState();
         if (shuffleStation && shuffleStation.stationId) {
             // This endpoint identifies Shuffle even when its response omits flags.
             shuffleStation.isShuffle = true;
-            // Update lastUpdated so it appears immediately in "Jump Back In"
-            shuffleStation.lastUpdated = new Date().toISOString();
-
-            // Ensure the shuffle station is in our currentStations list so UI stays synced
-            const existingIdx = currentStations.findIndex(s => s.stationId === shuffleStation.stationId);
-            if (existingIdx === -1) {
-                currentStations.unshift(shuffleStation);
-            } else {
-                currentStations[existingIdx] = { ...currentStations[existingIdx], ...shuffleStation };
-            }
+            shuffleStation.lastPlayed = new Date().toISOString();
+            config.rememberShuffle(shuffleStation);
+            // The endpoint can return a new ID; keep a single Shuffle entry.
+            currentStations = currentStations.filter(station => !isShuffleStation(station) &&
+                station.stationId !== shuffleStation.stationId);
+            currentStations.unshift(shuffleStation);
             sendStations(currentStations);
             const result = await playStation(shuffleStation.stationId);
             sendToUI('UI:LOADING', { isLoading: false });
@@ -893,7 +907,9 @@ ipcMain.handle('CONTENT:PLAY_SHUFFLE', async () => {
         sendToUI('UI:LOADING', { isLoading: false });
         return { error: e.message || 'Error fetching shuffle station' };
     }
-});
+}
+
+ipcMain.handle('CONTENT:PLAY_SHUFFLE', () => playShuffle());
 
 // Search
 ipcMain.handle('CONTENT:SEARCH', async (event, query) => {
