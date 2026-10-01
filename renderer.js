@@ -103,11 +103,7 @@ function renderPage(page) {
         if (lyricsOverlay) lyricsOverlay.classList.remove('visible');
     }
 
-    // Hide footer thumbs when on Now Playing (they appear there instead)
-    const miniThumbs = document.getElementById('mini-thumbs');
-    if (miniThumbs) {
-        miniThumbs.style.display = page === 'nowplaying' ? 'none' : '';
-    }
+    updateFooterThumbVisibility();
 
     switch (page) {
         case 'home':
@@ -128,6 +124,13 @@ function renderPage(page) {
         default:
             renderHomePage();
     }
+}
+
+function updateFooterThumbVisibility() {
+    const thumbs = document.getElementById('mini-thumbs');
+    const expandedPlayerVisible = AppState.currentPage === 'nowplaying' &&
+        !document.body.classList.contains('mini-mode');
+    if (thumbs) thumbs.style.display = expandedPlayerVisible ? 'none' : '';
 }
 
 function renderHomePage() {
@@ -2377,12 +2380,10 @@ function initAPIListeners() {
     // Mini player mode toggle
     window.api.onMiniMode((data) => {
         document.body.classList.toggle('mini-mode', data.isMini);
+        updateFooterThumbVisibility();
         // Collapse volume slider by default in mini mode, reset when leaving
         if (data.isMini) {
             DOM.volumeSlider.classList.add('collapsed');
-            // Restore mini thumbs (they may be hidden if we were on Now Playing page)
-            const miniThumbs = document.getElementById('mini-thumbs');
-            if (miniThumbs) miniThumbs.style.display = '';
         } else {
             DOM.volumeSlider.classList.remove('collapsed');
         }

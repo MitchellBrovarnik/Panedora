@@ -72,6 +72,31 @@ function setup(t) {
     return { window, ui, player, calls, node, open, select, events };
 }
 
+test('footer thumbs follow the visible player through expanded view, mini mode and navigation', async t => {
+    const s = setup(t);
+    const thumbs = s.node('mini-thumbs');
+    assert.notEqual(thumbs.style.display, 'none');
+    s.open();
+    await tick();
+    assert.equal(thumbs.style.display, 'none');
+    for (let i = 0; i < 2; i++) {
+        s.events.MiniMode({ isMini: true });
+        assert.notEqual(thumbs.style.display, 'none', 'Mini player keeps its only thumb controls');
+        assert.equal(s.node('mini-thumb-up').classList.contains('liked'), true);
+        s.events.MiniMode({ isMini: false });
+        assert.equal(thumbs.style.display, 'none', 'Returning to expanded view must hide duplicate controls again');
+        assert.equal(s.node('np-thumbup').classList.contains('liked'), true);
+    }
+    s.ui.update({ isPlaying: false });
+    assert.equal(thumbs.style.display, 'none');
+    s.node('np-back-btn').click();
+    assert.notEqual(thumbs.style.display, 'none', 'Home restores the bottom-bar controls');
+    s.ui.render('search');
+    s.events.MiniMode({ isMini: true });
+    s.events.MiniMode({ isMini: false });
+    assert.notEqual(thumbs.style.display, 'none');
+});
+
 test('Home reconciles collection changes immediately and preserves unchanged cards, focus and scroll', t => {
     const s = setup(t);
     const stations = Array.from({ length: 8 }, (_, index) => ({

@@ -4,9 +4,9 @@
 
 ## New: Tune Your Station
 
-**Station modes now work directly in Panedora.** Click the artwork in the play bar to open Now Playing, then choose a mode from **Tune your station** above Recently Played. Selecting a different mode clears the old upcoming queue, loads a fresh mix, and starts the new song—even if playback was paused.
+**Station modes now work directly in Panedora.** Click the artwork in the play bar to open Now Playing, then choose a mode from **Tune your station** above Recently Played.
 
-The themed menu shows the modes Pandora makes available for your station and account, such as Discovery, Deep Cuts, or Artist Only. Artist Only appears only when eligible. Tuning is hidden for Shuffle and stations without available modes. If Pandora rejects a change, the app keeps the current song and shows an error.
+The themed menu shows the modes Pandora makes available for your station and account, such as Discovery, Deep Cuts, or Artist Only. Artist Only appears only when eligible. Tuning is hidden for Shuffle and stations without available modes.
 
 ## Project Purpose
 Panedora is a personal, educational, and experimental project created purely for fun. It was built as a creative exercise to explore modern UI design (Glassmorphism) and Electron-based desktop application development. This project is intended for personal use only and was developed with zero intent to cause harm, bypass security, or interfere with Pandora's business operations. It is shared as a demonstration of UI/UX design and technical integration.

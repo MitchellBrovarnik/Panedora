@@ -179,6 +179,12 @@ app.whenReady().then(async () => {
     assert.equal(calls.some(c => c.path.includes('interactiveradio')), false, 'Modes load only in the expanded view');
     await run("document.getElementById('now-playing-art').click()");
     await waitFor(() => run("document.getElementById('np-mode-select')?.value === '0'"), 'mode list');
+    const footerThumbsHidden = () => run("getComputedStyle(document.getElementById('mini-thumbs')).display === 'none'");
+    assert.equal(await footerThumbsHidden(), true, 'Expanded player hides duplicate bottom-bar thumbs');
+    await run('window.api.window.toggleMini()');
+    await waitFor(async () => !await footerThumbsHidden(), 'mini player thumb controls');
+    await run('window.api.window.toggleMini()');
+    await waitFor(footerThumbsHidden, 'bottom-bar thumbs hidden after returning to expanded player');
     assert.equal(await run("document.getElementById('np-thumbup').classList.contains('liked')"), true);
     assert.equal(await run("document.getElementById('heart-btn').classList.contains('liked')"), true);
     await run("document.getElementById('np-thumbup').click()");
