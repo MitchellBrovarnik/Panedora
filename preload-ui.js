@@ -39,7 +39,10 @@ contextBridge.exposeInMainWorld('api', {
         thumbUp: () => ipcRenderer.invoke('PLAYER:CMD', { action: 'thumbUp' }),
         thumbDown: () => ipcRenderer.invoke('PLAYER:CMD', { action: 'thumbDown' }),
         undoFeedback: (trackToken) => ipcRenderer.invoke('PLAYER:UNDO_FEEDBACK', { trackToken }),
-        getMoreTracks: () => ipcRenderer.invoke('PLAYER:GET_MORE_TRACKS')
+        getMoreTracks: () => ipcRenderer.invoke('PLAYER:GET_MORE_TRACKS'),
+        getStationModes: (stationId) => ipcRenderer.invoke('PLAYER:GET_STATION_MODES', { stationId }),
+        setStationMode: (stationId, modeId) => ipcRenderer.invoke('PLAYER:SET_STATION_MODE', { stationId, modeId }),
+        resolveStreamConflict: (promptId, takeOver) => ipcRenderer.invoke('PLAYER:RESOLVE_STREAM_CONFLICT', { promptId, takeOver })
     },
 
     // ========================================

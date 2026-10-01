@@ -103,11 +103,7 @@ function renderPage(page) {
         if (lyricsOverlay) lyricsOverlay.classList.remove('visible');
     }
 
-    // Hide footer thumbs when on Now Playing (they appear there instead)
-    const miniThumbs = document.getElementById('mini-thumbs');
-    if (miniThumbs) {
-        miniThumbs.style.display = page === 'nowplaying' ? 'none' : '';
-    }
+    updateFooterThumbVisibility();
 
     switch (page) {
         case 'home':
@@ -128,6 +124,13 @@ function renderPage(page) {
         default:
             renderHomePage();
     }
+}
+
+function updateFooterThumbVisibility() {
+    const thumbs = document.getElementById('mini-thumbs');
+    const expandedPlayerVisible = AppState.currentPage === 'nowplaying' &&
+        !document.body.classList.contains('mini-mode');
+    if (thumbs) thumbs.style.display = expandedPlayerVisible ? 'none' : '';
 }
 
 function renderHomePage() {
@@ -231,40 +234,25 @@ function updateHomeGrids() {
     const moreSection = document.getElementById('home-more-section');
     if (!recentContainer) return;
 
-    // Sort stations by lastUpdated for "Jump Back In"
-    const recentStations = [...AppState.stations]
-        .sort((a, b) => new Date(b.lastUpdated || 0) - new Date(a.lastUpdated || 0))
-        .slice(0, 6);
-
-    // A second batch for "More from Your Collection"
-    const moreStations = [...AppState.stations]
-        .sort((a, b) => new Date(b.lastUpdated || 0) - new Date(a.lastUpdated || 0))
-        .slice(6, 12);
+    const sortedStations = [...AppState.stations]
+        .sort((a, b) => new Date(b.lastUpdated || 0) - new Date(a.lastUpdated || 0));
+    const recentStations = sortedStations.slice(0, 6);
+    const moreStations = sortedStations.slice(6, 12);
+    const cardMap = new Map(Array.from(
+        document.querySelectorAll('#home-recent .card, #home-more .card'),
+        card => [card.dataset.id, card]
+    ));
+    const focusedElement = document.activeElement;
 
     // Helper to update a container's children without destroying elements that just moved
     function updateGridNodes(container, stationsArray) {
         if (!container) return;
 
-        // Convert to map for easy lookup
-        const existingCards = Array.from(container.querySelectorAll('.card'));
-        const cardMap = {};
-        existingCards.forEach(card => cardMap[card.dataset.id] = card);
+        const orderedCards = stationsArray.map(station => {
+            const dataId = String(station.id || station.stationId);
+            let card = cardMap.get(dataId);
 
-        // Build new arrangement
-        const newFragment = document.createDocumentFragment();
-        let hasChanges = existingCards.length !== stationsArray.length;
-
-        stationsArray.forEach((station, index) => {
-            const dataId = station.id || station.stationId;
-            let card = cardMap[dataId];
-
-            if (card) {
-                // Card exists, check if it moved
-                if (existingCards[index] !== card) {
-                    hasChanges = true;
-                }
-                newFragment.appendChild(card);
-            } else {
+            if (!card) {
                 // Completely new card
                 let img = station.image || null;
                 let title = station.name;
@@ -277,18 +265,25 @@ function updateHomeGrids() {
 
                 const temp = document.createElement('div');
                 temp.innerHTML = createCard(img, title, station.type === 'playlist' ? 'Playlist' : 'Station', dataId);
-                const newCard = temp.firstElementChild;
-                newCard.addEventListener('click', () => playStation(station));
-                newFragment.appendChild(newCard);
-                hasChanges = true;
+                card = temp.firstElementChild;
+                card.addEventListener('click', () => {
+                    const current = AppState.stations.find(s => String(s.id || s.stationId) === dataId);
+                    if (current) playStation(current);
+                });
             }
+            return card;
         });
 
-        // Only touch the DOM if something actually changed order or items
-        if (hasChanges) {
-            container.innerHTML = '';
-            container.appendChild(newFragment);
-        }
+        // Leave unchanged cards attached; move existing cards between either grid.
+        const retained = new Set(orderedCards);
+        Array.from(container.children).forEach(child => {
+            if (!retained.has(child)) child.remove();
+        });
+        orderedCards.forEach((card, index) => {
+            if (container.children[index] !== card) {
+                container.insertBefore(card, container.children[index] || null);
+            }
+        });
     }
 
     // Fallback if empty
@@ -306,6 +301,10 @@ function updateHomeGrids() {
             moreContainer.innerHTML = '';
             moreSection.style.display = 'none';
         }
+    }
+    if (focusedElement?.isConnected && focusedElement.closest('#home-recent, #home-more') &&
+        document.activeElement !== focusedElement) {
+        focusedElement.focus({ preventScroll: true });
     }
 }
 
@@ -1157,7 +1156,7 @@ function renderNowPlayingPage() {
             </div>
             
             <div class="np-right">
-
+                <section class="station-tuning" id="np-station-tuning" aria-labelledby="np-tuning-title"></section>
                 ${historyHtml}
             </div>
         </div>
@@ -1175,6 +1174,8 @@ function renderNowPlayingPage() {
 
     document.getElementById('np-thumbup')?.addEventListener('click', () => handleThumb(true));
     document.getElementById('np-thumbdown')?.addEventListener('click', () => handleThumb(false));
+    renderStationModes();
+    requestStationModes();
 
     // History undo-dislike handlers
     document.querySelectorAll('.history-undo-btn').forEach(btn => {
@@ -1194,6 +1195,181 @@ function renderNowPlayingPage() {
             }
         });
     });
+}
+
+let stationModesRequest = null;
+
+async function requestStationModes() {
+    const { stationId, playbackGeneration, isShuffle, stationLoading, streamBlocked, stationModes } = AppState.playerState;
+    if (AppState.currentPage !== 'nowplaying' || !stationId || isShuffle || stationLoading || streamBlocked ||
+        stationModes?.changing || stationModes?.status === 'loading' ||
+        (stationModesRequest?.stationId === stationId && stationModesRequest?.generation === playbackGeneration)) return;
+    const request = { stationId, generation: playbackGeneration };
+    stationModesRequest = request;
+    try {
+        await window.api.player.getStationModes(stationId);
+    } catch {
+        if (stationModesRequest === request && AppState.playerState.stationId === stationId &&
+            AppState.playerState.playbackGeneration === playbackGeneration) {
+            AppState.playerState.stationModes = { status: 'error', error: 'Could not load station modes. Please try again.' };
+            renderStationModes();
+        }
+    } finally {
+        if (stationModesRequest === request) stationModesRequest = null;
+    }
+}
+
+function renderStationModes() {
+    const panel = document.getElementById('np-station-tuning');
+    if (!panel || AppState.currentPage !== 'nowplaying') return;
+    const { stationId, stationName, isShuffle, stationLoading, streamBlocked } = AppState.playerState;
+    const state = AppState.playerState.stationModes || { status: 'idle' };
+    const modes = (state.modes || []).filter(mode => mode.available);
+    panel.hidden = !stationId || isShuffle ||
+        (state.status === 'ready' && !state.error && (!state.available || !modes.length));
+    if (panel.hidden) {
+        panel.replaceChildren();
+        panel.dataset.modeMarkup = '';
+        panel.removeAttribute('aria-busy');
+        return;
+    }
+    const current = modes.find(mode => mode.id === state.currentModeId);
+    const loading = state.status === 'idle' || state.status === 'loading';
+    const disabled = !stationId || stationLoading || streamBlocked || loading ||
+        state.changing || state.status !== 'ready' || !state.available;
+    let message = 'Changing modes starts a new song.';
+    if (!stationId) message = 'Play a station to see its modes.';
+    else if (stationLoading) message = 'Loading station…';
+    else if (streamBlocked) message = 'Resume playback here to tune this station.';
+    else if (state.changing) message = 'Changing station mode…';
+    else if (state.error) message = state.error;
+    else if (loading) message = 'Loading station modes…';
+    else if (!state.available) message = 'Pandora does not offer modes for this station.';
+    const placeholder = loading ? 'Loading modes…' : 'Select a mode';
+    const options = modes.map(mode => `
+        <button class="station-mode-option" id="np-mode-option-${mode.id}" type="button" role="option"
+            data-mode-id="${mode.id}" tabindex="-1" aria-selected="${mode.id === state.currentModeId}">
+            <span class="station-mode-option-name">${escapeHtml(mode.name)}</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>
+        </button>`).join('');
+    const markup = `
+        <h3 class="tune-title" id="np-tuning-title">Tune your station</h3>
+        <p class="station-tuning-name">${escapeHtml(stationName || 'Current station')}</p>
+        <span class="station-mode-label" id="np-mode-label">Listening mode</span>
+        <div class="station-mode-picker">
+            <button class="station-mode-select" id="np-mode-select" type="button" value="${current?.id ?? ''}"
+                aria-haspopup="listbox" aria-expanded="false" aria-controls="np-mode-menu"
+                aria-labelledby="np-mode-label np-mode-value" aria-describedby="np-mode-description np-mode-status" ${disabled ? 'disabled' : ''}>
+                <span id="np-mode-value">${escapeHtml(current?.name || placeholder)}</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <div class="station-mode-menu" id="np-mode-menu" role="listbox" aria-labelledby="np-mode-label" hidden>${options}</div>
+        </div>
+        <p class="station-mode-description" id="np-mode-description">${escapeHtml(current?.description || '')}</p>
+        <p class="station-mode-status ${state.error && !state.changing ? 'is-error' : ''}" id="np-mode-status" role="status">${escapeHtml(message)}</p>
+        ${state.error && !state.changing && !stationLoading && !streamBlocked ? '<button class="station-mode-retry" id="np-mode-retry" type="button">Reload modes</button>' : ''}
+    `;
+    // Audio time/pause updates must not replace a focused/open mode selector.
+    const sessionKey = `${stationId}:${AppState.playerState.playbackGeneration}`;
+    if (panel.dataset.modeMarkup === markup && panel.dataset.modeSession === sessionKey) return;
+    panel.dataset.modeMarkup = markup;
+    panel.dataset.modeSession = sessionKey;
+    const restoreFocus = !!document.activeElement?.closest('.station-mode-picker');
+    panel.innerHTML = markup;
+    panel.setAttribute('aria-busy', String(!!stationId && (loading || state.changing || stationLoading)));
+    const select = document.getElementById('np-mode-select');
+    const menu = document.getElementById('np-mode-menu');
+    const picker = select.closest('.station-mode-picker');
+    const optionButtons = Array.from(menu.querySelectorAll('[role="option"]'));
+    const openMenu = (last = false) => {
+        if (select.disabled) return;
+        menu.hidden = false;
+        select.setAttribute('aria-expanded', 'true');
+        positionStationModeMenu();
+        const selected = menu.querySelector('[aria-selected="true"]');
+        focusStationModeOption(selected || optionButtons[last ? optionButtons.length - 1 : 0]);
+    };
+    select.addEventListener('click', () => menu.hidden ? openMenu() : closeStationModeMenu());
+    picker.addEventListener('focusout', event => {
+        if (!picker.contains(event.relatedTarget)) closeStationModeMenu();
+    });
+    picker.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && !menu.hidden) {
+            event.preventDefault();
+            event.stopPropagation();
+            closeStationModeMenu(true);
+        } else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+            event.preventDefault();
+            if (menu.hidden) { openMenu(event.key === 'ArrowUp' || event.key === 'End'); return; }
+            const index = optionButtons.indexOf(document.activeElement);
+            const next = event.key === 'Home' ? 0 : event.key === 'End' ? optionButtons.length - 1
+                : (index + (event.key === 'ArrowDown' ? 1 : -1) + optionButtons.length) % optionButtons.length;
+            focusStationModeOption(optionButtons[next]);
+        }
+    });
+    optionButtons.forEach(option => option.addEventListener('click', async () => {
+        if (select.disabled) return;
+        const modeId = Number(option.dataset.modeId);
+        closeStationModeMenu(true);
+        if (modeId === state.currentModeId) return;
+        select.disabled = true;
+        try {
+            const result = await window.api.player.setStationMode(stationId, modeId);
+            if (!result?.success && result?.error && AppState.playerState.stationId === stationId) {
+                showErrorToast(result.error);
+            }
+        } catch {
+            showErrorToast('Could not change the station mode. Please try again.');
+        } finally {
+            // Force a refresh even if IPC rejected before a state event arrived.
+            panel.dataset.modeMarkup = '';
+            renderStationModes();
+        }
+    }));
+    document.getElementById('np-mode-retry')?.addEventListener('click', () => requestStationModes());
+    if (restoreFocus && !disabled) select?.focus();
+}
+
+function focusStationModeOption(option) {
+    if (!option) return;
+    option.focus({ preventScroll: true });
+    // Scroll the options, never the page/history behind this floating menu.
+    const menu = option.parentElement;
+    if (option.offsetTop < menu.scrollTop) menu.scrollTop = option.offsetTop;
+    else if (option.offsetTop + option.offsetHeight > menu.scrollTop + menu.clientHeight) {
+        menu.scrollTop = option.offsetTop + option.offsetHeight - menu.clientHeight;
+    }
+}
+
+function positionStationModeMenu() {
+    const menu = document.getElementById('np-mode-menu');
+    const trigger = document.getElementById('np-mode-select');
+    if (!menu || menu.hidden || !trigger) return;
+    const anchor = trigger.getBoundingClientRect();
+    if (!anchor.width) return;
+    const viewport = document.getElementById('main-scroll').getBoundingClientRect();
+    const top = Math.max(0, viewport.top) + 8;
+    const bottom = Math.min(window.innerHeight, viewport.bottom) - 8;
+    if (anchor.bottom <= top || anchor.top >= bottom) {
+        closeStationModeMenu();
+        return;
+    }
+    const below = Math.max(0, bottom - anchor.bottom - 6);
+    const above = Math.max(0, anchor.top - top - 6);
+    const height = Math.min(282, menu.scrollHeight + 2);
+    const opensAbove = below < height && above > below;
+    menu.dataset.placement = opensAbove ? 'above' : 'below';
+    menu.style.maxHeight = Math.min(282, opensAbove ? above : below) + 'px';
+    if (menu.contains(document.activeElement)) focusStationModeOption(document.activeElement);
+}
+
+function closeStationModeMenu(restoreFocus = false) {
+    const menu = document.getElementById('np-mode-menu');
+    const trigger = document.getElementById('np-mode-select');
+    if (!menu || !trigger) return;
+    menu.hidden = true;
+    trigger.setAttribute('aria-expanded', 'false');
+    if (restoreFocus) trigger.focus();
 }
 
 // Variables for lyrics state
@@ -1362,32 +1538,26 @@ function renderStationsList() {
         <svg viewBox="0 0 24 24" fill="currentColor" style="width: 20px; height: 20px; margin-right: 10px; opacity: 0.95; shape-rendering: geometricPrecision;">
             <path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/>
         </svg>
-        <span class="station-name" style="font-weight: 500; color: var(--text-primary);">Shuffle Stations</span>
+        <span class="station-name" style="font-weight: 500;">Shuffle Stations</span>
       </div>
     `;
     AppState.stations.forEach(station => {
         // Skip rendering the quickmix/shuffle station if it's in the standard list, since we have a dedicated button
         if (station.isShuffle || station.stationType === 'QUICKMIX' || station.name === 'Shuffle') return;
         
-        const isActive = AppState.playerState.track &&
-            station.name.toLowerCase().includes(AppState.playerState.artist?.toLowerCase() || '');
-        html += createStationListItem(station.name, station.id, station.type, isActive);
+        html += createStationListItem(station.name, station.id, station.type);
     });
 
     DOM.stationsList.innerHTML = html;
+    updateActiveStation();
 
     // Attach click handler for Shuffle Stations
     const shuffleBtn = document.getElementById('shuffle-stations-btn');
     if (shuffleBtn) {
         shuffleBtn.addEventListener('click', async () => {
-            // Provide immediate feedback
-            document.querySelectorAll('.station-item').forEach(el => el.classList.remove('active'));
-            shuffleBtn.classList.add('active');
-            
             const result = await window.api.content.playShuffle();
             if (result && result.error) {
-                alert('Failed to shuffle stations: ' + result.error);
-                shuffleBtn.classList.remove('active');
+                showErrorToast('Failed to shuffle stations: ' + result.error);
             }
         });
     }
@@ -1405,26 +1575,128 @@ function renderStationsList() {
         // Attach delete handlers
         const deleteBtn = item.querySelector('.delete-btn');
         if (deleteBtn) {
-            deleteBtn.addEventListener('click', async (e) => {
+            deleteBtn.addEventListener('click', (e) => {
                 e.stopPropagation(); // Don't play the station
                 const id = item.dataset.id;
                 const station = AppState.stations.find(s => s.id === id);
                 if (!station) return;
 
-                const confirmed = confirm(`Are you sure you want to delete the station "${station.name}"?`);
-                if (confirmed) {
-                    item.style.opacity = '0.5';
-                    item.style.pointerEvents = 'none';
-                    const success = await window.api.content.removeStation(id);
-                    if (!success) {
-                        alert('Failed to delete station. Please try again.');
-                        item.style.opacity = '1';
-                        item.style.pointerEvents = 'all';
-                    }
-                }
+                openStationRemoval(station);
             });
         }
     });
+}
+
+let stationRemoval = null;
+
+function renderStationRemoval() {
+    const modal = document.getElementById('station-remove-dialog');
+    if (!modal) return;
+    if (!stationRemoval) {
+        if (modal.open) modal.close();
+        return;
+    }
+    const { name, pending, error } = stationRemoval;
+    document.getElementById('station-remove-name').textContent = name;
+    document.getElementById('station-remove-error').textContent = error || '';
+    document.getElementById('station-remove-error').hidden = !error;
+    document.getElementById('station-remove-status').hidden = !pending;
+    modal.setAttribute('aria-busy', String(pending));
+    ['station-remove-confirm', 'station-remove-cancel', 'station-remove-close'].forEach(id => {
+        document.getElementById(id).disabled = pending;
+    });
+    if (!modal.open) {
+        modal.showModal();
+        document.getElementById('station-remove-cancel').focus();
+    }
+}
+
+function openStationRemoval(station) {
+    if (stationRemoval?.pending) return;
+    stationRemoval = { id: station.id, name: station.name, pending: false, error: null };
+    renderStationRemoval();
+}
+
+function closeStationRemoval(force = false) {
+    if (stationRemoval?.pending && !force) return;
+    stationRemoval = null;
+    renderStationRemoval();
+}
+
+async function removeSelectedStation() {
+    const removal = stationRemoval;
+    if (!removal || removal.pending) return;
+    removal.pending = true;
+    removal.error = null;
+    renderStationRemoval();
+    try {
+        const success = await window.api.content.removeStation(removal.id);
+        if (stationRemoval !== removal) return;
+        if (success) {
+            closeStationRemoval(true);
+            DOM.stationsList.querySelector('.station-item.active, .station-item')?.focus();
+            return;
+        }
+        removal.error = 'Could not remove this station. Please try again.';
+    } catch {
+        if (stationRemoval !== removal) return;
+        removal.error = 'Could not remove this station. Please try again.';
+    }
+    removal.pending = false;
+    renderStationRemoval();
+    document.getElementById('station-remove-confirm').focus();
+}
+
+function updateActiveStation() {
+    const { stationId, isShuffle } = AppState.playerState;
+    document.querySelectorAll('#stations-list .station-item').forEach(item => {
+        const active = !!stationId && (item.id === 'shuffle-stations-btn'
+            ? isShuffle === true : !isShuffle && item.dataset.id === String(stationId));
+        item.classList.toggle('active', active);
+        if (active) item.setAttribute('aria-current', 'true');
+        else item.removeAttribute('aria-current');
+    });
+}
+
+function renderStreamPrompt() {
+    const modal = document.getElementById('stream-conflict-dialog');
+    if (!modal) return;
+    const prompt = AppState.playerState.streamPrompt;
+    if (!prompt) {
+        if (modal.open) modal.close();
+        return;
+    }
+    const pending = prompt.pending === true;
+    modal.setAttribute('aria-busy', String(pending));
+    ['stream-take-over', 'stream-keep-listening', 'stream-dialog-close'].forEach(id => {
+        document.getElementById(id).disabled = pending;
+    });
+    document.getElementById('stream-dialog-status').hidden = !pending;
+    if (!modal.open) {
+        closeStationModeMenu();
+        modal.showModal();
+        document.getElementById('stream-keep-listening').focus();
+    }
+}
+
+async function answerStreamPrompt(takeOver) {
+    const prompt = AppState.playerState.streamPrompt;
+    if (!prompt || prompt.pending) return;
+    AppState.playerState.streamPrompt = { ...prompt, pending: true };
+    renderStreamPrompt();
+    try {
+        const result = await window.api.player.resolveStreamConflict(prompt.id, takeOver);
+        if (!result?.success && AppState.playerState.streamPrompt?.id === prompt.id) {
+            AppState.playerState.streamPrompt = null;
+            renderStreamPrompt();
+        }
+    } catch {
+        if (AppState.playerState.streamPrompt?.id === prompt.id) {
+            AppState.playerState.streamPrompt = { ...prompt, pending: false };
+            renderStreamPrompt();
+            showErrorToast('Could not send your listening choice. Please try again.');
+        }
+    }
 }
 
 // ============================================================================
@@ -1454,7 +1726,17 @@ function checkMarquee(el) {
     }
 }
 function updatePlayerUI(state) {
+    if ((state.stationId !== undefined && state.stationId !== AppState.playerState.stationId) ||
+        (state.playbackGeneration !== undefined && state.playbackGeneration !== AppState.playerState.playbackGeneration)) {
+        stationModesRequest = null;
+    }
     AppState.playerState = { ...AppState.playerState, ...state };
+    updateActiveStation();
+    renderStreamPrompt();
+    if (AppState.currentPage === 'nowplaying') {
+        renderStationModes();
+        if (AppState.playerState.stationModes?.status === 'idle') requestStationModes();
+    }
 
     // Update now playing info
     if (state.track) {
@@ -1607,10 +1889,12 @@ async function handleThumb(isPositive) {
 // ============================================================================
 
 function playStation(station) {
-    // Update lastUpdated locally so Home page "Jump Back In" reflects this on next visit
-    const match = AppState.stations.find(s => s.id === station.id || s.name === station.name);
+    // Reflect the selection immediately without rebuilding Home or resetting scroll.
+    const id = station.id || station.stationId;
+    const match = AppState.stations.find(s => (s.id || s.stationId) === id);
     if (match) {
         match.lastUpdated = new Date().toISOString();
+        if (AppState.currentPage === 'home') updateHomeGrids();
     }
 
     window.api.content.playItem(station);
@@ -1628,6 +1912,25 @@ const debouncedSearch = debounce(async (query) => {
 // ============================================================================
 
 function initEventListeners() {
+    document.getElementById('station-remove-confirm')?.addEventListener('click', () => removeSelectedStation());
+    document.getElementById('station-remove-cancel')?.addEventListener('click', () => closeStationRemoval());
+    document.getElementById('station-remove-close')?.addEventListener('click', () => closeStationRemoval());
+    document.getElementById('station-remove-dialog')?.addEventListener('cancel', event => {
+        event.preventDefault();
+        closeStationRemoval();
+    });
+    document.getElementById('stream-take-over')?.addEventListener('click', () => answerStreamPrompt(true));
+    document.getElementById('stream-keep-listening')?.addEventListener('click', () => answerStreamPrompt(false));
+    document.getElementById('stream-dialog-close')?.addEventListener('click', () => answerStreamPrompt(false));
+    document.getElementById('stream-conflict-dialog')?.addEventListener('cancel', event => {
+        event.preventDefault();
+        answerStreamPrompt(false);
+    });
+    document.addEventListener('pointerdown', event => {
+        if (!event.target.closest('.station-mode-picker')) closeStationModeMenu();
+    });
+    window.addEventListener('resize', positionStationModeMenu);
+    document.getElementById('main-scroll').addEventListener('scroll', positionStationModeMenu);
     // Navigation
     DOM.navItems.forEach(item => {
         item.addEventListener('click', (e) => {
@@ -1796,6 +2099,7 @@ function initEventListeners() {
 function initAPIListeners() {
     // Manage a single Audio instance to prevent overlapping event listeners and track skipping
     let currentAudio = null;
+    let currentAudioToken = null;
     let consecutiveErrors = 0; // Prevent chain-skipping on stale/expired URLs
 
     // Player state updates
@@ -1897,9 +2201,11 @@ function initAPIListeners() {
                 }
             }
 
-            // Only update source and play if the URL actually changed
-            if (currentAudio.src !== state.audioURL) {
+            // A new playlist entry may reuse the same audio URL. Start that entry
+            // at the beginning, while ordinary state updates preserve position.
+            if (currentAudio.src !== state.audioURL || currentAudioToken !== state.trackToken) {
                 console.log('[UI] Loading new audio source');
+                currentAudioToken = state.trackToken;
                 currentAudio.src = state.audioURL;
                 if (state.isPlaying !== false) currentAudio.play().then(() => {
                     consecutiveErrors = 0; // Reset on successful play
@@ -2005,16 +2311,19 @@ function initAPIListeners() {
     // Collection/stations data
     window.api.onCollection((data) => {
         console.log('[UI] Received collection data:', data);
-        AppState.stations = data || [];
+        // Pandora's collection can lag behind a station just selected locally.
+        const previousDates = new Map(AppState.stations.map(station => [station.id, station.lastUpdated]));
+        AppState.stations = (data || []).map(station => {
+            const previous = previousDates.get(station.id);
+            return new Date(previous || 0) > new Date(station.lastUpdated || 0)
+                ? { ...station, lastUpdated: previous } : station;
+        });
         AppState.isLoading = false;
         renderStationsList();
 
         if (AppState.currentPage === 'home') {
-            // Only update the home page automatically if it has no station cards (e.g. fresh login)
-            const recentContainer = document.getElementById('home-recent');
-            if (recentContainer && recentContainer.querySelectorAll('.card').length === 0 && AppState.stations.length > 0) {
-                updateHomeGrids();
-            }
+            if (document.getElementById('home-recent')) updateHomeGrids();
+            else renderHomePage();
         } else if (AppState.currentPage === 'library') {
             renderPage('library');
         }
@@ -2041,7 +2350,7 @@ function initAPIListeners() {
             renderPage('home');
         } else {
             // Logged out — clear data, pause audio, and show login form
-
+            closeStationRemoval(true);
             AppState.isLoading = false;
             AppState.stations = [];
             AppState.playerState = { volume: 50 };
@@ -2071,12 +2380,10 @@ function initAPIListeners() {
     // Mini player mode toggle
     window.api.onMiniMode((data) => {
         document.body.classList.toggle('mini-mode', data.isMini);
+        updateFooterThumbVisibility();
         // Collapse volume slider by default in mini mode, reset when leaving
         if (data.isMini) {
             DOM.volumeSlider.classList.add('collapsed');
-            // Restore mini thumbs (they may be hidden if we were on Now Playing page)
-            const miniThumbs = document.getElementById('mini-thumbs');
-            if (miniThumbs) miniThumbs.style.display = '';
         } else {
             DOM.volumeSlider.classList.remove('collapsed');
         }

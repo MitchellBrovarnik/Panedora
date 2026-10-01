@@ -241,6 +241,37 @@
         </footer>
     </div>
 
+    <dialog class="stream-dialog" id="stream-conflict-dialog" aria-labelledby="stream-dialog-title" aria-describedby="stream-dialog-description">
+        <button class="stream-dialog-close" id="stream-dialog-close" type="button" aria-label="Keep Panedora paused">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+        </button>
+        <div class="stream-dialog-copy">
+            <h2 id="stream-dialog-title">Playing on another device</h2>
+            <p id="stream-dialog-description">Your Pandora account is listening somewhere else.<span> Switch playback here, or let them keep listening.</span></p>
+            <p class="stream-dialog-status" id="stream-dialog-status" role="status" hidden>Switching playback to Panedora…</p>
+        </div>
+        <div class="stream-dialog-actions">
+            <button class="stream-dialog-secondary" id="stream-keep-listening" type="button" autofocus>Let them listen</button>
+            <button class="stream-dialog-primary" id="stream-take-over" type="button">Let me listen</button>
+        </div>
+    </dialog>
+
+    <dialog class="stream-dialog station-remove-dialog" id="station-remove-dialog" aria-labelledby="station-remove-title" aria-describedby="station-remove-description">
+        <button class="stream-dialog-close" id="station-remove-close" type="button" aria-label="Cancel station removal">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+        </button>
+        <div class="stream-dialog-copy">
+            <h2 id="station-remove-title">Remove this station?</h2>
+            <p id="station-remove-description">Remove <strong id="station-remove-name"></strong> from your Pandora collection?</p>
+            <p class="station-remove-error" id="station-remove-error" role="alert" hidden></p>
+            <p class="stream-dialog-status" id="station-remove-status" role="status" hidden>Removing station…</p>
+        </div>
+        <div class="stream-dialog-actions">
+            <button class="stream-dialog-secondary" id="station-remove-cancel" type="button" autofocus>Cancel</button>
+            <button class="station-remove-confirm" id="station-remove-confirm" type="button">Remove station</button>
+        </div>
+    </dialog>
+
     <script src="components.js"></script>
     <script src="visualizer.js"></script>
     <script src="renderer.js"></script>

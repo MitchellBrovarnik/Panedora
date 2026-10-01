@@ -325,9 +325,77 @@ class PandoraAPI {
         }
     }
 
-    /**
-     * Get playlist tracks for a station
-     */
+    // Interactive radio uses its own endpoints. Mode IDs must come from Pandora,
+    // including curated/mood modes; a menu position is not a mode ID.
+    static parseStationModes(response) {
+        const data = response?.result || response;
+        if (response?.stat === 'fail' || response?.errorCode ||
+            (!Array.isArray(data?.availableModes) && data?.interactiveRadioAvailable !== false)) {
+            throw new Error('Invalid station modes response');
+        }
+        const modeId = value => {
+            if (typeof value !== 'number' && !(typeof value === 'string' && /^\d+$/.test(value))) return null;
+            const id = Number(value);
+            return Number.isSafeInteger(id) && id >= 0 ? id : null;
+        };
+        const seen = new Set();
+        const modes = (data.availableModes || []).flatMap(mode => {
+            const id = modeId(mode?.modeId);
+            if (id === null || seen.has(id) || typeof mode?.modeName !== 'string' || !mode.modeName.trim()) return [];
+            seen.add(id);
+            return [{
+                id,
+                name: mode.modeName,
+                description: typeof mode.modeDescription === 'string' ? mode.modeDescription : '',
+                available: mode.isModeAvailable === true,
+                premiumOnly: mode.isPremiumOnly === true
+            }];
+        });
+        return {
+            success: true,
+            available: data.interactiveRadioAvailable !== false && modes.length > 0,
+            currentModeId: modeId(data.currentModeId),
+            modes
+        };
+    }
+
+    async getStationModes(stationId) {
+        try {
+            const response = await this.request('/v1/interactiveradio/getAvailableModesSimple', { stationId });
+            if (PandoraAPI.isStreamConflict(response)) throw response;
+            return PandoraAPI.parseStationModes(response);
+        } catch (error) {
+            return {
+                success: false,
+                streamConflict: PandoraAPI.isStreamConflict(error),
+                error: 'Could not load station modes. Please try again.'
+            };
+        }
+    }
+
+    async setStationMode(stationId, modeId) {
+        if (!Number.isSafeInteger(modeId) || modeId < 0) {
+            return { success: false, error: 'Choose a mode offered by this station.' };
+        }
+        try {
+            const response = await this.request('/v1/interactiveradio/setAndGetAvailableModes', { stationId, modeId });
+            if (PandoraAPI.isStreamConflict(response)) throw response;
+            const result = PandoraAPI.parseStationModes(response);
+            // Pandora can return HTTP 200 while silently keeping the old mode.
+            if (result.currentModeId !== modeId) {
+                return { ...result, success: false, error: 'Pandora did not enable that mode. Choose another available mode.' };
+            }
+            return result;
+        } catch (error) {
+            return {
+                success: false,
+                streamConflict: PandoraAPI.isStreamConflict(error),
+                error: 'Could not confirm the station mode. Please try again.'
+            };
+        }
+    }
+
+    /** Get playlist tracks for a station. */
     static isStreamConflict(value) {
         return value?.errorString === 'STREAM_VIOLATION' ||
             ['SimStreamViolation', 'SimStreamViolationItem'].includes(value?.trackType) ||
