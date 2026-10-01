@@ -1157,7 +1157,7 @@ function renderNowPlayingPage() {
             </div>
             
             <div class="np-right">
-
+                <section class="station-tuning" id="np-station-tuning" aria-labelledby="np-tuning-title"></section>
                 ${historyHtml}
             </div>
         </div>
@@ -1175,6 +1175,8 @@ function renderNowPlayingPage() {
 
     document.getElementById('np-thumbup')?.addEventListener('click', () => handleThumb(true));
     document.getElementById('np-thumbdown')?.addEventListener('click', () => handleThumb(false));
+    renderStationModes();
+    requestStationModes();
 
     // History undo-dislike handlers
     document.querySelectorAll('.history-undo-btn').forEach(btn => {
@@ -1194,6 +1196,87 @@ function renderNowPlayingPage() {
             }
         });
     });
+}
+
+let stationModesRequest = null;
+
+async function requestStationModes() {
+    const { stationId, stationLoading, streamBlocked, stationModes } = AppState.playerState;
+    if (AppState.currentPage !== 'nowplaying' || !stationId || stationLoading || streamBlocked ||
+        stationModes?.changing || stationModes?.status === 'loading' || stationModesRequest?.stationId === stationId) return;
+    const request = { stationId };
+    stationModesRequest = request;
+    try {
+        await window.api.player.getStationModes(stationId);
+    } catch {
+        if (stationModesRequest === request && AppState.playerState.stationId === stationId) {
+            AppState.playerState.stationModes = { status: 'error', error: 'Could not load station modes. Please try again.' };
+            renderStationModes();
+        }
+    } finally {
+        if (stationModesRequest === request) stationModesRequest = null;
+    }
+}
+
+function renderStationModes() {
+    const panel = document.getElementById('np-station-tuning');
+    if (!panel || AppState.currentPage !== 'nowplaying') return;
+    const { stationId, stationName, stationLoading, streamBlocked } = AppState.playerState;
+    const state = AppState.playerState.stationModes || { status: 'idle' };
+    const modes = state.modes || [];
+    const current = modes.find(mode => mode.id === state.currentModeId);
+    const loading = state.status === 'idle' || state.status === 'loading';
+    const disabled = !stationId || stationLoading || streamBlocked || loading ||
+        state.changing || state.status !== 'ready' || !state.available;
+    let message = 'Changes apply to upcoming songs.';
+    if (!stationId) message = 'Play a station to see its modes.';
+    else if (stationLoading) message = 'Loading station…';
+    else if (streamBlocked) message = 'Resume playback here to tune this station.';
+    else if (state.changing) message = 'Changing station mode…';
+    else if (state.error) message = state.error;
+    else if (loading) message = 'Loading station modes…';
+    else if (!state.available) message = 'Pandora does not offer modes for this station.';
+    const placeholder = loading ? 'Loading modes…' : 'Select a mode';
+    const options = (current ? '' : `<option value="" selected disabled>${placeholder}</option>`) +
+        modes.map(mode => `<option value="${mode.id}" ${mode.id === state.currentModeId ? 'selected' : ''}
+            ${mode.available ? '' : 'disabled'}>${escapeHtml(mode.name)}${mode.available ? '' : mode.premiumOnly ? ' — Premium required' : ' — Unavailable'}</option>`).join('');
+    const markup = `
+        <h3 class="tune-title" id="np-tuning-title">Tune your station</h3>
+        <p class="station-tuning-name">${escapeHtml(stationName || 'Current station')}</p>
+        <label class="station-mode-label" for="np-mode-select">Listening mode</label>
+        <select class="station-mode-select" id="np-mode-select" aria-describedby="np-mode-description np-mode-status"
+            ${disabled ? 'disabled' : ''}>${options}</select>
+        <p class="station-mode-description" id="np-mode-description">${escapeHtml(current?.description || '')}</p>
+        <p class="station-mode-status ${state.error && !state.changing ? 'is-error' : ''}" id="np-mode-status" role="status">${escapeHtml(message)}</p>
+        ${state.error && !state.changing && !stationLoading && !streamBlocked ? '<button class="station-mode-retry" id="np-mode-retry" type="button">Reload modes</button>' : ''}
+    `;
+    // Audio time/pause updates must not replace a focused/open mode selector.
+    if (panel.dataset.modeMarkup === markup) return;
+    panel.dataset.modeMarkup = markup;
+    const restoreFocus = document.activeElement?.id === 'np-mode-select';
+    panel.innerHTML = markup;
+    panel.setAttribute('aria-busy', String(!!stationId && (loading || state.changing || stationLoading)));
+    const select = document.getElementById('np-mode-select');
+    select?.addEventListener('change', async () => {
+        const modeId = Number(select.value);
+        // Restore the confirmed selection while the main process verifies the change.
+        select.value = state.currentModeId == null ? '' : String(state.currentModeId);
+        select.disabled = true;
+        try {
+            const result = await window.api.player.setStationMode(stationId, modeId);
+            if (!result?.success && result?.error && AppState.playerState.stationId === stationId) {
+                showErrorToast(result.error);
+            }
+        } catch {
+            showErrorToast('Could not change the station mode. Please try again.');
+        } finally {
+            // Force a refresh even if IPC rejected before a state event arrived.
+            panel.dataset.modeMarkup = '';
+            renderStationModes();
+        }
+    });
+    document.getElementById('np-mode-retry')?.addEventListener('click', () => requestStationModes());
+    if (restoreFocus && !disabled) select?.focus();
 }
 
 // Variables for lyrics state
@@ -1454,7 +1537,12 @@ function checkMarquee(el) {
     }
 }
 function updatePlayerUI(state) {
+    if (state.stationId !== undefined && state.stationId !== AppState.playerState.stationId) stationModesRequest = null;
     AppState.playerState = { ...AppState.playerState, ...state };
+    if (AppState.currentPage === 'nowplaying') {
+        renderStationModes();
+        if (AppState.playerState.stationModes?.status === 'idle') requestStationModes();
+    }
 
     // Update now playing info
     if (state.track) {

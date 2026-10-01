@@ -1,0 +1,39 @@
+name: Player tests
+
+on:
+  pull_request:
+    paths:
+      - '*.js'
+      - '*.html'
+      - '*.css'
+      - 'package*.json'
+      - 'tests/**'
+      - '.github/workflows/tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  player:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run prepare-dist
+      - name: Native Electron player and station modes
+        run: xvfb-run --auto-servernum npm run test:electron:player -- --no-sandbox
+      - name: Save player screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: player-ui
+          path: /tmp/panedora-player-test-*/*.png
+          if-no-files-found: ignore
+          retention-days: 7

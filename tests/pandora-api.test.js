@@ -37,6 +37,68 @@ function setup(responses) {
 const blocked = () => ({ status: 403, body: { ...challenge } });
 const paid = () => ({ status: 200, body: { authToken: 'new-token', listenerId: 'listener', config: { branding: 'PandoraPlus' } } });
 
+function modeResponse(currentModeId = 0) {
+    return {
+        interactiveRadioAvailable: true,
+        currentModeId,
+        availableModes: [
+            { modeId: 0, modeName: 'My Station', isModeAvailable: true },
+            { modeId: 1091989, modeName: 'Energy Boost', modeDescription: 'More energy.', isModeAvailable: true },
+            { modeId: 5, modeName: 'Artist Only', isModeAvailable: false, isPremiumOnly: true }
+        ]
+    };
+}
+
+test('station modes use the interactive-radio endpoint and normalize actual IDs and restrictions', async () => {
+    for (const nested of [false, true]) {
+        const data = modeResponse('0');
+        data.availableModes.push({ modeId: null, modeName: 'Invalid' }, { modeId: 0, modeName: 'Duplicate' });
+        const { api, calls } = setup([{ status: 200, body: nested ? { result: data, stat: 'ok' } : data }]);
+        const result = await api.getStationModes('station-1');
+        assert.equal(result.success, true);
+        assert.equal(result.currentModeId, 0);
+        assert.equal(result.modes.length, 3);
+        assert.equal(result.modes[1].id, 1091989);
+        assert.equal(result.modes[2].available, false);
+        assert.equal(result.modes[2].premiumOnly, true);
+        assert.equal(calls[0].url, 'https://www.pandora.com/api/v1/interactiveradio/getAvailableModesSimple');
+        assert.deepEqual(JSON.parse(calls[0].body), { stationId: 'station-1' });
+        assert.equal(calls[0].headers['X-AuthToken'], 'expired-token');
+    }
+});
+
+test('setting a mode sends its numeric API ID and requires the returned mode to match', async () => {
+    for (const currentModeId of [1091989, '1091989', 0, null]) {
+        const { api, calls } = setup([{ status: 200, body: modeResponse(currentModeId) }]);
+        const result = await api.setStationMode('station-1', 1091989);
+        assert.equal(result.success, Number(currentModeId) === 1091989);
+        assert.equal(calls[0].url, 'https://www.pandora.com/api/v1/interactiveradio/setAndGetAvailableModes');
+        assert.deepEqual(JSON.parse(calls[0].body), { stationId: 'station-1', modeId: 1091989 });
+    }
+});
+
+test('a station with no modes is distinguished from a malformed or failed modes response', async () => {
+    const { api } = setup([
+        { status: 200, body: { interactiveRadioAvailable: false } },
+        { status: 200, body: {} },
+        { status: 200, body: { stat: 'fail', result: modeResponse() } }
+    ]);
+    assert.equal((await api.getStationModes('shuffle')).available, false);
+    assert.equal((await api.getStationModes('station-1')).success, false);
+    assert.equal((await api.getStationModes('station-1')).success, false);
+});
+
+test('invalid IDs are rejected without requests and mode conflicts never force takeover', async () => {
+    const { api, calls } = setup([{ status: 429, body: { errorString: 'STREAM_VIOLATION' } }]);
+    for (const id of [null, -1, '5', NaN, 1.5]) {
+        assert.equal((await api.setStationMode('station-1', id)).success, false);
+    }
+    assert.equal(calls.length, 0);
+    const result = await api.setStationMode('station-1', 1091989);
+    assert.equal(result.streamConflict, true);
+    assert.equal(calls.length, 1);
+});
+
 test('blocked sign-in waits for verification and uses its cookies for one retry', async () => {
     const { api, state, cookies, calls } = setup([blocked(), paid()]);
     let prompts = 0;

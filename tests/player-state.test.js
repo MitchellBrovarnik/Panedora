@@ -9,12 +9,21 @@ function track(rating = 0, token = 'track-1') {
     return { trackToken: token, songRating: rating, songTitle: token, audioURL: 'https://fixture.invalid/' + token };
 }
 
+function modes(currentModeId = 0) {
+    return { success: true, available: true, currentModeId, modes: [
+        { id: 0, name: 'My Station', available: true },
+        { id: 1091989, name: 'Energy Boost', available: true },
+        { id: 5, name: 'Artist Only', available: false }
+    ] };
+}
+
 function setup() {
     const handlers = new Map();
     const dialogs = [];
     const messages = [];
     const calls = [];
     const playlists = [];
+    let activeMode = 0;
     const electron = {
         app: { commandLine: { appendSwitch() {} }, on() {}, whenReady: () => new Promise(() => {}) },
         ipcMain: { handle: (name, fn) => handlers.set(name, fn) },
@@ -25,6 +34,8 @@ function setup() {
         playbackResumed: async force => { calls.push(['resume', force]); return { success: true }; },
         playbackPaused: async () => { calls.push(['pause']); return true; },
         trackStarted: async () => {},
+        getStationModes: async stationId => { calls.push(['getModes', stationId]); return modes(activeMode); },
+        setStationMode: async (stationId, modeId) => { calls.push(['setMode', stationId, modeId]); activeMode = modeId; return modes(activeMode); },
         addFeedback: async () => { calls.push(['addFeedback']); return { success: true, feedbackId: 'new-feedback' }; },
         deleteFeedback: async id => { calls.push(['deleteFeedback', id]); return { success: true }; },
         logout() {}
@@ -35,7 +46,7 @@ function setup() {
         api = testApi;
         uiWindow = testWindow;
         currentStations = [{stationId:'station-1'}, {stationId:'station-2'}];
-        module.exports = { playStation, showStreamConflict, getCurrentState, thumbUp, thumbDown, pausePlayer, resumePlayer,
+        module.exports = { playStation, showStreamConflict, getCurrentState, thumbUp, thumbDown, pausePlayer, resumePlayer, loadStationModes, changeStationMode, skipTrack,
             seed: (tracks) => { currentStation = currentStations[0]; currentPlaylist = tracks; currentTrackIndex = 0; isPaused = false; tracks.forEach(rememberTrack); }
         };`;
     vm.runInNewContext(source, {
@@ -53,6 +64,211 @@ function setup() {
     });
     return { ...module.exports, api, handlers, dialogs, messages, calls, playlists };
 }
+
+test('modes load on request, preserve zero, and reject unavailable or arbitrary selections', async () => {
+    const s = setup();
+    s.seed([track()]);
+    assert.equal(s.getCurrentState().stationModes.status, 'idle');
+    assert.deepEqual(s.calls, []);
+    assert.equal((await s.changeStationMode('station-1', 1091989)).success, false);
+    await s.loadStationModes('station-1');
+    assert.equal(s.getCurrentState().stationModes.currentModeId, 0);
+    for (const id of [5, 2, '1091989']) {
+        assert.equal((await s.changeStationMode('station-1', id)).success, false);
+    }
+    assert.equal((await s.changeStationMode('station-2', 1091989)).success, false);
+    assert.equal((await s.changeStationMode('station-1', 0)).success, true);
+    assert.equal(s.calls.filter(c => c[0] === 'setMode').length, 0);
+});
+
+test('confirmed tuning retains the current song, thumb, history and pause state, replacing only upcoming tracks', async () => {
+    for (const paused of [false, true]) {
+        const s = setup();
+        s.playlists.push({ tracks: [track(1, 'current'), track(0, 'old-next')] });
+        await s.playStation('station-1');
+        if (paused) await s.pausePlayer();
+        const history = JSON.stringify(s.getCurrentState().history);
+        await s.loadStationModes('station-1');
+        const requests = [];
+        s.api.getPlaylist = async (...args) => {
+            requests.push(args);
+            return { tracks: [track(1, 'tuned-next'), track(0, 'tuned-2'), track(0, 'tuned-3')] };
+        };
+        assert.equal((await s.changeStationMode('station-1', 1091989)).success, true);
+        assert.deepEqual(requests, [['station-1', false]]);
+        assert.equal(s.getCurrentState().trackToken, 'current');
+        assert.equal(s.getCurrentState().feedback, 'thumbUp');
+        assert.equal(s.getCurrentState().isPlaying, !paused);
+        assert.equal(JSON.stringify(s.getCurrentState().history), history);
+        assert.equal(s.getCurrentState().stationModes.currentModeId, 1091989);
+        await s.skipTrack();
+        assert.equal(s.getCurrentState().trackToken, 'tuned-next');
+        assert.equal(s.getCurrentState().feedback, 'thumbUp');
+    }
+});
+
+test('a rejected change and a mode reset during playlist fetch never display the requested mode as active', async () => {
+    for (const resetDuringFetch of [false, true]) {
+        const s = setup();
+        s.seed([track()]);
+        await s.loadStationModes('station-1');
+        s.api.setStationMode = async () => resetDuringFetch ? modes(1091989) : { ...modes(0), success: false, error: 'Not enabled' };
+        s.api.getStationModes = async () => modes(0);
+        assert.equal((await s.changeStationMode('station-1', 1091989)).success, false);
+        assert.equal(s.getCurrentState().stationModes.currentModeId, 0);
+        assert.ok(s.getCurrentState().stationModes.error);
+        assert.equal(s.getCurrentState().trackToken, 'track-1');
+    }
+});
+
+test('lost setter responses read back actual state; failed verification clears the unconfirmed mode', async () => {
+    const s = setup();
+    s.seed([track()]);
+    await s.loadStationModes('station-1');
+    s.api.setStationMode = async () => ({ success: false, error: 'Timed out' });
+    s.api.getStationModes = async () => modes(1091989);
+    assert.equal((await s.changeStationMode('station-1', 1091989)).success, false);
+    assert.equal(s.getCurrentState().stationModes.currentModeId, 1091989, 'Read-back is authoritative even after a lost response');
+    s.api.setStationMode = async () => modes(0);
+    s.api.getStationModes = async () => ({ success: false, error: 'Offline' });
+    await s.changeStationMode('station-1', 0);
+    assert.equal(s.getCurrentState().stationModes.currentModeId, null);
+    assert.equal(s.getCurrentState().stationModes.status, 'error');
+    assert.equal(s.getCurrentState().trackToken, 'track-1');
+});
+
+test('a delayed pre-change playlist cannot overwrite tuning', async () => {
+    const s = setup();
+    s.seed([track()]);
+    await s.loadStationModes('station-1');
+    let oldPlaylist;
+    let requests = 0;
+    s.api.getPlaylist = async () => ++requests === 1
+        ? new Promise(resolve => { oldPlaylist = resolve; })
+        : { tracks: [track(0, 'tuned'), track(0, 'tuned-2'), track(0, 'tuned-3')] };
+    const pending = s.handlers.get('PLAYER:GET_MORE_TRACKS')();
+    await s.changeStationMode('station-1', 1091989);
+    oldPlaylist({ tracks: [track(0, 'stale')], streamConflict: true });
+    await pending;
+    assert.equal(s.dialogs.length, 0);
+    assert.equal(s.getCurrentState().playlistLength, 4);
+    await s.skipTrack();
+    assert.equal(s.getCurrentState().trackToken, 'tuned');
+});
+
+test('a song ending waits for tuning; repeated changes and prefetch are blocked while it is pending', async () => {
+    const s = setup();
+    s.seed([track(1, 'current'), track(0, 'stale-next')]);
+    await s.loadStationModes('station-1');
+    let complete;
+    s.api.setStationMode = async () => new Promise(resolve => { complete = resolve; });
+    s.api.getStationModes = async () => modes(1091989);
+    s.api.getPlaylist = async () => ({ tracks: [track(0, 'tuned'), track(0, 'tuned-2'), track(0, 'tuned-3')] });
+    const changing = s.changeStationMode('station-1', 1091989);
+    const ended = s.skipTrack();
+    assert.equal(ended, s.skipTrack(), 'Duplicate Next must share the pending advance');
+    assert.equal((await s.changeStationMode('station-1', 1091989)).success, false);
+    assert.equal((await s.handlers.get('PLAYER:GET_MORE_TRACKS')()).tracks.length, 0);
+    assert.equal(s.getCurrentState().stationModes.currentModeId, 0);
+    assert.equal(s.getCurrentState().trackToken, 'current');
+    await s.pausePlayer();
+    complete(modes(1091989));
+    await Promise.all([changing, ended]);
+    assert.equal(s.getCurrentState().trackToken, 'tuned');
+    assert.equal(s.getCurrentState().isPlaying, false, 'A later pause must win');
+});
+
+test('station switches and sign-out discard delayed mode reads and changes', async () => {
+    for (const readOnly of [false, true]) {
+        for (const logout of [false, true]) {
+            const s = setup();
+            s.seed([track()]);
+            let complete;
+            let pending;
+            if (readOnly) {
+                s.api.getStationModes = async () => new Promise(resolve => { complete = resolve; });
+                pending = s.loadStationModes('station-1');
+            } else {
+                await s.loadStationModes('station-1');
+                s.api.setStationMode = async () => new Promise(resolve => { complete = resolve; });
+                pending = s.changeStationMode('station-1', 1091989);
+            }
+            if (logout) await s.handlers.get('AUTH:LOGOUT')();
+            else await s.playStation('station-2');
+            complete(modes(1091989));
+            await pending;
+            assert.equal(s.getCurrentState().stationId, logout ? null : 'station-2');
+            assert.equal(s.getCurrentState().stationModes.status, 'idle');
+            assert.equal(s.getCurrentState().stationModes.currentModeId, null);
+            assert.equal(s.getCurrentState().stationModes.changing, false);
+        }
+    }
+});
+
+test('mode change conflicts retain the explicit device choice and reset tuning after takeover', async () => {
+    for (const response of [0, 1]) {
+        const s = setup();
+        s.seed([track()]);
+        await s.loadStationModes('station-1');
+        s.api.setStationMode = async () => ({ success: false, streamConflict: true });
+        const pending = s.changeStationMode('station-1', 1091989);
+        await tick();
+        assert.equal(s.dialogs.length, 1);
+        assert.equal(s.calls.some(c => c[0] === 'resume'), false);
+        assert.equal(s.getCurrentState().streamBlocked, true);
+        s.dialogs[0].resolve({ response });
+        await pending;
+        assert.equal(s.getCurrentState().streamBlocked, response !== 0);
+        if (response === 0) assert.equal(s.getCurrentState().stationModes.status, 'idle');
+    }
+});
+
+test('a pending skip cannot advance the song or append its queue after tuning starts', async () => {
+    const s = setup();
+    s.seed([track(1, 'current'), track(0, 'stale')]);
+    await s.loadStationModes('station-1');
+    let oldResult;
+    let count = 0;
+    s.api.getPlaylist = async () => ++count === 1
+        ? new Promise(resolve => { oldResult = resolve; })
+        : { tracks: [track(0, 'tuned'), track(0, 'tuned-2'), track(0, 'tuned-3')] };
+    const oldSkip = s.skipTrack();
+    assert.equal(s.getCurrentState().trackToken, 'current');
+    await s.changeStationMode('station-1', 1091989);
+    oldResult({ tracks: [track(0, 'old-fetch')] });
+    await oldSkip;
+    assert.equal(s.getCurrentState().trackToken, 'current');
+    await s.skipTrack();
+    assert.equal(s.getCurrentState().trackToken, 'tuned');
+});
+
+test('a pending thumbs-down still skips the retained current song after tuning', async () => {
+    const s = setup();
+    s.seed([track(0, 'current')]);
+    await s.loadStationModes('station-1');
+    let finishFeedback;
+    s.api.addFeedback = async () => new Promise(resolve => { finishFeedback = resolve; });
+    const thumb = s.thumbDown();
+    s.api.getPlaylist = async () => ({ tracks: [track(0, 'tuned'), track(0, 'tuned-2'), track(0, 'tuned-3')] });
+    await s.changeStationMode('station-1', 1091989);
+    finishFeedback({ success: true, feedbackId: 'new-thumb' });
+    await thumb;
+    assert.equal(s.getCurrentState().trackToken, 'tuned');
+    assert.equal(s.getCurrentState().history[0].feedback, 'disliked');
+});
+
+test('a skip conflict followed by takeover releases the queue refill guard', async () => {
+    const s = setup();
+    s.seed([track()]);
+    s.playlists.push({ tracks: [], streamConflict: true }, { tracks: [track(0, 'reclaimed')] });
+    const skip = s.skipTrack();
+    await tick();
+    s.dialogs[0].resolve({ response: 0 });
+    await skip;
+    s.playlists.push({ tracks: [track(0, 'next-after-takeover')] });
+    await s.skipTrack();
+    assert.equal(s.getCurrentState().trackToken, 'next-after-takeover');
+});
 
 test('Let them listen pauses without sending a takeover request', async () => {
     const s = setup();

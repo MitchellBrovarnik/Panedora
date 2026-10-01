@@ -33,6 +33,21 @@ let playbackGeneration = 0;
 let streamPrompt = null;
 let pauseRevision = 0;
 let resumeOperation = null;
+let skipOperation = null;
+let stationLoading = false;
+let stationModes = emptyStationModes();
+let stationModesRead = null;
+let stationModeChange = null;
+
+function emptyStationModes() {
+    return { status: 'idle', available: false, modes: [], currentModeId: null, error: null };
+}
+
+function resetStationModes() {
+    stationModes = emptyStationModes();
+    stationModesRead = null;
+    stationModeChange = null;
+}
 
 // ============================================================================
 // Window Creation
@@ -155,6 +170,8 @@ function getCurrentState() {
         album: track?.albumTitle || null,
         stationName: currentStation?.name || null,
         stationId: currentStation?.stationId || null,
+        stationLoading,
+        stationModes: { ...stationModes, changing: stationModeChange?.generation === playbackGeneration },
         coverArt: PandoraAPI.getHighResArt(track?.albumArt),
         time: 0, // UI will track via audio element
         duration: track?.trackLength || 0,
@@ -236,6 +253,8 @@ function showStreamConflict(stationId, generation = playbackGeneration) {
             }
             // Discard playlist responses requested before this successful takeover.
             playbackGeneration++;
+            isLoadingMoreTracks = false;
+            resetStationModes();
             currentPlaylist = result.tracks;
             currentTrackIndex = 0;
             streamReclaimed = false;
@@ -255,6 +274,7 @@ function showStreamConflict(stationId, generation = playbackGeneration) {
 }
 
 async function resumePlayer() {
+    if (stationLoading) return { success: false };
     if (!currentStation) return { success: false, error: 'Select a station first.' };
     if (streamReclaimed) {
         await showStreamConflict(currentStation.stationId);
@@ -353,6 +373,9 @@ async function loadStations() {
 
 async function playStation(stationId, startingAtTrackId = null) {
     const generation = ++playbackGeneration;
+    stationLoading = true;
+    resetStationModes();
+    isLoadingMoreTracks = false;
     const previousTrack = currentPlaylist[currentTrackIndex];
     isPaused = true;
     sendPlayerState({ ...getCurrentState(), pausePlayback: true });
@@ -364,8 +387,10 @@ async function playStation(stationId, startingAtTrackId = null) {
     streamReclaimed = false;
     currentPlaylist = [];
     currentTrackIndex = 0;
+    sendPlayerState(getCurrentState());
     const result = await api.getPlaylist(stationId, true, startingAtTrackId);
     if (generation !== playbackGeneration) return getCurrentState();
+    stationLoading = false;
     if (result.streamConflict) {
         await showStreamConflict(stationId, generation);
         return getCurrentState();
@@ -381,12 +406,25 @@ async function playStation(stationId, startingAtTrackId = null) {
     return getCurrentState();
 }
 
-async function skipTrack() {
-    if (streamReclaimed) return getCurrentState();
-    const generation = playbackGeneration;
-    isPaused = false;
-    currentTrackIndex++;
-    if (currentTrackIndex >= currentPlaylist.length - 2 && currentStation && !isLoadingMoreTracks) {
+function skipTrack() {
+    if (streamReclaimed || stationLoading) return Promise.resolve(getCurrentState());
+    if (skipOperation?.generation === playbackGeneration) return skipOperation.promise;
+    const operation = { generation: playbackGeneration, pauseRevision };
+    skipOperation = operation;
+    operation.promise = (async () => {
+        // A natural song ending during a mode change must wait for the fresh mix.
+        if (stationModeChange?.generation === operation.generation) await stationModeChange.promise;
+        if (operation.generation !== playbackGeneration || streamReclaimed) return getCurrentState();
+        return advanceTrack(operation.generation, operation.pauseRevision);
+    })().finally(() => {
+        if (skipOperation === operation) skipOperation = null;
+    });
+    return operation.promise;
+}
+
+async function advanceTrack(generation, requestedPauseRevision) {
+    const nextIndex = currentTrackIndex + 1;
+    if (nextIndex >= currentPlaylist.length - 2 && currentStation && !isLoadingMoreTracks) {
         isLoadingMoreTracks = true;
         try {
             const result = await api.getPlaylist(currentStation.stationId);
@@ -398,21 +436,137 @@ async function skipTrack() {
             if (result.tracks?.length) currentPlaylist.push(...result.tracks);
             else if (result.error) sendToUI('UI:ERROR', { message: result.error });
         } finally {
-            isLoadingMoreTracks = false;
+            if (generation === playbackGeneration) isLoadingMoreTracks = false;
         }
     }
-    if (currentTrackIndex >= currentPlaylist.length) {
-        currentTrackIndex = Math.max(0, currentPlaylist.length - 1);
+    if (nextIndex >= currentPlaylist.length) {
         isPaused = true;
         sendToUI('UI:ERROR', { message: 'No more tracks available. Please try playing the station again.' });
         sendPlayerState({ ...getCurrentState(), pausePlayback: true });
         return getCurrentState();
     }
+    currentTrackIndex = nextIndex;
+    if (requestedPauseRevision === pauseRevision) isPaused = false;
     const track = currentPlaylist[currentTrackIndex];
     rememberTrack(track);
     if (track?.trackToken) api.trackStarted(currentStation?.stationId, track.trackToken);
     sendPlayerState(getCurrentState());
     return getCurrentState();
+}
+
+// Modes are loaded only when the expanded song/history view requests them.
+async function loadStationModes(stationId) {
+    if (!currentStation || stationId !== currentStation.stationId || stationLoading || streamReclaimed) {
+        return { success: false };
+    }
+    if (stationModeChange?.generation === playbackGeneration) return { success: false };
+    if (stationModesRead?.generation === playbackGeneration) return stationModesRead.promise;
+    const operation = { generation: playbackGeneration };
+    stationModesRead = operation;
+    stationModes = { ...stationModes, status: 'loading', error: null };
+    sendPlayerState(getCurrentState());
+    operation.promise = (async () => {
+        try {
+            const result = await api.getStationModes(stationId);
+            if (operation.generation !== playbackGeneration || stationModesRead !== operation) return { success: false };
+            stationModes = result.success
+                ? { ...result, status: 'ready', error: null }
+                : { ...emptyStationModes(), status: 'error', error: result.error };
+            sendPlayerState(getCurrentState());
+            if (result.streamConflict) await showStreamConflict(stationId, operation.generation);
+            return result;
+        } catch {
+            const result = { success: false, error: 'Could not load station modes. Please try again.' };
+            if (operation.generation === playbackGeneration && stationModesRead === operation) {
+                stationModes = { ...emptyStationModes(), status: 'error', error: result.error };
+                sendPlayerState(getCurrentState());
+            }
+            return result;
+        } finally {
+            if (stationModesRead === operation) stationModesRead = null;
+        }
+    })();
+    return operation.promise;
+}
+
+function changeStationMode(stationId, modeId) {
+    if (!currentStation || stationId !== currentStation.stationId || stationLoading || streamReclaimed ||
+        stationModeChange?.generation === playbackGeneration || stationModes.status !== 'ready') {
+        return Promise.resolve({ success: false, error: 'Wait for the station to be ready, then try again.' });
+    }
+    const mode = stationModes.modes.find(item => item.id === modeId);
+    if (!stationModes.available || !mode?.available) {
+        return Promise.resolve({ success: false, error: 'That mode is not available on this station.' });
+    }
+    if (stationModes.currentModeId === modeId) return Promise.resolve({ success: true });
+
+    const operation = { generation: ++playbackGeneration };
+    stationModeChange = operation;
+    stationModesRead = null;
+    isLoadingMoreTracks = false;
+    stationModes = { ...stationModes, error: null };
+    // Invalidate pre-change requests and discard only upcoming songs. Keeping the
+    // current track preserves its playback position, saved thumb and history.
+    currentPlaylist = currentPlaylist.slice(0, currentTrackIndex + 1);
+    sendPlayerState(getCurrentState());
+    const isCurrent = () => operation.generation === playbackGeneration && !streamReclaimed;
+    operation.promise = (async () => {
+        try {
+            const result = await api.setStationMode(stationId, modeId);
+            if (!isCurrent()) return { success: false };
+            if (result.streamConflict) {
+                await showStreamConflict(stationId, operation.generation);
+                return { success: false };
+            }
+            if (!result.success) {
+                // A lost response may have applied the change on Pandora. Read
+                // back the actual mode; never keep an optimistic selection.
+                const actual = result.modes ? result : await api.getStationModes(stationId);
+                if (!isCurrent()) return { success: false };
+                stationModes = actual.modes
+                    ? { ...actual, status: 'ready', error: result.error }
+                    : { ...emptyStationModes(), status: 'error', error: result.error };
+                if (actual.streamConflict) await showStreamConflict(stationId, operation.generation);
+                return { success: false };
+            }
+
+            // Continue the existing station, rather than starting it again (which
+            // can reset its tuning). Do not play from the previous queued mix.
+            const playlist = await api.getPlaylist(stationId, false);
+            if (!isCurrent()) return { success: false };
+            if (playlist.streamConflict) {
+                await showStreamConflict(stationId, operation.generation);
+                return { success: false };
+            }
+            const confirmed = await api.getStationModes(stationId);
+            if (!isCurrent()) return { success: false };
+            if (confirmed.streamConflict) {
+                await showStreamConflict(stationId, operation.generation);
+                return { success: false };
+            }
+            if (!confirmed.success) {
+                stationModes = { ...emptyStationModes(), status: 'error', error: confirmed.error };
+                return { success: false };
+            }
+            const keptMode = confirmed.currentModeId === modeId;
+            stationModes = {
+                ...confirmed, status: 'ready',
+                error: !keptMode ? 'Pandora did not keep that mode active. Choose another available mode.'
+                    : playlist.error || (!playlist.tracks?.length ? 'The mode changed, but upcoming songs could not be loaded. Try Next again.' : null)
+            };
+            if (playlist.tracks?.length) currentPlaylist.push(...playlist.tracks);
+            return { success: keptMode };
+        } catch {
+            if (isCurrent()) stationModes = { ...emptyStationModes(), status: 'error', error: 'Could not confirm the station mode. Please try again.' };
+            return { success: false };
+        } finally {
+            if (stationModeChange === operation) {
+                stationModeChange = null;
+                sendPlayerState(getCurrentState());
+            }
+        }
+    })();
+    return operation.promise;
 }
 
 async function replayTrack() {
@@ -426,7 +580,6 @@ async function setTrackFeedback(isPositive) {
     if (!track?.trackToken) return { success: false, error: 'No track selected.' };
     const rating = isPositive ? 1 : -1;
     if (feedbackForTrack(track) === (isPositive ? 'thumbUp' : 'thumbDown')) return { success: true };
-    const generation = playbackGeneration;
     const result = await api.addFeedback(track.trackToken, isPositive);
     if (!result.success) {
         sendPlayerState(getCurrentState());
@@ -440,7 +593,9 @@ async function setTrackFeedback(isPositive) {
         histItem.feedback = isPositive ? 'liked' : 'disliked';
         histItem.feedbackId = track.feedbackId;
     }
-    if (!isPositive && generation === playbackGeneration && currentPlaylist[currentTrackIndex] === track) {
+    // A mode change invalidates playlists but retains this exact track object.
+    // Its pending thumbs-down should still advance once the fresh mix is ready.
+    if (!isPositive && currentPlaylist[currentTrackIndex] === track) {
         await skipTrack();
     } else sendPlayerState(getCurrentState());
     return { success: true };
@@ -491,6 +646,8 @@ ipcMain.handle('AUTH:LOGIN', async (event, { username, password }) => {
 // Logout
 ipcMain.handle('AUTH:LOGOUT', async () => {
     playbackGeneration++;
+    stationLoading = false;
+    resetStationModes();
     try {
         // Tell Pandora to stop the stream for this session so it doesn't hang
         const track = currentPlaylist[currentTrackIndex];
@@ -517,6 +674,9 @@ ipcMain.handle('AUTH:LOGOUT', async () => {
 });
 
 // Player commands
+ipcMain.handle('PLAYER:GET_STATION_MODES', (event, { stationId } = {}) => loadStationModes(stationId));
+ipcMain.handle('PLAYER:SET_STATION_MODE', (event, { stationId, modeId } = {}) => changeStationMode(stationId, modeId));
+
 ipcMain.handle('PLAYER:CMD', async (event, { action, value }) => {
     switch (action) {
         case 'next':
@@ -731,7 +891,8 @@ ipcMain.handle('CONTENT:FETCH_LYRICS', async (event, artist, title) => {
 
 // Get more tracks
 ipcMain.handle('PLAYER:GET_MORE_TRACKS', async () => {
-    if (!currentStation || streamReclaimed) return { tracks: [] };
+    if (!currentStation || streamReclaimed || stationLoading ||
+        stationModeChange?.generation === playbackGeneration) return { tracks: [] };
     const generation = playbackGeneration;
     const stationId = currentStation.stationId;
     const result = await api.getPlaylist(stationId);
@@ -791,7 +952,7 @@ app.whenReady().then(() => {
                     console.log('[Main] Auto-relogin successful.');
 
                     // Refresh the playlist so audio URLs aren't expired
-                    if (currentStation && !streamReclaimed) {
+                    if (currentStation && !streamReclaimed && !stationLoading && !stationModeChange) {
                         const generation = playbackGeneration;
                         const stationId = currentStation.stationId;
                         console.log('[Main] Refreshing playlist for current station...');

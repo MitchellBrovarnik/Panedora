@@ -128,6 +128,7 @@ You do **not** need to compile the application locally. Simply navigate to the R
 4. **Curating & History:**
    *   Use the **Thumbs Up** / **Thumbs Down** buttons to inform Pandora's algorithm of your preferences.
    *   Review your recently played tracks in the panel on the right side of the Now Playing page. Click **Undo** on any disliked track to remove the negative feedback from your Pandora account.
+   *   Click the artwork in the play bar to open the expanded song/history view. Use **Tune your station** above Recently Played to choose from Pandora's available modes. Confirmed changes apply to upcoming songs while the current song continues.
 5. **Lyrics:** Click the **Lyrics** button in the player footer to display synchronized, scrolling lyrics over the Now Playing page.
 6. **Mini Player:** Click the **Mini Player** button to collapse the app into a compact floating bar that stays on top of all other windows, including fullscreen games.
 7. **Themes, Effects & Settings:** Click the **Settings** gear in the sidebar to choose a Color Theme, Background Effect, and Lyrics Highlight Style.
@@ -135,8 +136,7 @@ You do **not** need to compile the application locally. Simply navigate to the R
 
 ## Known Issues
 
-*   **Station Tuning Limitations:** The "Tune Your Station" feature (e.g., selecting "Discovery", "Deep Cuts", or "Artist Only") is currently not supported directly within Panedora.
-    *   **Workaround:** Open the official Pandora web or mobile app, go to your station, select the desired Tune mode, and let a few songs play. When you return to Panedora, that station will reflect the updated tuning.
+*   **Station Mode Availability:** Modes vary by station and subscription. Unavailable modes are disabled; stations such as Shuffle may offer no modes. Errors are shown if Pandora rejects a change or the active mode cannot be confirmed.
 *   **Search Functionality:** The search tab is a work in progress. Searching for a specific song may not play that exact track.
 
 ## Privacy and Security

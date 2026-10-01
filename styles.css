@@ -1678,6 +1678,7 @@ body::before {
 
 .np-content {
     display: flex;
+    flex-wrap: wrap;
     gap: 48px;
     flex: 1;
     align-items: flex-start;
@@ -1689,6 +1690,8 @@ body::before {
     flex-direction: column;
     align-items: center;
     max-width: 360px;
+    min-width: 0;
+    flex: 0 1 280px;
 }
 
 .np-artwork {
@@ -1854,7 +1857,83 @@ body::before {
 
 /* Tune panel */
 .np-right {
-    min-width: 190px;
+    min-width: 0;
+    flex: 1 1 260px;
+    max-width: 360px;
+    width: 100%;
+}
+
+.station-tuning {
+    padding: 18px;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--r-lg);
+    background: var(--glass);
+}
+
+.station-tuning-name {
+    margin-bottom: 16px;
+    color: var(--text-1);
+    font-size: 15px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.station-mode-label {
+    display: block;
+    margin-bottom: 7px;
+    color: var(--text-2);
+    font-size: 12px;
+}
+
+.station-mode-select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--r-sm);
+    background: var(--glass);
+    color: var(--text-1);
+    font: inherit;
+    font-size: 13px;
+    color-scheme: dark;
+}
+
+.station-mode-select option {
+    background: #202027;
+    color: #fff;
+}
+
+.station-mode-select:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.station-mode-select:focus-visible,
+.station-mode-retry:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+}
+
+.station-mode-description,
+.station-mode-status {
+    margin-top: 10px;
+    color: var(--text-2);
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.station-mode-description:empty { display: none; }
+.station-mode-status { color: var(--text-3); }
+.station-mode-status.is-error { color: #f9a8a8; }
+.station-mode-retry {
+    margin-top: 10px;
+    padding: 7px 12px;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--r-sm);
+    background: var(--glass-hover);
+    color: var(--text-1);
+    font: inherit;
+    font-size: 12px;
 }
 
 .tune-title {

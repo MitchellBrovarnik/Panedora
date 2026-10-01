@@ -36,6 +36,21 @@ function silentWav() {
 app.whenReady().then(async () => {
     let canStream = false;
     let resumeGate = null;
+    let modeGate = null;
+    let activeMode = 0;
+    let rejectMode = false;
+    let modesUnavailable = false;
+    let modesFailed = false;
+    const modeData = () => ({
+        interactiveRadioAvailable: !modesUnavailable,
+        currentModeId: activeMode,
+        availableModes: modesUnavailable ? [] : [
+            { modeId: 0, modeName: 'My Station', modeDescription: 'The station shaped by your thumbs.', isModeAvailable: true },
+            { modeId: 1091989, modeName: 'Energy Boost', modeDescription: 'A higher-energy mix from this station.', isModeAvailable: true },
+            { modeId: 5, modeName: 'Artist Only', isModeAvailable: false, isPremiumOnly: true },
+            { modeId: 987654, modeName: 'Curated <Mix>', isModeAvailable: false }
+        ]
+    });
     const calls = [];
     const prompts = [];
     const art = [{ size: 500, url: 'https://fixture.invalid/art.svg' }];
@@ -69,7 +84,15 @@ app.whenReady().then(async () => {
             case '/api/v1/search/fullSearch':
                 return json({ items: [{ type: 'TR', pandoraId: 'TR:fixture', songTitle: 'Fixture Song', artistName: 'Fixture Artist', albumArt: art }] });
             case '/api/v1/playlist/getFragment':
-                return canStream ? json({ tracks }) : json({ errorString: 'STREAM_VIOLATION' }, 429);
+                return canStream ? json({ tracks: activeMode === 0 ? tracks : tracks.map(t => ({
+                    ...t, trackToken: 'tuned-' + t.trackToken, audioURL: t.audioURL.replace('audio-', 'tuned-audio-')
+                })) }) : json({ errorString: 'STREAM_VIOLATION' }, 429);
+            case '/api/v1/interactiveradio/getAvailableModesSimple':
+                return modesFailed ? json({ errorString: 'Unavailable' }, 503) : json(modeData());
+            case '/api/v1/interactiveradio/setAndGetAvailableModes':
+                if (modeGate) await modeGate;
+                if (!rejectMode) activeMode = body.modeId;
+                return json(modeData());
             case '/api/v1/station/playbackResumed':
                 if (body.forceActive) canStream = true;
                 else if (resumeGate) await resumeGate;
@@ -125,7 +148,9 @@ app.whenReady().then(async () => {
     assert.equal(await run("getComputedStyle(document.getElementById('mini-thumb-up')).color"), 'rgb(29, 185, 84)');
 
     await run('window.api.window.toggleMini()');
-    await run("renderPage('nowplaying')");
+    assert.equal(calls.some(c => c.path.includes('interactiveradio')), false, 'Modes load only in the expanded view');
+    await run("document.getElementById('now-playing-art').click()");
+    await waitFor(() => run("document.getElementById('np-mode-select')?.value === '0'"), 'mode list');
     assert.equal(await run("document.getElementById('np-thumbup').classList.contains('liked')"), true);
     assert.equal(await run("document.getElementById('heart-btn').classList.contains('liked')"), true);
     await run("document.getElementById('np-thumbup').click()");
@@ -152,6 +177,53 @@ app.whenReady().then(async () => {
     assert.equal(await run("document.getElementById('np-thumbup').classList.contains('liked')"), true);
     assert.equal(await run("AppState.playerState.history[0].feedback"), 'liked');
 
+    // Tune through the real expanded-view selector. The current audio and its
+    // saved thumb must survive until Next, including a delayed mode response.
+    assert.equal(await run("document.querySelector('#np-mode-select option[value=\"5\"]').disabled"), true);
+    assert.equal(await run("document.querySelector('#np-mode-select option[value=\"987654\"]').textContent.includes('Curated <Mix>')"), true);
+    assert.equal(await run("document.querySelectorAll('#np-station-tuning mix').length"), 0);
+    const audioBefore = await run("document.querySelector('audio').src");
+    let finishMode;
+    modeGate = new Promise(resolve => { finishMode = resolve; });
+    await run("document.querySelector('audio').currentTime = 12; document.getElementById('np-mode-select').value = '1091989'; document.getElementById('np-mode-select').dispatchEvent(new Event('change'))");
+    await waitFor(() => run("AppState.playerState.stationModes.changing"), 'pending tuning');
+    assert.equal(await run("document.getElementById('np-mode-select').value"), '0');
+    assert.equal(await run("document.getElementById('np-mode-select').disabled"), true);
+    finishMode();
+    modeGate = null;
+    await waitFor(() => run("!AppState.playerState.stationModes.changing && document.getElementById('np-mode-select').value === '1091989'"), 'verified tuning');
+    assert.equal(await run("document.querySelector('audio').src"), audioBefore);
+    assert.equal(await run("document.querySelector('audio').currentTime >= 12"), true);
+    assert.equal(await run("document.getElementById('np-thumbup').classList.contains('liked')"), true);
+    const fragments = calls.filter(c => c.path.endsWith('/getFragment'));
+    assert.equal(fragments[fragments.length - 1].body.isStationStart, false);
+    assert.deepEqual(calls.find(c => c.path.endsWith('/setAndGetAvailableModes')).body, { stationId: 'fixture-station', modeId: 1091989 });
+    await capture('station-tuning');
+    win.setSize(900, 600);
+    await capture('station-tuning-small');
+    assert.equal(await run("document.querySelector('.np-right').getBoundingClientRect().right <= innerWidth"), true);
+    win.setSize(1200, 800);
+
+    rejectMode = true;
+    await run("document.getElementById('np-mode-select').value = '0'; document.getElementById('np-mode-select').dispatchEvent(new Event('change'))");
+    await waitFor(() => run("!AppState.playerState.stationModes.changing && !!AppState.playerState.stationModes.error"), 'rejected mode');
+    assert.equal(await run("document.getElementById('np-mode-select').value"), '1091989');
+    assert.match(await run("document.getElementById('np-mode-status').textContent"), /did not enable/);
+    await run('window.api.player.next()');
+    await waitFor(() => run("AppState.playerState.trackToken === 'tuned-fixture-track-1'"), 'fresh tuned track');
+
+    modesFailed = true;
+    await run("document.getElementById('np-mode-retry').click()");
+    await waitFor(() => run("AppState.playerState.stationModes.status === 'error'"), 'mode load failure');
+    modesFailed = false;
+    await run("document.getElementById('np-mode-retry').click()");
+    await waitFor(() => run("!document.getElementById('np-mode-select').disabled"), 'mode retry');
+    modesUnavailable = true;
+    await run("document.getElementById('np-back-btn').click(); document.getElementById('now-playing-art').click()");
+    await waitFor(() => run("AppState.playerState.stationModes.status === 'ready' && !AppState.playerState.stationModes.available"), 'station without modes');
+    assert.equal(await run("document.getElementById('np-mode-select').disabled"), true);
+    assert.match(await run("document.getElementById('np-mode-status').textContent"), /does not offer modes/);
+
     // A later conflict must stop already buffered audio before asking again.
     canStream = false;
     await run('void window.api.player.getMoreTracks()');
@@ -159,7 +231,7 @@ app.whenReady().then(async () => {
     await waitFor(() => run("document.querySelector('audio').paused"), 'buffered audio stopped');
     prompts[2].resolve({ response: 1 });
     assert.equal(calls.filter(c => c.path.endsWith('/playbackResumed') && c.body.forceActive).length, 1);
-    console.log('Native player smoke test passed: both listening choices, mini Play recovery, buffered audio stop, search images, saved REST thumbs, approved pause/resume.');
+    console.log('Native player smoke test passed: device takeover, saved thumbs, expanded station modes, verified changes, queue replacement, mode failures and retry.');
     console.log('Screenshots: ' + testData);
     clearTimeout(deadline);
     app.quit();
