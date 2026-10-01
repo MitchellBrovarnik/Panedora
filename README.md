@@ -79,6 +79,7 @@ Your selected effect is saved and restored automatically on next launch.
 
 ### Robust Session Management
 *   **Secure Authentication:** Signs in directly with Pandora, generating and managing the required auth tokens and CSRF tokens for all subsequent requests.
+*   **Pandora Verification:** If Pandora requests a human check during sign-in, a small modal displays its CAPTCHA. Complete the check to retry sign-in automatically, or close the modal to cancel. The verification and API requests share Electron's cookie session.
 *   **Clean Sign Out:** A dedicated sign-out process permanently wipes session tokens, pauses active streams, and safely tears down the player state to prevent ghost playback or infinite reload loops.
 
 ## Technical Architecture

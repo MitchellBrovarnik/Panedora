@@ -11,10 +11,10 @@ class PandoraAPI {
         this.apiPath = '/api';
         this.authToken = config.getAuthToken();
         this.onSessionExpired = null; // Callback for main process
+        this.onVerificationRequired = null;
 
-        // Always generate a fresh CSRF token on startup.
-        // Stale tokens from a previous session can cause Pandora to reject requests.
-        // The API just validates that the X-CsrfToken header matches the csrftoken cookie.
+        // Use a fresh token if Chromium has no cookie. Requests adopt the cookie
+        // already in the shared session, including changes made during verification.
         this.csrfToken = this.generateCsrfToken();
         config.setCsrfToken(this.csrfToken);
     }
@@ -24,6 +24,14 @@ class PandoraAPI {
      */
     generateCsrfToken() {
         return require('crypto').randomBytes(16).toString('hex');
+    }
+
+    getUserAgent() {
+        return require('electron').session.defaultSession.getUserAgent();
+    }
+
+    static needsVerification(error) {
+        return error?.status === 403 && Number(error.errorCode) === 1215;
     }
 
     /**
@@ -37,17 +45,12 @@ class PandoraAPI {
         const headers = {
             'Content-Type': 'application/json',
             'X-CsrfToken': this.csrfToken || '',
-            'User-Agent': `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${process.versions.chrome} Safari/537.36`,
+            // Match the verification window's actual browser identity.
+            'User-Agent': this.getUserAgent(),
             'Accept': 'application/json, text/plain, */*',
             'Accept-Language': 'en-US,en;q=0.9',
             'Origin': 'https://www.pandora.com',
-            'Referer': 'https://www.pandora.com/',
-            'sec-ch-ua': `"Not_A Brand";v="8", "Chromium";v="${process.versions.chrome.split('.')[0]}", "Google Chrome";v="${process.versions.chrome.split('.')[0]}"`,
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"Windows"',
-            'Sec-Fetch-Dest': 'empty',
-            'Sec-Fetch-Mode': 'cors',
-            'Sec-Fetch-Site': 'same-origin'
+            'Referer': 'https://www.pandora.com/'
         };
         if (!isLogin) {
             headers['X-AuthToken'] = this.authToken || '';
@@ -59,91 +62,38 @@ class PandoraAPI {
      * Make an API request
      */
     async request(endpoint, data = {}) {
-        const { net } = require('electron');
         const url = `https://${this.baseUrl}${this.apiPath}${endpoint}`;
-
-        const headers = this._buildHeaders(endpoint);
-
-        const { session } = require('electron');
-        const cookieSession = session.defaultSession;
-
-        // Ensure our CSRF token is in the Chromium cookie jar
-        if (this.csrfToken) {
+        let verificationUsed = false;
+        let sessionRefreshUsed = false;
+        // Each recovery can run once. Verification may reveal an expired auth
+        // token, so let the normal session refresh handle that next response.
+        while (true) {
             try {
-                await cookieSession.cookies.set({
-                    url: 'https://www.pandora.com',
-                    name: 'csrftoken',
-                    value: this.csrfToken,
-                    domain: '.pandora.com',
-                    path: '/',
-                    secure: true
-                });
-            } catch (e) {
-                console.error('[API] Failed to set cookie natively:', e);
-            }
-        }
-
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 30000);
-
-        try {
-            // Use Chromium's native network stack for cookie management
-            const response = await net.fetch(url, {
-                method: 'POST',
-                headers: headers,
-                body: JSON.stringify(data),
-                signal: controller.signal,
-                credentials: 'include'
-            });
-
-            clearTimeout(timeout);
-
-            // Capture CSRF token
-            let cookies = [];
-            if (typeof response.headers.getSetCookie === 'function') {
-                cookies = response.headers.getSetCookie();
-            } else {
-                const cookieStr = response.headers.get('set-cookie');
-                if (cookieStr) cookies = [cookieStr];
-            }
-
-            for (const cookie of cookies) {
-                const csrfMatch = cookie.match(/csrftoken=([^;]+)/);
-                if (csrfMatch) {
-                    this.csrfToken = csrfMatch[1];
-                    config.setCsrfToken(this.csrfToken);
-                }
-            }
-
-            const bodyText = await response.text();
-            let json;
-            try {
-                json = JSON.parse(bodyText);
-            } catch (e) {
-                throw { error: 'Invalid JSON', body: bodyText, status: response.status };
-            }
-
-            if (response.ok) {
-                return json;
-            } else {
-                if (response.status === 401 || json.errorCode === 1000) {
-                    // Prevent infinite loop if the login request itself fails
-                    if (endpoint !== '/v1/auth/login' && this.onSessionExpired) {
-                        const relogged = await this.onSessionExpired();
-                        if (relogged) {
-                            // Retry the request once after successful relogin
-                            return await this._requestInternal(url, endpoint, data);
-                        }
+                return await this._requestInternal(url, endpoint, data);
+            } catch (error) {
+                if (PandoraAPI.needsVerification(error) && this.onVerificationRequired && !verificationUsed) {
+                    verificationUsed = true;
+                    let verified;
+                    try {
+                        verified = await this.onVerificationRequired(error, url);
+                    } catch (verificationError) {
+                        console.error('[API] Could not open verification:', verificationError.message);
+                        throw { ...error, message: 'Could not open Pandora verification. Please try signing in again.' };
                     }
+                    if (!verified) {
+                        throw { ...error, message: 'Pandora verification was cancelled. Sign in again to retry.' };
+                    }
+                    continue;
                 }
-                throw { status: response.status, ...json };
+
+                if ((error.status === 401 || error.errorCode === 1000) &&
+                    endpoint !== '/v1/auth/login' && this.onSessionExpired && !sessionRefreshUsed) {
+                    sessionRefreshUsed = true;
+                    const relogged = await this.onSessionExpired();
+                    if (relogged) continue;
+                }
+                throw error;
             }
-        } catch (error) {
-            clearTimeout(timeout);
-            if (error.name === 'AbortError') {
-                throw { error: 'Request timed out' };
-            }
-            throw error;
         }
     }
 
@@ -151,7 +101,24 @@ class PandoraAPI {
      * Internal request method to retry without infinite loops
      */
     async _requestInternal(url, endpoint, data) {
-        const { net } = require('electron');
+        const { net, session } = require('electron');
+        const cookies = await session.defaultSession.cookies.get({ url, name: 'csrftoken' });
+        // Prefer the most specific cookie if Pandora supplied a scoped token.
+        const csrfCookie = cookies.sort((a, b) => (b.path || '').length - (a.path || '').length)[0];
+        if (csrfCookie?.value) {
+            this.csrfToken = csrfCookie.value;
+            config.setCsrfToken(this.csrfToken);
+        } else {
+            this.csrfToken = this.csrfToken || this.generateCsrfToken();
+            await session.defaultSession.cookies.set({
+                url: 'https://www.pandora.com',
+                name: 'csrftoken',
+                value: this.csrfToken,
+                domain: '.pandora.com',
+                path: '/',
+                secure: true
+            });
+        }
         const headers = this._buildHeaders(endpoint);
 
         const controller = new AbortController();
@@ -166,8 +133,6 @@ class PandoraAPI {
                 credentials: 'include'
             });
 
-            clearTimeout(timeout);
-
             const bodyText = await response.text();
             let json;
             try {
@@ -179,11 +144,15 @@ class PandoraAPI {
             if (response.ok) {
                 return json;
             } else {
-                throw { status: response.status, ...json };
+                throw { ...json, status: response.status };
             }
         } catch (error) {
-            clearTimeout(timeout);
+            if (error.name === 'AbortError') {
+                throw { error: 'Request timed out', message: 'Request timed out' };
+            }
             throw error;
+        } finally {
+            clearTimeout(timeout);
         }
     }
 
@@ -230,8 +199,16 @@ class PandoraAPI {
 
             return { success: false, error: 'No auth token received' };
         } catch (error) {
-            console.error('[API] Login failed:', error);
-            return { success: false, error: error.message || 'Login failed' };
+            console.error('[API] Login failed:', {
+                status: error.status,
+                message: error.message,
+                errorCode: error.errorCode,
+                errorString: error.errorString
+            });
+            const message = PandoraAPI.needsVerification(error) && error.message === 'Invalid request'
+                ? 'Pandora is still requiring browser verification. Sign in again to retry the check.'
+                : error.message || 'Login failed';
+            return { success: false, error: message, status: error.status, errorCode: error.errorCode };
         }
     }
 
