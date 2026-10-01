@@ -423,7 +423,7 @@ class PandoraAPI {
             if (PandoraAPI.isStreamConflict(response)) throw response;
             const result = PandoraAPI.parseStationModes(response, this.hasPremiumAccess());
             // Pandora can return HTTP 200 while silently keeping the old mode.
-            if (result.currentModeId !== modeId || !result.modes.some(mode => mode.id === modeId && mode.available)) {
+            if (!result.available || result.currentModeId !== modeId || !result.modes.some(mode => mode.id === modeId && mode.available)) {
                 return { ...result, success: false, error: 'Pandora did not enable that mode. Choose another available mode.' };
             }
             return result;

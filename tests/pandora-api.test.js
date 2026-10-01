@@ -181,10 +181,13 @@ test('unoffered, unavailable and unconfirmed modes cannot succeed through a dire
         assert.equal((await api.setStationMode('station-1', id)).success, false);
         assert.equal(calls.length, 1);
     }
-    const revoked = modeResponse(1091989);
-    revoked.availableModes.find(mode => mode.modeId === 1091989).isModeAvailable = false;
-    const { api } = setup([{ status: 200, body: modeResponse() }, { status: 200, body: revoked }]);
-    assert.equal((await api.setStationMode('station-1', 1091989)).success, false);
+    for (const stationUnavailable of [false, true]) {
+        const revoked = modeResponse(1091989);
+        if (stationUnavailable) revoked.interactiveRadioAvailable = false;
+        else revoked.availableModes.find(mode => mode.modeId === 1091989).isModeAvailable = false;
+        const { api } = setup([{ status: 200, body: modeResponse() }, { status: 200, body: revoked }]);
+        assert.equal((await api.setStationMode('station-1', 1091989)).success, false);
+    }
 });
 
 test('Premium proof is cleared when logging out or restoring a saved token', async () => {
