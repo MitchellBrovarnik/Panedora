@@ -1543,26 +1543,76 @@ function renderStationsList() {
         // Attach delete handlers
         const deleteBtn = item.querySelector('.delete-btn');
         if (deleteBtn) {
-            deleteBtn.addEventListener('click', async (e) => {
+            deleteBtn.addEventListener('click', (e) => {
                 e.stopPropagation(); // Don't play the station
                 const id = item.dataset.id;
                 const station = AppState.stations.find(s => s.id === id);
                 if (!station) return;
 
-                const confirmed = confirm(`Are you sure you want to delete the station "${station.name}"?`);
-                if (confirmed) {
-                    item.style.opacity = '0.5';
-                    item.style.pointerEvents = 'none';
-                    const success = await window.api.content.removeStation(id);
-                    if (!success) {
-                        alert('Failed to delete station. Please try again.');
-                        item.style.opacity = '1';
-                        item.style.pointerEvents = 'all';
-                    }
-                }
+                openStationRemoval(station);
             });
         }
     });
+}
+
+let stationRemoval = null;
+
+function renderStationRemoval() {
+    const modal = document.getElementById('station-remove-dialog');
+    if (!modal) return;
+    if (!stationRemoval) {
+        if (modal.open) modal.close();
+        return;
+    }
+    const { name, pending, error } = stationRemoval;
+    document.getElementById('station-remove-name').textContent = name;
+    document.getElementById('station-remove-error').textContent = error || '';
+    document.getElementById('station-remove-error').hidden = !error;
+    document.getElementById('station-remove-status').hidden = !pending;
+    modal.setAttribute('aria-busy', String(pending));
+    ['station-remove-confirm', 'station-remove-cancel', 'station-remove-close'].forEach(id => {
+        document.getElementById(id).disabled = pending;
+    });
+    if (!modal.open) {
+        modal.showModal();
+        document.getElementById('station-remove-cancel').focus();
+    }
+}
+
+function openStationRemoval(station) {
+    if (stationRemoval?.pending) return;
+    stationRemoval = { id: station.id, name: station.name, pending: false, error: null };
+    renderStationRemoval();
+}
+
+function closeStationRemoval(force = false) {
+    if (stationRemoval?.pending && !force) return;
+    stationRemoval = null;
+    renderStationRemoval();
+}
+
+async function removeSelectedStation() {
+    const removal = stationRemoval;
+    if (!removal || removal.pending) return;
+    removal.pending = true;
+    removal.error = null;
+    renderStationRemoval();
+    try {
+        const success = await window.api.content.removeStation(removal.id);
+        if (stationRemoval !== removal) return;
+        if (success) {
+            closeStationRemoval(true);
+            DOM.stationsList.querySelector('.station-item.active, .station-item')?.focus();
+            return;
+        }
+        removal.error = 'Could not remove this station. Please try again.';
+    } catch {
+        if (stationRemoval !== removal) return;
+        removal.error = 'Could not remove this station. Please try again.';
+    }
+    removal.pending = false;
+    renderStationRemoval();
+    document.getElementById('station-remove-confirm').focus();
 }
 
 function updateActiveStation() {
@@ -1828,6 +1878,13 @@ const debouncedSearch = debounce(async (query) => {
 // ============================================================================
 
 function initEventListeners() {
+    document.getElementById('station-remove-confirm')?.addEventListener('click', () => removeSelectedStation());
+    document.getElementById('station-remove-cancel')?.addEventListener('click', () => closeStationRemoval());
+    document.getElementById('station-remove-close')?.addEventListener('click', () => closeStationRemoval());
+    document.getElementById('station-remove-dialog')?.addEventListener('cancel', event => {
+        event.preventDefault();
+        closeStationRemoval();
+    });
     document.getElementById('stream-take-over')?.addEventListener('click', () => answerStreamPrompt(true));
     document.getElementById('stream-keep-listening')?.addEventListener('click', () => answerStreamPrompt(false));
     document.getElementById('stream-dialog-close')?.addEventListener('click', () => answerStreamPrompt(false));
@@ -2254,7 +2311,7 @@ function initAPIListeners() {
             renderPage('home');
         } else {
             // Logged out — clear data, pause audio, and show login form
-
+            closeStationRemoval(true);
             AppState.isLoading = false;
             AppState.stations = [];
             AppState.playerState = { volume: 50 };

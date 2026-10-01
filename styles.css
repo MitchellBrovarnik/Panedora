@@ -2030,6 +2030,12 @@ body::before {
 .stream-dialog button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .stream-dialog button:disabled { opacity: 0.55; cursor: default; }
 
+.station-remove-dialog .stream-dialog-icon { background: rgba(239, 68, 68, 0.1); color: #f99a9a; }
+.station-remove-dialog strong { color: var(--text-1); font-weight: 500; overflow-wrap: anywhere; }
+.station-remove-dialog .station-remove-error { color: #f9a8a8; }
+.station-remove-confirm { background: linear-gradient(135deg, #b8354a, #d74754); color: #fff; box-shadow: 0 4px 18px rgba(215, 71, 84, 0.15); }
+.station-remove-confirm:not(:disabled):hover { filter: brightness(1.12); }
+
 body.mini-mode .stream-dialog[open] { display: flex; align-items: center; gap: 10px; width: calc(100vw - 8px); max-width: none; max-height: calc(100vh - 8px); margin: auto; padding: 9px 12px; border-radius: 16px; }
 body.mini-mode .stream-dialog-icon { flex-shrink: 0; width: 30px; height: 30px; margin: 0; border-radius: 9px; }
 body.mini-mode .stream-dialog-icon svg { width: 21px; height: 21px; }

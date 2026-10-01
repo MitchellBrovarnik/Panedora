@@ -55,6 +55,11 @@ app.whenReady().then(async () => {
     });
     const calls = [];
     const art = [{ size: 500, url: 'https://fixture.invalid/art.svg' }];
+    let fixtureStations = [
+        { stationId: 'fixture-station', name: 'Fixture Station', art },
+        { stationId: 'removable-station', name: 'Thunder (Live/Acoustic) Radio', art }
+    ];
+    let removalFailed = false;
     const audio = silentWav();
     const tracks = [1, 2, 3, 4].map(n => ({
         trackToken: 'fixture-track-' + n, songTitle: 'Fixture Song ' + n,
@@ -80,7 +85,11 @@ app.whenReady().then(async () => {
             case '/api/v1/auth/login':
                 return json({ authToken: 'fixture-token', config: { branding: 'PandoraPlus' } });
             case '/api/v1/station/getStations':
-                return json({ stations: [{ stationId: 'fixture-station', name: 'Fixture Station', art }] });
+                return json({ stations: fixtureStations });
+            case '/api/v1/station/removeStation':
+                if (removalFailed) return json({ errorString: 'Removal failed' }, 503);
+                fixtureStations = fixtureStations.filter(station => station.stationId !== body.stationId);
+                return json({});
             case '/api/v1/station/shuffle':
                 return json({ stationId: 'fixture-shuffle', name: 'Fixture Mix', art });
             case '/api/v1/search/fullSearch':
@@ -127,7 +136,7 @@ app.whenReady().then(async () => {
     };
     await waitFor(() => run("!!document.getElementById('login-form')"), 'login UI');
     assert.equal((await run("window.api.auth.login('fixture@example.invalid', 'fixture-password')")).success, true);
-    await waitFor(() => run('AppState.stations.length === 1'), 'station collection');
+    await waitFor(() => run('AppState.stations.length === 2'), 'station collection');
 
     await run("AppState.searchQuery = 'fixture'; renderPage('search'); window.api.content.search('fixture')");
     await waitFor(() => run("document.querySelector('#search-songs img')?.naturalWidth > 0"), 'search artwork');
@@ -312,6 +321,26 @@ app.whenReady().then(async () => {
     win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
     await waitFor(() => run("!document.getElementById('stream-conflict-dialog').open"), 'Escape keeps this player paused');
     assert.equal(calls.filter(c => c.path.endsWith('/playbackResumed') && c.body.forceActive).length, 1);
+
+    await run("renderPage('home'); document.querySelector('[data-id=\"removable-station\"] .delete-btn').click()");
+    await waitFor(() => run("document.getElementById('station-remove-dialog').open"), 'themed station removal');
+    assert.equal(await run('document.activeElement.id'), 'station-remove-cancel');
+    assert.equal(await run("document.getElementById('station-remove-name').textContent"), 'Thunder (Live/Acoustic) Radio');
+    await capture('station-removal');
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+    await waitFor(() => run("!document.getElementById('station-remove-dialog').open"), 'Escape cancels removal');
+    assert.equal(calls.filter(c => c.path.endsWith('/removeStation')).length, 0);
+    removalFailed = true;
+    await run("document.querySelector('[data-id=\"removable-station\"] .delete-btn').click(); document.getElementById('station-remove-confirm').click()");
+    await waitFor(() => run("!document.getElementById('station-remove-error').hidden"), 'inline removal error');
+    assert.equal(await run("document.getElementById('station-remove-dialog').open && !document.getElementById('station-remove-confirm').disabled"), true);
+    removalFailed = false;
+    await run("document.getElementById('station-remove-confirm').click()");
+    await waitFor(() => run("!document.getElementById('station-remove-dialog').open && !AppState.stations.some(station => station.id === 'removable-station')"), 'confirmed removal');
+    assert.equal(await run("!!document.querySelector('[data-id=\"fixture-station\"]')"), true);
+    assert.equal(calls.filter(c => c.path.endsWith('/removeStation')).length, 2);
+    assert.equal(calls.filter(c => c.path.endsWith('/removeStation')).every(c => c.body.stationId === 'removable-station'), true);
     console.log('Native player smoke test passed: device takeover, saved thumbs, immediate mode changes and approved auto-resume, Artist Only eligibility, Shuffle exclusion, mode failures and retry.');
     console.log('Screenshots: ' + testData);
     clearTimeout(deadline);

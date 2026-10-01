@@ -259,6 +259,25 @@
         </div>
     </dialog>
 
+    <dialog class="stream-dialog station-remove-dialog" id="station-remove-dialog" aria-labelledby="station-remove-title" aria-describedby="station-remove-description">
+        <button class="stream-dialog-close" id="station-remove-close" type="button" aria-label="Cancel station removal">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+        </button>
+        <div class="stream-dialog-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 10v7m4-7v7"/></svg>
+        </div>
+        <div class="stream-dialog-copy">
+            <h2 id="station-remove-title">Remove this station?</h2>
+            <p id="station-remove-description">Remove <strong id="station-remove-name"></strong> from your Pandora collection?</p>
+            <p class="station-remove-error" id="station-remove-error" role="alert" hidden></p>
+            <p class="stream-dialog-status" id="station-remove-status" role="status" hidden>Removing station…</p>
+        </div>
+        <div class="stream-dialog-actions">
+            <button class="stream-dialog-secondary" id="station-remove-cancel" type="button" autofocus>Cancel</button>
+            <button class="station-remove-confirm" id="station-remove-confirm" type="button">Remove station</button>
+        </div>
+    </dialog>
+
     <script src="components.js"></script>
     <script src="visualizer.js"></script>
     <script src="renderer.js"></script>

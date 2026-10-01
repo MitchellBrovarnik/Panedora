@@ -2,6 +2,12 @@
 
 [![License: CC BY-NC-ND 4.0](https://img.shields.io/badge/License-CC%20BY--NC--ND%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-nd/4.0/)
 
+## New: Tune Your Station
+
+**Station modes now work directly in Panedora.** Click the artwork in the play bar to open Now Playing, then choose a mode from **Tune your station** above Recently Played. Selecting a different mode clears the old upcoming queue, loads a fresh mix, and starts the new song—even if playback was paused.
+
+The themed menu shows the modes Pandora makes available for your station and account, such as Discovery, Deep Cuts, or Artist Only. Artist Only appears only when eligible. Tuning is hidden for Shuffle and stations without available modes. If Pandora rejects a change, the app keeps the current song and shows an error.
+
 ## Project Purpose
 Panedora is a personal, educational, and experimental project created purely for fun. It was built as a creative exercise to explore modern UI design (Glassmorphism) and Electron-based desktop application development. This project is intended for personal use only and was developed with zero intent to cause harm, bypass security, or interfere with Pandora's business operations. It is shared as a demonstration of UI/UX design and technical integration.
 
@@ -18,6 +24,8 @@ A premium, immersive Pandora desktop client built with Electron. Panedora featur
 
 ## Recent Updates
 
+*   **Tune Your Station:** Choose and apply Pandora's available station modes directly in the expanded Now Playing view, with immediate playback of the new mix.
+*   **Themed Confirmations & Station Highlighting:** Device takeover and station removal use dialogs that match the app's theme. The sidebar follows the actual playing station or Shuffle.
 *   **Mini Player Transparency & Contrast:** Rewrote the Mini Player window logic to achieve true OS-level transparency. Introduced localized frosted glass "pill" containers and soft radial gradients to ensure readability at any size.
 *   **Always-on-Top Mini Player:** Built a compact, floating Mini Player mode that stays on top of other windows (even borderless fullscreen games), providing instant access to playback controls, thumbnail art, and feedback buttons without leaving your current application.
 *   **Live Lyrics:** Added a comprehensive lyrics fetching system that seamlessly presents synchronized, time-coded lyrics overlaid on the Now Playing screen, complete with auto-scrolling and a highlighted active line.
@@ -75,7 +83,7 @@ Your selected effect is saved and restored automatically on next launch.
 ### Station Library
 *   **Home Screen:** Displays a time-aware greeting ("Good Morning", "Good Afternoon", "Good Evening") and organizes your stations into two grids: "Jump Back In" (your 6 most recently played) and "More from Your Collection" (the next 6 by recency).
 *   **Full Library View:** The Library page shows all your stations sorted alphabetically with a live filter input — type to narrow down results instantly as you type, with a debounced update and preserved cursor position.
-*   **Search:** Search for songs, artists, and stations. Results are organized into separate sections. Note that playing a specific song from search results is a work in progress.
+*   **Search:** Search for songs, artists, and stations. Results are organized into separate sections. Selecting a song currently starts a station based on that song; it does not guarantee playback of that exact track, including on Premium accounts.
 
 ### Robust Session Management
 *   **Secure Authentication:** Signs in directly with Pandora, generating and managing the required auth tokens and CSRF tokens for all subsequent requests.
@@ -134,10 +142,9 @@ You do **not** need to compile the application locally. Simply navigate to the R
 7. **Themes, Effects & Settings:** Click the **Settings** gear in the sidebar to choose a Color Theme, Background Effect, and Lyrics Highlight Style.
 8. **Sign Out:** Hover over the left sidebar to expand it, then click the **Sign Out** button at the bottom to safely end your session.
 
-## Known Issues
+## Current Limitations
 
-*   **Station Mode Availability:** The dropdown shows only modes Pandora marks available for your station and account, including Artist Only when eligible. The tuning panel is hidden for Shuffle and stations with no available modes. Errors are shown if Pandora rejects a change or the active mode cannot be confirmed.
-*   **Search Functionality:** The search tab is a work in progress. Searching for a specific song may not play that exact track.
+*   **On-Demand Song Playback:** Pandora Premium supports playing available songs on demand; Plus primarily provides station listening and replay ([Pandora's subscription/API comparison](https://developer.pandora.com/docs/getting-started/pandora-subscriptions-and-apis/)). Panedora currently uses station playback for song search results and has not implemented verified Premium on-demand playback. A Premium subscription alone therefore does not make exact-song selection work in this client. Use Pandora's official app or website for direct song playback.
 
 ## Privacy and Security
 
@@ -155,4 +162,4 @@ This project is **source-available** under the [CC BY-NC-ND 4.0](https://creativ
 This application is an unofficial, third-party client created for personal, non-commercial use and educational purposes. It is not affiliated with, endorsed by, or sponsored by Pandora Media, LLC, or its parent company, Sirius XM Holdings Inc. 'Pandora' is a registered trademark of Pandora Media, LLC. No proprietary Pandora assets or code are included in this repository.
 
 > [!TIP]
-> **DISCLAIMER:** This application only works with an active Pandora Plus or Premium subscription. Using a paid account ensures full compatibility with all playback features and provides the highest audio quality available through the API.
+> This application currently requires an active Pandora Plus or Premium subscription. A paid account does not guarantee support for every feature in Pandora's official apps; see the current limitations above.

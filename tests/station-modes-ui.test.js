@@ -320,3 +320,70 @@ test('the in-app listening dialog defaults to keeping playback paused and only s
     await tick();
     assert.equal(s.node('stream-conflict-dialog').open, false);
 });
+
+test('station removal uses a themed, escaped confirmation; Cancel, close and Escape never remove or play a station', async t => {
+    const s = setup(t);
+    s.ui.state.stations = [{ id: 'station-1', name: 'Thunder <Live> "Radio"', type: 'station' }];
+    s.ui.renderStations();
+    s.window.api.content.playItem = () => s.calls.push(['play']);
+    s.window.api.content.removeStation = async id => { s.calls.push(['remove', id]); return true; };
+    for (const action of ['station-remove-cancel', 'station-remove-close', 'Escape']) {
+        s.window.document.querySelector('.delete-btn').click();
+        assert.equal(s.node('station-remove-dialog').open, true);
+        assert.equal(s.window.document.activeElement.id, 'station-remove-cancel');
+        assert.equal(s.node('station-remove-name').textContent, 'Thunder <Live> "Radio"');
+        assert.equal(s.node('station-remove-name').childElementCount, 0);
+        if (action === 'Escape') s.node('station-remove-dialog').dispatchEvent(new s.window.Event('cancel', { cancelable: true }));
+        else s.node(action).click();
+        await tick();
+        assert.equal(s.node('station-remove-dialog').open, false);
+    }
+    assert.deepEqual(s.calls, []);
+});
+
+test('station removal submits the confirmed ID once, survives a sidebar refresh, and handles failure with retry', async t => {
+    const s = setup(t);
+    s.ui.state.stations = [{ id: 'station-1', name: 'First Radio', type: 'station' }];
+    s.ui.renderStations();
+    let finish;
+    s.window.api.content.removeStation = async id => {
+        s.calls.push(['remove', id]);
+        return new Promise(resolve => { finish = resolve; });
+    };
+    s.window.document.querySelector('.delete-btn').click();
+    s.node('station-remove-confirm').click();
+    s.node('station-remove-confirm').click();
+    s.node('station-remove-dialog').dispatchEvent(new s.window.Event('cancel', { cancelable: true }));
+    assert.deepEqual(s.calls, [['remove', 'station-1']]);
+    assert.equal(s.node('station-remove-dialog').open, true);
+    assert.equal(s.node('station-remove-cancel').disabled, true);
+    assert.equal(s.node('station-remove-status').hidden, false);
+    s.ui.state.stations.unshift({ id: 'station-2', name: 'Other Radio', type: 'station' });
+    s.ui.renderStations();
+    finish(false);
+    await tick();
+    assert.equal(s.node('station-remove-dialog').open, true);
+    assert.equal(s.node('station-remove-error').hidden, false);
+    assert.equal(s.node('station-remove-confirm').disabled, false);
+    s.node('station-remove-confirm').click();
+    assert.deepEqual(s.calls.at(-1), ['remove', 'station-1']);
+    finish(true);
+    await tick();
+    assert.equal(s.node('station-remove-dialog').open, false);
+});
+
+test('station removal recovers from an IPC exception without leaving controls disabled', async t => {
+    const s = setup(t);
+    s.ui.state.stations = [{ id: 'station-1', name: 'First Radio', type: 'station' }];
+    s.ui.renderStations();
+    s.window.api.content.removeStation = async () => { throw new Error('IPC unavailable'); };
+    s.window.document.querySelector('.delete-btn').click();
+    s.node('station-remove-confirm').click();
+    await tick();
+    assert.equal(s.node('station-remove-dialog').open, true);
+    assert.equal(s.node('station-remove-confirm').disabled, false);
+    assert.equal(s.node('station-remove-cancel').disabled, false);
+    assert.match(s.node('station-remove-error').textContent, /try again/);
+    s.node('station-remove-cancel').click();
+    assert.equal(s.node('station-remove-dialog').open, false);
+});

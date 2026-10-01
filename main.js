@@ -849,7 +849,8 @@ ipcMain.handle('NAV:PLAY_URI', async (event, payload) => {
             // Reload station list so it appears in sidebar
             await loadStations();
 
-            // For songs, pass the pandoraId as startingAtTrackId so Pandora plays this exact track first
+            // Ask to start this station with the selected song. This station API
+            // can ignore the request; it is not verified Premium on-demand playback.
             const startTrackId = (type === 'song' || type === 'TR' || type === 'track') ? (metadata.pandoraId || id) : null;
             const result = await playStation(station.stationId, startTrackId);
             sendToUI('UI:LOADING', { isLoading: false });
