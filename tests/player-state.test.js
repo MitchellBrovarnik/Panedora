@@ -26,7 +26,8 @@ function setup(config = { getRememberedShuffle: () => null, rememberShuffle() {}
     const playlists = [];
     let activeMode = 0;
     const electron = {
-        app: { commandLine: { appendSwitch() {} }, on() {}, whenReady: () => new Promise(() => {}) },
+        app: { isPackaged: true, commandLine: { appendSwitch() {} }, on() {}, whenReady: () => new Promise(() => {}) },
+        shell: { openExternal: async url => { calls.push(['openExternal', url]); } },
         ipcMain: { handle: (name, fn) => handlers.set(name, fn) }
     };
     const api = {
@@ -54,6 +55,7 @@ function setup(config = { getRememberedShuffle: () => null, rememberShuffle() {}
         uiWindow = testWindow;
         currentStations = [{stationId:'station-1'}, {stationId:'station-2'}];
         module.exports = { loadStations, playStation, showStreamConflict, getCurrentState, thumbUp, thumbDown, pausePlayer, resumePlayer, loadStationModes, changeStationMode, skipTrack,
+            seedUpdateChecker: checker => { updateChecker = checker; },
             seed: (tracks, station = {}) => { currentStations[0] = { ...currentStations[0], ...station }; currentStation = currentStations[0]; currentPlaylist = tracks; currentTrackIndex = 0; isPaused = false; tracks.forEach(rememberTrack); }
         };`;
     vm.runInNewContext(source, {
@@ -61,6 +63,7 @@ function setup(config = { getRememberedShuffle: () => null, rememberShuffle() {}
         require: name => {
             if (name === 'electron') return electron;
             if (name === './pandora-api') return { getHighResArt: () => null };
+            if (name === './update-checker') return require('../update-checker');
             if (name === './config') return config;
             if (name === './pandora-verification') return { PandoraVerification: class { cancel() {} } };
             return require(name);
@@ -69,8 +72,68 @@ function setup(config = { getRememberedShuffle: () => null, rememberShuffle() {}
         setTimeout, clearTimeout,
         console: { log() {}, error() {} }
     });
-    return { ...module.exports, api, handlers, prompts, window, messages, calls, started, playlists };
+    return { ...module.exports, api, handlers, prompts, window, messages, calls, started, playlists, electron };
 }
+
+test('update checks and choices require the app renderer and a verified notice', async () => {
+    const s = setup();
+    const checker = {
+        notice: { version: '1.2.0', currentVersion: '1.1.3' },
+        check: async () => checker.notice,
+        dismiss: version => { assert.equal(version, checker.notice.version); checker.notice = null; return true; }
+    };
+    s.seedUpdateChecker(checker);
+    const trusted = { sender: s.window.webContents };
+    const check = s.handlers.get('APP:CHECK_UPDATES');
+    assert.equal(await check({ sender: {} }), null);
+    s.electron.app.isPackaged = false;
+    assert.equal(await check(trusted), null, 'Development launches must not check for updates');
+    s.electron.app.isPackaged = true;
+    assert.equal((await check(trusted)).version, '1.2.0');
+    const answer = s.handlers.get('APP:UPDATE_RESPONSE');
+    for (const [event, payload] of [
+        [{ sender: {} }, { version: '1.2.0', action: 'download' }],
+        [trusted, { version: '9.0.0', action: 'download' }],
+        [trusted, { version: '1.2.0', action: 'https://untrusted.invalid' }]
+    ]) assert.equal((await answer(event, payload)).success, false);
+    assert.deepEqual(s.calls, []);
+    assert.equal((await answer(trusted, { version: '1.2.0', action: 'download', url: 'https://untrusted.invalid' })).success, true);
+    assert.deepEqual(s.calls, [['openExternal', 'https://github.com/MitchellBrovarnik/Panedora/releases/latest']]);
+    assert.equal((await answer(trusted, { version: '1.2.0', action: 'download' })).success, false);
+});
+
+test('update download failures allow retry and duplicate clicks cannot open multiple browser tabs', async () => {
+    const s = setup();
+    const checker = { notice: { version: '1.2.0' }, dismiss: () => { checker.notice = null; return true; } };
+    s.seedUpdateChecker(checker);
+    const answer = s.handlers.get('APP:UPDATE_RESPONSE');
+    const event = { sender: s.window.webContents };
+    const choice = { version: '1.2.0', action: 'download' };
+    s.electron.shell.openExternal = async () => { throw new Error('No browser'); };
+    assert.match((await answer(event, choice)).error, /Could not open/);
+    assert.ok(checker.notice);
+    let finish;
+    let opened = 0;
+    s.electron.shell.openExternal = () => { opened++; return new Promise(resolve => { finish = resolve; }); };
+    const pending = answer(event, choice);
+    assert.equal((await answer(event, choice)).success, false);
+    assert.equal(opened, 1);
+    finish();
+    assert.equal((await pending).success, true);
+    assert.equal(checker.notice, null);
+});
+
+test('Later saves the update choice without opening a browser or changing playback', async () => {
+    const s = setup();
+    const checker = { notice: { version: '1.2.0' }, dismiss: () => { checker.notice = null; return true; } };
+    s.seedUpdateChecker(checker);
+    s.seed([track()]);
+    const before = s.getCurrentState();
+    const result = await s.handlers.get('APP:UPDATE_RESPONSE')({ sender: s.window.webContents }, { version: '1.2.0', action: 'later' });
+    assert.equal(result.success, true);
+    assert.deepEqual(s.calls, []);
+    assert.deepEqual(s.getCurrentState(), before);
+});
 
 test('Shuffle survives a new app session and collection refreshes when Pandora omits it', async () => {
     let remembered = null;

@@ -15,6 +15,17 @@ function setup(t) {
     return () => loadModule(path.join(__dirname, '..', 'config.js'), { electron });
 }
 
+test('update snooze survives app restart and account changes without storing account details', t => {
+    const reopen = setup(t);
+    const first = reopen();
+    assert.equal(first.getUpdateSnooze(), null);
+    const snooze = { version: '1.2.0', until: 86400000 };
+    first.setUpdateSnooze(snooze);
+    first.setCredentials('listener@example.invalid', 'fixture-password');
+    first.clearAll();
+    assert.deepEqual({ ...reopen().getUpdateSnooze() }, snooze);
+});
+
 test('remembered Shuffle is restored from disk after the config module restarts', t => {
     const reopen = setup(t);
     const first = reopen();

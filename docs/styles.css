@@ -1,3 +1,11 @@
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('assets/InterVariable.woff2') format('woff2');
+}
+
 :root {
     --bg-base: #0d1117;
     --text-main: #f0f6fc;
@@ -366,6 +374,10 @@ h1, h2, h3 {
     grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
     gap: 2.5rem;
 }
+
+.feature-announcement { display: inline-block; padding: 5px 12px; margin-bottom: 18px; border: 1px solid var(--glass-border); border-radius: 8px; color: var(--primary); font-size: 0.9rem; font-weight: 500; text-decoration: none; }
+.feature-announcement:hover { border-color: var(--primary); }
+.privacy-note, .download-note { margin: 20px auto 0; max-width: 760px; color: var(--text-muted); font-size: 0.9rem; line-height: 1.65; }
 
 .feature-card {
     padding: 2.5rem;
