@@ -217,12 +217,15 @@ app.whenReady().then(async () => {
     assert.equal(await run("document.querySelector('.np-right').getBoundingClientRect().right <= innerWidth"), true);
     win.setSize(1200, 800);
 
+    await run("document.querySelector('audio').pause()");
+    await waitFor(() => run('!AppState.playerState.isPlaying'), 'paused before changing modes');
     rejectMode = true;
     await run("document.getElementById('np-mode-select').value = '0'; document.getElementById('np-mode-select').dispatchEvent(new Event('change'))");
     await waitFor(() => run("!AppState.playerState.stationModes.changing && !!AppState.playerState.stationModes.error"), 'rejected mode');
     assert.equal(await run("document.getElementById('np-mode-select').value"), '1091989');
     assert.match(await run("document.getElementById('np-mode-status').textContent"), /did not enable/);
     assert.equal(await run('AppState.playerState.trackToken'), 'tuned-1091989-fixture-track-1', 'A rejection must not interrupt the song');
+    assert.equal(await run("document.querySelector('audio').paused"), true, 'A rejected mode must not resume playback');
 
     modesFailed = true;
     await run("document.getElementById('np-mode-retry').click()");
@@ -236,7 +239,16 @@ app.whenReady().then(async () => {
     await run("document.getElementById('np-back-btn').click(); document.getElementById('now-playing-art').click()");
     await waitFor(() => run("!!document.querySelector('#np-mode-select option[value=\"5\"]')"), 'eligible Artist Only');
     const reusedAudioURL = await run("document.querySelector('audio').src");
+    const resumesBeforeMode = calls.filter(c => c.path.endsWith('/playbackResumed')).length;
+    let approveModeResume;
+    resumeGate = new Promise(resolve => { approveModeResume = resolve; });
     await run("document.querySelector('audio').currentTime = 12; document.getElementById('np-mode-select').value = '5'; document.getElementById('np-mode-select').dispatchEvent(new Event('change'))");
+    await waitFor(() => calls.filter(c => c.path.endsWith('/playbackResumed')).length > resumesBeforeMode, 'mode resume approval');
+    assert.equal(calls.filter(c => c.path.endsWith('/playbackResumed')).at(-1).body.forceActive, false);
+    assert.equal(await run("document.querySelector('audio').paused"), true);
+    assert.equal(await run('AppState.playerState.trackToken'), 'tuned-1091989-fixture-track-1');
+    approveModeResume();
+    resumeGate = null;
     await waitFor(() => run("AppState.playerState.trackToken === 'tuned-5-fixture-track-1' && !document.querySelector('audio').paused"), 'Artist Only playback');
     assert.equal(await run("document.querySelector('audio').src"), reusedAudioURL);
     assert.equal(await run("document.querySelector('audio').currentTime < 10"), true, 'A fresh track token restarts even a reused audio URL');
@@ -264,7 +276,7 @@ app.whenReady().then(async () => {
     await waitFor(() => run("document.querySelector('audio').paused"), 'buffered audio stopped');
     prompts[2].resolve({ response: 1 });
     assert.equal(calls.filter(c => c.path.endsWith('/playbackResumed') && c.body.forceActive).length, 1);
-    console.log('Native player smoke test passed: device takeover, saved thumbs, immediate mode changes, Artist Only eligibility, Shuffle exclusion, mode failures and retry.');
+    console.log('Native player smoke test passed: device takeover, saved thumbs, immediate mode changes and approved auto-resume, Artist Only eligibility, Shuffle exclusion, mode failures and retry.');
     console.log('Screenshots: ' + testData);
     clearTimeout(deadline);
     app.quit();

@@ -82,7 +82,7 @@ test('modes load on request, preserve zero, and reject unavailable or arbitrary 
     assert.equal(s.calls.filter(c => c[0] === 'setMode').length, 0);
 });
 
-test('confirmed tuning immediately plays the first fresh song, preserves history and respects pause state', async () => {
+test('confirmed tuning immediately plays the first fresh song and resumes previously paused playback', async () => {
     for (const paused of [false, true]) {
         const s = setup();
         s.playlists.push({ tracks: [track(1, 'current'), track(0, 'old-next')] });
@@ -98,7 +98,8 @@ test('confirmed tuning immediately plays the first fresh song, preserves history
         assert.deepEqual(requests, [['station-1', false]]);
         assert.equal(s.getCurrentState().trackToken, 'tuned-next');
         assert.equal(s.getCurrentState().feedback, 'thumbUp');
-        assert.equal(s.getCurrentState().isPlaying, !paused);
+        assert.equal(s.getCurrentState().isPlaying, true);
+        assert.deepEqual(s.calls.filter(call => call[0] === 'resume'), paused ? [['resume', false]] : []);
         assert.deepEqual(Array.from(s.getCurrentState().history, item => [item.trackToken, item.feedback]), [
             ['current', 'liked'], ['tuned-next', 'liked']
         ]);
@@ -107,6 +108,89 @@ test('confirmed tuning immediately plays the first fresh song, preserves history
         await s.skipTrack();
         assert.equal(s.getCurrentState().trackToken, 'tuned-2');
         assert.equal(s.getCurrentState().feedback, null);
+    }
+});
+
+test('a paused mode change waits for resume approval and respects a later pause', async () => {
+    for (const pauseAgain of [false, true]) {
+        const s = setup();
+        s.seed([track(1, 'current')]);
+        await s.pausePlayer();
+        await s.loadStationModes('station-1');
+        s.api.getPlaylist = async () => ({ tracks: [track(0, 'new')] });
+        let approve;
+        s.api.playbackResumed = async force => {
+            s.calls.push(['resume', force]);
+            return new Promise(resolve => { approve = resolve; });
+        };
+        const changing = s.changeStationMode('station-1', 1091989);
+        await tick();
+        assert.equal(s.getCurrentState().trackToken, 'current');
+        assert.equal(s.getCurrentState().isPlaying, false);
+        assert.equal(s.started.length, 0);
+        if (pauseAgain) await s.pausePlayer();
+        approve({ success: true });
+        assert.equal((await changing).success, true);
+        assert.equal(s.getCurrentState().trackToken, 'new');
+        assert.equal(s.getCurrentState().isPlaying, !pauseAgain);
+        assert.deepEqual(s.calls.filter(call => call[0] === 'resume'), [['resume', false]]);
+        assert.equal(s.calls.filter(call => call[0] === 'pause').length, pauseAgain ? 2 : 1);
+    }
+});
+
+test('failed mode changes and denied resumes leave an already paused song untouched', async () => {
+    for (const resumeDenied of [false, true]) {
+        const s = setup();
+        s.seed([track(1, 'current')]);
+        await s.pausePlayer();
+        await s.loadStationModes('station-1');
+        if (!resumeDenied) s.api.setStationMode = async () => ({ ...modes(0), success: false, error: 'Mode rejected' });
+        s.api.getPlaylist = async () => ({ tracks: [track(0, 'new')] });
+        s.api.playbackResumed = async force => { s.calls.push(['resume', force]); return { success: false, error: 'Resume rejected' }; };
+        assert.equal((await s.changeStationMode('station-1', 1091989)).success, false);
+        assert.equal(s.getCurrentState().trackToken, 'current');
+        assert.equal(s.getCurrentState().isPlaying, false);
+        assert.equal(s.getCurrentState().feedback, 'thumbUp');
+        assert.equal(s.started.length, 0);
+        assert.deepEqual(s.calls.filter(call => call[0] === 'resume'), resumeDenied ? [['resume', false]] : []);
+    }
+});
+
+test('resuming through a mode change still asks before device takeover', async () => {
+    const s = setup();
+    s.seed([track(1, 'current')]);
+    await s.pausePlayer();
+    await s.loadStationModes('station-1');
+    s.api.getPlaylist = async () => ({ tracks: [track(0, 'new')] });
+    s.api.playbackResumed = async force => { s.calls.push(['resume', force]); return { success: false, streamConflict: true }; };
+    const changing = s.changeStationMode('station-1', 1091989);
+    await tick();
+    assert.equal(s.dialogs.length, 1);
+    assert.equal(s.getCurrentState().streamBlocked, true);
+    assert.deepEqual(s.calls.filter(call => call[0] === 'resume'), [['resume', false]]);
+    s.dialogs[0].resolve({ response: 1 });
+    await changing;
+    assert.equal(s.getCurrentState().isPlaying, false);
+    assert.equal(s.started.length, 0);
+});
+
+test('late mode resume approvals cannot play after switching stations or signing out', async () => {
+    for (const logout of [false, true]) {
+        const s = setup();
+        s.seed([track(1, 'current')]);
+        await s.pausePlayer();
+        await s.loadStationModes('station-1');
+        s.api.getPlaylist = async stationId => ({ tracks: [track(0, stationId === 'station-1' ? 'new' : 'other')] });
+        let approve;
+        s.api.playbackResumed = async () => new Promise(resolve => { approve = resolve; });
+        const changing = s.changeStationMode('station-1', 1091989);
+        await tick();
+        if (logout) await s.handlers.get('AUTH:LOGOUT')();
+        else await s.playStation('station-2');
+        approve({ success: true });
+        await changing;
+        assert.equal(s.getCurrentState().trackToken, logout ? null : 'other');
+        assert.equal(s.started.some(call => call[1] === 'new'), false);
     }
 });
 

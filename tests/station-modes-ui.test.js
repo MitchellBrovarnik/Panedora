@@ -70,7 +70,7 @@ test('artwork opens tuning above history with only available API options and esc
     assert.equal(s.node('np-mode-select').value, '0');
     assert.deepEqual(Array.from(s.node('np-mode-select').options, option => option.value), ['0', '1091989', '987654']);
     assert.match(s.node('np-mode-select').options[2].textContent, /Curated <Mix>/);
-    assert.match(s.node('np-mode-status').textContent, /switches to a new song/);
+    assert.match(s.node('np-mode-status').textContent, /starts a new song/);
     assert.equal(s.window.document.querySelector('#np-station-tuning mix'), null);
     assert.equal(s.node('np-station-tuning').nextElementSibling.className, 'np-history');
     assert.equal(s.node('np-thumbup').classList.contains('liked'), true);

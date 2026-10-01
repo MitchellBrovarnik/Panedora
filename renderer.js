@@ -1236,7 +1236,7 @@ function renderStationModes() {
     const loading = state.status === 'idle' || state.status === 'loading';
     const disabled = !stationId || stationLoading || streamBlocked || loading ||
         state.changing || state.status !== 'ready' || !state.available;
-    let message = 'Changing modes switches to a new song.';
+    let message = 'Changing modes starts a new song.';
     if (!stationId) message = 'Play a station to see its modes.';
     else if (stationLoading) message = 'Loading station…';
     else if (streamBlocked) message = 'Resume playback here to tune this station.';
