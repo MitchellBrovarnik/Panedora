@@ -3,7 +3,7 @@
  * Direct API-based architecture (no hidden browser)
  */
 
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, net } = require('electron');
 const path = require('path');
 
 // Disable GPU caching to prevent 'Access is denied' cache_util_win errors on Windows startup
@@ -14,9 +14,12 @@ const PandoraAPI = require('./pandora-api');
 const config = require('./config');
 const { PandoraVerification } = require('./pandora-verification');
 const verification = new PandoraVerification();
+const { UpdateChecker, DOWNLOAD_URL } = require('./update-checker');
 
 let uiWindow = null;
 let api = null;
+let updateChecker = null;
+let updateResponsePending = false;
 
 // Current state
 let currentStations = [];
@@ -698,6 +701,28 @@ async function thumbDown() { return setTrackFeedback(false); }
 // ============================================================================
 
 // Initialize app
+ipcMain.handle('APP:CHECK_UPDATES', async event => {
+    if (event.sender !== uiWindow?.webContents || !app.isPackaged || !updateChecker) return null;
+    return updateChecker.check();
+});
+
+ipcMain.handle('APP:UPDATE_RESPONSE', async (event, { version, action } = {}) => {
+    if (event.sender !== uiWindow?.webContents || updateResponsePending ||
+        !updateChecker?.notice || updateChecker.notice.version !== version || !['download', 'later'].includes(action)) {
+        return { success: false };
+    }
+    updateResponsePending = true;
+    try {
+        // The renderer and release response cannot supply an arbitrary URL.
+        if (action === 'download') await shell.openExternal(DOWNLOAD_URL);
+        return { success: updateChecker.dismiss(version) };
+    } catch {
+        return { success: false, error: 'Could not open the download page. Please try again.' };
+    } finally {
+        updateResponsePending = false;
+    }
+});
+
 ipcMain.handle('APP:INIT', async () => {
     try {
         // Always do a fresh login with saved credentials on startup.
@@ -1018,6 +1043,11 @@ ipcMain.handle('PLAYER:GET_MORE_TRACKS', async () => {
 // ============================================================================
 
 app.whenReady().then(() => {
+    updateChecker = new UpdateChecker({
+        version: app.getVersion(), fetch: (...args) => net.fetch(...args),
+        getSnooze: config.getUpdateSnooze, setSnooze: config.setUpdateSnooze,
+        platform: process.platform, arch: process.arch
+    });
     // Initialize API
     api = new PandoraAPI();
     api.onVerificationRequired = (challenge, blockedUrl) => {

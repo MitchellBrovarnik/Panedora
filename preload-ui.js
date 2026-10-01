@@ -14,6 +14,10 @@ contextBridge.exposeInMainWorld('api', {
     // App Lifecycle
     // ========================================
     init: () => ipcRenderer.invoke('APP:INIT'),
+    updates: {
+        check: () => ipcRenderer.invoke('APP:CHECK_UPDATES'),
+        respond: (version, action) => ipcRenderer.invoke('APP:UPDATE_RESPONSE', { version, action })
+    },
 
     // ========================================
     // Authentication

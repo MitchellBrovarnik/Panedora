@@ -5,11 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https: blob:; media-src 'self' https: blob:;">
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https: blob:; media-src 'self' https: blob:;">
     <title>Panedora</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
 
@@ -269,6 +266,23 @@
         <div class="stream-dialog-actions">
             <button class="stream-dialog-secondary" id="station-remove-cancel" type="button" autofocus>Cancel</button>
             <button class="station-remove-confirm" id="station-remove-confirm" type="button">Remove station</button>
+        </div>
+    </dialog>
+
+    <dialog class="stream-dialog update-dialog" id="update-dialog" aria-labelledby="update-title" aria-describedby="update-description update-versions">
+        <button class="stream-dialog-close" id="update-close" type="button" aria-label="Remind me later">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 6 12 12M18 6 6 18"/></svg>
+        </button>
+        <div class="stream-dialog-copy">
+            <h2 id="update-title">Update available</h2>
+            <p id="update-description">Download the latest Panedora release for new features and fixes.</p>
+            <p id="update-versions">Version <span id="update-available-version"></span> · Installed <span id="update-current-version"></span></p>
+            <p class="stream-dialog-status" id="update-status" role="status" hidden>Opening the download page…</p>
+            <p class="update-error" id="update-error" role="alert" hidden></p>
+        </div>
+        <div class="stream-dialog-actions">
+            <button class="stream-dialog-secondary" id="update-later" type="button" title="Remind me again after 24 hours" autofocus>Later</button>
+            <button class="stream-dialog-primary" id="update-download" type="button">Download update</button>
         </div>
     </dialog>
 

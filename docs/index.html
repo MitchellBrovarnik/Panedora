@@ -9,23 +9,20 @@
     <meta http-equiv="Expires" content="-1">
     <title>Panedora - A Modern Pandora Client</title>
     <meta name="description"
-        content="Panedora is a sleek, modern desktop Pandora client for Windows, macOS, and Linux with premium audio, real-time lyrics, adaptive themes, and a mini player mode.">
+        content="Panedora is an unofficial Pandora desktop app with Tune Your Station, custom themes, lyrics, and a mini player. Requires Pandora Plus or Premium.">
     <meta name="keywords"
         content="Pandora client, desktop Pandora, Pandora app, music player, Pandora Windows, Pandora Mac, Pandora Linux, Panedora">
     <link rel="canonical" href="https://panedora.app/">
     <meta property="og:title" content="Panedora - A Modern Pandora Client">
     <meta property="og:description"
-        content="A sleek desktop Pandora client with premium audio, real-time lyrics, adaptive themes, and a mini player mode.">
+        content="Tune your Pandora stations in a modern desktop app with custom themes, lyrics, and a mini player. Pandora Plus or Premium required.">
     <meta property="og:url" content="https://panedora.app/">
     <meta property="og:type" content="website">
     <meta property="og:image" content="https://panedora.app/favicon.png">
     <link rel="icon" type="image/png" href="icon.png">
     <link rel="apple-touch-icon" href="favicon.png">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
-    <link rel="stylesheet" href="styles.css?v=2">
+    <link href="assets/boxicons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css?v=3">
 </head>
 
 <body>
@@ -63,9 +60,10 @@
             </div>
             <div class="container hero-container">
                 <div class="hero-text-content">
-                    <h1 class="hero-title">Experience Pandora<br />Like Never Before</h1>
-                    <p class="hero-subtitle">A stunning, completely reimagined desktop client for Pandora with seamless
-                        playback controls, intelligent feedback, and a modern glassmorphic interface.</p>
+                    <a class="feature-announcement" href="#features">New: Tune Your Station</a>
+                    <h1 class="hero-title">A modern desktop<br />app for Pandora.</h1>
+                    <p class="hero-subtitle">An unofficial Pandora app for Windows, macOS, and Linux with station tuning,
+                        custom themes, lyrics, and an always-on-top mini player. Pandora Plus or Premium required.</p>
                     <div class="hero-cta">
                         <a href="#download" class="btn btn-primary btn-large">
                             <i class='bx bx-download'></i> Download Now
@@ -88,22 +86,21 @@
                 <h2 class="section-title">Feature Highlights</h2>
                 <div class="feature-grid">
                     <div class="glass-panel feature-card">
-                        <div class="feature-icon"><i class='bx bx-headphone'></i></div>
-                        <h3>High-Quality Audio</h3>
-                        <p>Requests the premium aacplus (HE-AAC) streaming format from Pandora's servers, ensuring a
-                            clear and consistent listening experience.</p>
+                        <div class="feature-icon"><i class='bx bx-slider-alt'></i></div>
+                        <h3>Tune Your Station</h3>
+                        <p>Choose modes such as Discovery and Deep Cuts from the expanded Now Playing view. Artist Only
+                            appears for verified Premium accounts on eligible stations. Tuning is hidden for Shuffle.</p>
                     </div>
                     <div class="glass-panel feature-card">
                         <div class="feature-icon"><i class='bx bx-like'></i></div>
                         <h3>Intelligent Feedback</h3>
-                        <p>Large, interactive Thumbs Up and Down buttons that sync directly with Pandora. Review your
-                            recently played history and instantly undo any negative feedback right from the app.</p>
+                        <p>Shape your station with thumbs up and down, and review recently played songs
+                            in Now Playing.</p>
                     </div>
                     <div class="glass-panel feature-card">
-                        <div class="feature-icon"><i class='bx bx-desktop'></i></div>
-                        <h3>Desktop Integrated</h3>
-                        <p>Built as a native-feeling Electron application featuring a completely custom frameless window
-                            for a sleek, modern, and unobstructed viewing experience.</p>
+                        <div class="feature-icon"><i class='bx bx-headphone'></i></div>
+                        <h3>High-Quality Audio</h3>
+                        <p>Panedora requests Pandora's aacplus (HE-AAC) format for station playback.</p>
                     </div>
                     <div class="glass-panel feature-card">
                         <div class="feature-icon"><i class='bx bx-minus'></i></div>
@@ -114,15 +111,14 @@
                     <div class="glass-panel feature-card">
                         <div class="feature-icon"><i class='bx bx-equalizer'></i></div>
                         <h3>Audio Visualizers</h3>
-                        <p>Powered by the HTML5 Web Audio API, Panedora extracts frequency data from the active media
-                            stream to render live, interactive canvas animations like reactive floating orbs and digital
-                            snow.</p>
+                        <p>Reactive bars, circles, and waves respond to frequency data from the playing audio.
+                            Other animated backgrounds are available in Settings.</p>
                     </div>
                     <div class="glass-panel feature-card">
                         <div class="feature-icon"><i class='bx bx-text'></i></div>
                         <h3>Integrated Lyrics</h3>
-                        <p>Enjoy seamlessly fetched, perfectly formatted lyrics that map precisely to the currently
-                            playing track.</p>
+                        <p>Read lyrics for the current song, with scrolling and line highlighting when synchronized
+                            lyrics are available.</p>
                     </div>
                 </div>
             </div>
@@ -184,9 +180,8 @@
                 </p>
 
                 <h3>Robust Session Management</h3>
-                <p>Direct authentication with Pandora's official REST API endpoints securely handles auth tokens and
-                    CSRF token lifecycles. All token state is stored locally and securely, completely preventing
-                    third-party tracking or data collection.</p>
+                <p>The desktop app signs in directly with Pandora and manages its session locally. Panedora does not
+                    run a separate server that receives your Pandora credentials.</p>
             </div>
         </section>
 
@@ -197,8 +192,8 @@
                     <div class="glass-panel feature-card">
                         <div class="feature-icon"><i class='bx bx-lock-alt'></i></div>
                         <h3>Direct Authentication</h3>
-                        <p>Your credentials are used solely to authenticate with Pandora. Your password is encrypted at
-                            rest using your operating system's secure keychain (Electron safeStorage).</p>
+                        <p>Your credentials are used to sign in to Pandora. Saved passwords are encrypted locally using
+                            your operating system's secure storage when available, with an app encryption fallback.</p>
                     </div>
                     <div class="glass-panel feature-card">
                         <div class="feature-icon"><i class='bx bx-shield'></i></div>
@@ -208,11 +203,16 @@
                     </div>
                     <div class="glass-panel feature-card">
                         <div class="feature-icon"><i class='bx bx-no-entry'></i></div>
-                        <h3>No Third-Party Tracking</h3>
-                        <p>No personal data is collected or shared with any third-party services. The application
-                            communicates exclusively with Pandora's infrastructure.</p>
+                        <h3>No Analytics or Ad Trackers</h3>
+                        <p>Panedora includes no analytics or advertising trackers. Lyrics requests use LRCLIB, and
+                            release builds check GitHub for updates. These services receive network information such
+                            as your IP address; they do not receive your Pandora credentials.</p>
                     </div>
                 </div>
+                <p class="privacy-note">Lyrics requests send the song title and artist to LRCLIB when you use Lyrics.
+                    Update checks request the latest public release from GitHub. Fonts and icons are served with this
+                    website and bundled with the app where used. This website is hosted on GitHub Pages and checks
+                    GitHub for the latest download links.</p>
             </div>
         </section>
 
@@ -222,7 +222,7 @@
                 <div class="disclaimer-badge">
                     <i class='bx bx-info-circle'></i>
                     <span>Requires an active Pandora Premium or Pandora Plus subscription to log in. Free accounts are
-                        not yet supported, but may be in a future release.</span>
+                        not yet supported. Artist Only requires Premium and an eligible station.</span>
                 </div>
                 <div class="download-grid">
                     <a id="download-win" href="https://github.com/MitchellBrovarnik/Panedora/releases/latest"
@@ -247,12 +247,15 @@
                         <span class="btn btn-primary download-btn">Download AppImage</span>
                     </a>
                 </div>
+                <p class="download-note" id="latest-release-label" aria-live="polite"></p>
+                <p class="download-note">Song search starts a station based on the selected track. Exact song playback
+                    is not supported yet, including on Premium accounts.</p>
                 <div class="disclaimer-badge" style="margin-top: 1rem;">
                     <i class='bx bxl-windows'></i>
                     <span><strong>Windows users:</strong> SmartScreen may warn "Windows protected your PC" — this is
                         normal for apps without a code signing certificate. Click <strong>"More info"</strong> then
                         <strong>"Run anyway"</strong> to install. This project is <a
-                            href="https://github.com/MitchellBrovarnik/Pandora-Glass"
+                            href="https://github.com/MitchellBrovarnik/Panedora"
                             style="color: var(--accent-color);">source-available on GitHub</a> so you can verify the
                         code yourself.</span>
                 </div>
@@ -297,7 +300,7 @@
         </div>
     </footer>
 
-    <script src="script.js?v=2"></script>
+    <script src="script.js?v=3"></script>
 </body>
 
 </html>

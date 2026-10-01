@@ -1,3 +1,11 @@
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('assets/InterVariable.woff2') format('woff2');
+}
+
 /**
  * Panedora v4 — Floating Islands
  * Collapsible icon sidebar, detached glass panels, pill player
@@ -2044,6 +2052,13 @@ body::before {
 .station-remove-dialog .stream-dialog-actions button { padding: 8px 12px; }
 .station-remove-dialog strong { color: var(--text-1); font-weight: 500; overflow-wrap: anywhere; }
 .station-remove-dialog .station-remove-error { color: #f9a8a8; }
+
+.update-dialog { width: min(380px, calc(100vw - 32px)); padding: 20px; border-radius: 16px; }
+.update-dialog h2 { padding-right: 22px; font-size: 18px; }
+.update-dialog #update-versions { font-size: 12px; color: var(--text-3); }
+.update-dialog .update-error { color: #f9a8a8; }
+.update-dialog .stream-dialog-actions { margin-top: 16px; }
+.update-dialog .stream-dialog-actions button { padding: 9px 10px; font-size: 13px; }
 .station-remove-confirm { background: #a83242; color: #fff; }
 .station-remove-confirm:not(:disabled):hover { filter: brightness(1.08); }
 

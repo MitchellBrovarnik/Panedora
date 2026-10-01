@@ -8,6 +8,7 @@ const filesToCopy = [
     'main.js',
     'pandora-api.js',
     'pandora-verification.js',
+    'update-checker.js',
     'config.js',
     'preload-ui.js',
     'preload-verification.js',

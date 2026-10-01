@@ -1588,6 +1588,74 @@ function renderStationsList() {
 }
 
 let stationRemoval = null;
+let updateNotice = null;
+let updateNoticeFocus = null;
+
+async function checkForUpdateNotice() {
+    try {
+        const notice = await window.api.updates?.check();
+        if (!notice || typeof notice.version !== 'string' || typeof notice.currentVersion !== 'string' ||
+            updateNotice?.version === notice.version) return;
+        updateNotice = { ...notice, pending: false, error: null };
+        updateNoticeFocus = null;
+        renderUpdateNotice();
+    } catch {
+        // Update checks never block sign-in or playback.
+    }
+}
+
+function renderUpdateNotice() {
+    const modal = document.getElementById('update-dialog');
+    if (!modal) return;
+    const blocked = document.body.classList.contains('mini-mode') || stationRemoval || AppState.playerState.streamPrompt;
+    if (!updateNotice || blocked) {
+        if (modal.open) modal.close();
+        return;
+    }
+    document.getElementById('update-available-version').textContent = updateNotice.version;
+    document.getElementById('update-current-version').textContent = updateNotice.currentVersion;
+    document.getElementById('update-error').textContent = updateNotice.error || '';
+    document.getElementById('update-error').hidden = !updateNotice.error;
+    document.getElementById('update-status').hidden = !updateNotice.pending;
+    document.getElementById('update-status').textContent = updateNotice.action === 'download'
+        ? 'Opening the download page…' : 'Saving your choice…';
+    modal.setAttribute('aria-busy', String(updateNotice.pending));
+    ['update-download', 'update-later', 'update-close'].forEach(id => {
+        document.getElementById(id).disabled = updateNotice.pending;
+    });
+    if (!modal.open) {
+        closeStationModeMenu();
+        if (!updateNoticeFocus) updateNoticeFocus = document.activeElement;
+        modal.showModal();
+        document.getElementById('update-later').focus();
+    }
+}
+
+async function answerUpdateNotice(action) {
+    const notice = updateNotice;
+    if (!notice || notice.pending) return;
+    notice.pending = true;
+    notice.action = action;
+    notice.error = null;
+    renderUpdateNotice();
+    try {
+        const result = await window.api.updates.respond(notice.version, action);
+        if (updateNotice !== notice) return;
+        if (result?.success) {
+            updateNotice = null;
+            renderUpdateNotice();
+            if (!stationRemoval && !AppState.playerState.streamPrompt &&
+                !document.body.classList.contains('mini-mode') && updateNoticeFocus?.isConnected) updateNoticeFocus.focus();
+            updateNoticeFocus = null;
+            return;
+        }
+        notice.error = result?.error || 'Could not save your choice. Please try again.';
+    } catch {
+        notice.error = 'Could not save your choice. Please try again.';
+    }
+    notice.pending = false;
+    renderUpdateNotice();
+}
 
 function renderStationRemoval() {
     const modal = document.getElementById('station-remove-dialog');
@@ -1614,6 +1682,7 @@ function renderStationRemoval() {
 function openStationRemoval(station) {
     if (stationRemoval?.pending) return;
     stationRemoval = { id: station.id, name: station.name, pending: false, error: null };
+    renderUpdateNotice();
     renderStationRemoval();
 }
 
@@ -1621,6 +1690,7 @@ function closeStationRemoval(force = false) {
     if (stationRemoval?.pending && !force) return;
     stationRemoval = null;
     renderStationRemoval();
+    renderUpdateNotice();
 }
 
 async function removeSelectedStation() {
@@ -1664,8 +1734,10 @@ function renderStreamPrompt() {
     const prompt = AppState.playerState.streamPrompt;
     if (!prompt) {
         if (modal.open) modal.close();
+        renderUpdateNotice();
         return;
     }
+    renderUpdateNotice();
     const pending = prompt.pending === true;
     modal.setAttribute('aria-busy', String(pending));
     ['stream-take-over', 'stream-keep-listening', 'stream-dialog-close'].forEach(id => {
@@ -1912,6 +1984,13 @@ const debouncedSearch = debounce(async (query) => {
 // ============================================================================
 
 function initEventListeners() {
+    document.getElementById('update-download')?.addEventListener('click', () => answerUpdateNotice('download'));
+    document.getElementById('update-later')?.addEventListener('click', () => answerUpdateNotice('later'));
+    document.getElementById('update-close')?.addEventListener('click', () => answerUpdateNotice('later'));
+    document.getElementById('update-dialog')?.addEventListener('cancel', event => {
+        event.preventDefault();
+        answerUpdateNotice('later');
+    });
     document.getElementById('station-remove-confirm')?.addEventListener('click', () => removeSelectedStation());
     document.getElementById('station-remove-cancel')?.addEventListener('click', () => closeStationRemoval());
     document.getElementById('station-remove-close')?.addEventListener('click', () => closeStationRemoval());
@@ -2380,6 +2459,7 @@ function initAPIListeners() {
     // Mini player mode toggle
     window.api.onMiniMode((data) => {
         document.body.classList.toggle('mini-mode', data.isMini);
+        renderUpdateNotice();
         updateFooterThumbVisibility();
         // Collapse volume slider by default in mini mode, reset when leaving
         if (data.isMini) {
@@ -2435,6 +2515,7 @@ async function init() {
 
     // Render initial page
     renderPage('home');
+    void checkForUpdateNotice();
 }
 
 // Start the app when DOM is ready

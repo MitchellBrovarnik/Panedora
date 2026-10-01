@@ -12,7 +12,9 @@ const { app, BrowserWindow, session } = require('electron');
 const testData = fs.mkdtempSync(path.join(os.tmpdir(), 'panedora-player-test-'));
 app.setPath('userData', testData);
 app.disableHardwareAcceleration();
-const deadline = setTimeout(() => { console.error('Native player test timed out'); app.exit(1); }, 30000);
+// Exercise the release-only update checker with intercepted network fixtures.
+Object.defineProperty(app, 'isPackaged', { value: true });
+const deadline = setTimeout(() => { console.error('Native player test timed out'); app.exit(1); }, 45000);
 
 async function waitFor(check, description) {
     const end = Date.now() + 6000;
@@ -74,7 +76,7 @@ app.whenReady().then(async () => {
         rating: n === 1 ? 1 : n === 2 ? '1' : 0
     }));
     const json = (value, status = 200) => new Response(JSON.stringify(value), {
-        status, headers: { 'Content-Type': 'application/json' }
+        status, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
     // Intercept every HTTPS request, including images and the audio fixture.
     session.defaultSession.protocol.handle('https', async request => {
@@ -86,8 +88,13 @@ app.whenReady().then(async () => {
             headers: { 'Content-Type': 'audio/wav', 'Access-Control-Allow-Origin': '*' }
         });
         const body = request.method === 'POST' ? JSON.parse(await request.text()) : {};
-        calls.push({ path: url.pathname, body });
+        calls.push({ path: url.pathname, host: url.hostname, body });
         switch (url.pathname) {
+            case '/repos/MitchellBrovarnik/Panedora/releases/latest':
+                return json({ tag_name: 'v99.0.0', draft: false, prerelease: false,
+                    assets: ['Panedora.exe', 'Panedora-arm64.dmg', 'Panedora.AppImage'].map(name => ({
+                        name, browser_download_url: 'https://github.com/MitchellBrovarnik/Panedora/releases/download/v99.0.0/' + name
+                    })) });
             case '/api/v1/auth/login':
                 return json({ authToken: 'fixture-token', config: premiumAccount
                     ? { branding: 'PandoraPremium', flags: ['onDemand'] }
@@ -146,6 +153,21 @@ app.whenReady().then(async () => {
         fs.writeFileSync(path.join(testData, name + '.png'), (await win.webContents.capturePage()).toPNG());
     };
     await waitFor(() => run("!!document.getElementById('login-form')"), 'login UI');
+    await waitFor(() => run("document.getElementById('update-dialog').open"), 'new release notice');
+    await run('document.fonts.ready');
+    assert.equal(await run("document.fonts.check('16px Inter')"), true, 'App uses the bundled font');
+    assert.equal(await run('document.activeElement.id'), 'update-later');
+    assert.equal(await run("document.getElementById('update-available-version').textContent"), '99.0.0');
+    assert.equal(await run("document.getElementById('update-dialog').getBoundingClientRect().width <= 380 && document.getElementById('update-dialog').getBoundingClientRect().height < 320"), true, 'Update notice remains compact');
+    assert.equal(await run("document.getElementById('update-dialog').scrollHeight <= document.getElementById('update-dialog').clientHeight"), true, 'Update notice has no clipping or scrolling');
+    await capture('update-notice');
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+    await waitFor(() => run("!document.getElementById('update-dialog').open"), 'Escape postpones update');
+    const snooze = require('../config').getUpdateSnooze();
+    assert.equal(snooze.version, '99.0.0');
+    assert.ok(snooze.until > Date.now() + 23 * 60 * 60 * 1000);
+    assert.equal(calls.filter(c => c.host === 'api.github.com').length, 1);
     assert.equal((await run("window.api.auth.login('fixture@example.invalid', 'fixture-password')")).success, true);
     await waitFor(() => run('AppState.stations.length === 2'), 'station collection');
 
@@ -431,7 +453,33 @@ app.whenReady().then(async () => {
     await waitFor(() => run("AppState.playerState.isShuffle && !AppState.playerState.stationLoading"), 'restored Home Shuffle card plays');
     assert.equal(calls.filter(c => c.path.endsWith('/station/shuffle')).length, shuffleRequests + 1);
     assert.equal(await run("document.querySelectorAll('#home-recent [data-id=\"fixture-shuffle\"]').length"), 1);
+    assert.equal(await run("document.getElementById('update-dialog').open"), false, 'Renderer reload respects the update choice');
+    assert.equal(calls.filter(c => c.host === 'api.github.com').length, 1, 'App checks only once per launch');
+
+    const site = new BrowserWindow({ width: 1440, height: 1000, show: false, webPreferences: { contextIsolation: true, nodeIntegration: false } });
+    await site.loadFile(path.join(__dirname, '..', 'docs', 'index.html'));
+    const siteRun = script => site.webContents.executeJavaScript(script);
+    await waitFor(() => siteRun("document.getElementById('latest-release-label').textContent === 'Latest release: v99.0.0'"), 'website release links');
+    await siteRun('document.fonts.ready');
+    assert.equal(await siteRun("document.fonts.check('16px Inter') && document.fonts.check('16px boxicons')"), true, 'Website fonts and icons load locally');
+    assert.match(await siteRun("document.getElementById('download-mac').textContent"), /Apple Silicon/);
+    const captureSite = async name => {
+        await siteRun("document.querySelectorAll('.reveal').forEach(el => el.classList.add('active')); new Promise(resolve => setTimeout(resolve, 900))");
+        assert.equal(await siteRun('document.documentElement.scrollWidth <= innerWidth'), true, 'Website fits the viewport');
+        fs.writeFileSync(path.join(testData, name + '.png'), (await site.webContents.capturePage()).toPNG());
+    };
+    await captureSite('website-desktop');
+    await siteRun("document.getElementById('features').scrollIntoView()");
+    await captureSite('website-features');
+    site.setContentSize(430, 900);
+    await siteRun('window.scrollTo(0, 0)');
+    await captureSite('website-mobile');
+    await siteRun("document.getElementById('download').scrollIntoView()");
+    await captureSite('website-downloads-mobile');
+    assert.equal(calls.some(c => ['fonts.googleapis.com', 'fonts.gstatic.com', 'unpkg.com'].includes(c.host)), false, 'App and website make no external font or icon requests');
+    site.close();
     console.log('Native player smoke test passed: device takeover, saved thumbs, immediate mode changes and approved auto-resume, Artist Only eligibility, Shuffle exclusion, mode failures and retry.');
+    console.log('Update notice, persistent Later choice, local fonts and desktop/mobile website checks passed.');
     console.log('Screenshots: ' + testData);
     clearTimeout(deadline);
     app.quit();

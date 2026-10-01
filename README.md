@@ -6,7 +6,7 @@
 
 **Station modes now work directly in Panedora.** Click the artwork in the play bar to open Now Playing, then choose a mode from **Tune your station** above Recently Played.
 
-The themed menu shows the modes Pandora makes available for your station and account, such as Discovery, Deep Cuts, or Artist Only. Artist Only appears only when eligible. Tuning is hidden for Shuffle and stations without available modes.
+The themed menu shows the modes Pandora makes available for your station and account, such as Discovery, Deep Cuts, or Artist Only. Artist Only requires verified Pandora Premium access and an eligible station. Tuning is hidden for Shuffle and stations without available modes.
 
 ## Project Purpose
 Panedora is a personal, educational, and experimental project created purely for fun. It was built as a creative exercise to explore modern UI design (Glassmorphism) and Electron-based desktop application development. This project is intended for personal use only and was developed with zero intent to cause harm, bypass security, or interfere with Pandora's business operations. It is shared as a demonstration of UI/UX design and technical integration.
@@ -91,6 +91,11 @@ Your selected effect is saved and restored automatically on next launch.
 *   **Pandora Verification (Experimental):** Human-check support is implemented for sign-in, with a separate CAPTCHA window and automatic retry after completion. It has been tested with simulated challenges; verification against a live Pandora CAPTCHA still needs confirmation.
 *   **Clean Sign Out:** A dedicated sign-out process permanently wipes session tokens, pauses active streams, and safely tears down the player state to prevent ghost playback or infinite reload loops.
 
+### Update Notices
+Release builds containing the update checker look for a newer stable GitHub release once per launch. A small themed notice offers **Download update** or **Later**. Download opens the project's GitHub release page; Later postpones that version's reminder for 24 hours. Checks run in the background and quietly stop if the network is unavailable. Notices wait while the mini player or another app dialog is open.
+
+Older versions without this checker need one manual update before they can display notices for later releases. Development checkouts do not check automatically.
+
 ## Technical Architecture
 
 Panedora is built using a modern Electron stack, emphasizing security and separation of concerns:
@@ -150,13 +155,15 @@ You do **not** need to compile the application locally. Simply navigate to the R
 ## Privacy and Security
 
 Panedora is designed with user privacy as a priority:
-*   **Direct Authentication:** Your credentials are used solely to authenticate with Pandora. Your password is encrypted at rest using your operating system's secure keychain (Electron safeStorage).
+*   **Direct Authentication:** Your credentials are used to sign in to Pandora. Saved passwords are encrypted locally using the operating system's secure storage when available, with an app encryption fallback.
 *   **Local Storage Only:** Authentication tokens and encrypted credentials are stored locally on your machine in your user data directory. All auth data is cleared on sign-out.
-*   **No Third-Party Tracking:** No personal data is collected or shared with any third-party services. The application communicates exclusively with Pandora's infrastructure.
+*   **No Analytics or Ad Trackers:** Panedora includes no analytics or advertising trackers. Pandora handles authentication and playback; lyrics requests send the artist and song title to LRCLIB when you use Lyrics. Release builds with the update checker request GitHub's latest public release. These services receive normal network information such as your IP address, but lyrics and update requests do not include your Pandora credentials. Fonts are bundled with the app instead of fetched from Google Fonts.
 
 ## License
 
 This project is **source-available** under the [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/) License. You are free to view and study the source code, but commercial use and derivative distribution are not permitted. See the LICENSE file for details.
+
+Bundled third-party assets retain their own licenses: [Inter](assets/Inter-OFL.txt) uses SIL OFL 1.1; the website's [Boxicons font](docs/assets/Boxicons-OFL.txt) uses SIL OFL 1.1 and its [CSS](docs/assets/Boxicons-MIT.txt) uses MIT. Inter is sourced from [the official project](https://github.com/rsms/inter/tree/353b61b9f4430d5f420d56605a6e7993e0941470); Boxicons is the upstream 2.1.4 package, with its font paths changed to local files.
 
 ## Disclaimer
 

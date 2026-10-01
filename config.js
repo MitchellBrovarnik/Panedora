@@ -200,6 +200,10 @@ module.exports = {
     },
     clearCredentials: () => setConfig('credentials', null),
 
+    // Update reminders belong to this installation and survive account sign-out.
+    getUpdateSnooze: () => getConfig().updateSnooze || null,
+    setUpdateSnooze: value => setConfig('updateSnooze', value),
+
     // Auth Token (from login response)
     getAuthToken: () => getConfig().authToken,
     setAuthToken: (token) => setConfig('authToken', token),

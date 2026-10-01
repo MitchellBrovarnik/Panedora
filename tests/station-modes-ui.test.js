@@ -48,7 +48,8 @@ function setup(t) {
     window.eval(fs.readFileSync(path.join(root, 'components.js'), 'utf8') + '\n' +
         fs.readFileSync(path.join(root, 'renderer.js'), 'utf8') + `
         document.removeEventListener('DOMContentLoaded', init);
-        window.testUI = { state: AppState, update: updatePlayerUI, render: renderPage, renderStations: renderStationsList };
+        window.testUI = { state: AppState, update: updatePlayerUI, render: renderPage, renderStations: renderStationsList,
+            checkUpdates: checkForUpdateNotice, openRemoval: openStationRemoval, closeRemoval: closeStationRemoval };
         initEventListeners();
         initAPIListeners();
     `);
@@ -71,6 +72,90 @@ function setup(t) {
     };
     return { window, ui, player, calls, node, open, select, events };
 }
+
+test('update notice is compact in content, escapes versions and restores focus without changing playback', async t => {
+    const s = setup(t);
+    const responses = [];
+    s.window.api.updates = {
+        check: async () => ({ version: '<b>1.2.0</b>', currentVersion: '1.1.3' }),
+        respond: async (...args) => { responses.push(args); return { success: true }; }
+    };
+    const previous = s.node('play-pause-btn');
+    previous.focus();
+    await s.ui.checkUpdates();
+    assert.equal(s.node('update-dialog').open, true);
+    assert.equal(s.node('update-available-version').textContent, '<b>1.2.0</b>');
+    assert.equal(s.node('update-available-version').children.length, 0);
+    assert.equal(s.window.document.activeElement.id, 'update-later');
+    s.node('update-download').click();
+    s.node('update-download').click();
+    await tick();
+    assert.deepEqual(responses, [['<b>1.2.0</b>', 'download']]);
+    assert.equal(s.node('update-dialog').open, false);
+    assert.equal(s.window.document.activeElement, previous);
+    assert.equal(s.ui.state.playerState.isPlaying, true);
+    assert.deepEqual(s.calls, []);
+});
+
+test('update notice waits for mini mode and higher priority dialogs, preserving its original focus', async t => {
+    const s = setup(t);
+    s.window.api.updates = { check: async () => ({ version: '1.2.0', currentVersion: '1.1.3' }),
+        respond: async () => ({ success: true }) };
+    s.events.MiniMode({ isMini: true });
+    await s.ui.checkUpdates();
+    assert.equal(s.node('update-dialog').open, false);
+    s.events.MiniMode({ isMini: false });
+    assert.equal(s.node('update-dialog').open, true);
+    s.ui.update({ streamPrompt: { id: 1, pending: false } });
+    assert.equal(s.node('update-dialog').open, false);
+    assert.equal(s.node('stream-conflict-dialog').open, true);
+    s.ui.update({ streamPrompt: null });
+    assert.equal(s.node('stream-conflict-dialog').open, false);
+    assert.equal(s.node('update-dialog').open, true);
+    s.ui.openRemoval({ id: 'station-1', name: 'Fixture Station' });
+    assert.equal(s.node('update-dialog').open, false);
+    assert.equal(s.node('station-remove-dialog').open, true);
+    s.ui.closeRemoval();
+    assert.equal(s.node('station-remove-dialog').open, false);
+    assert.equal(s.node('update-dialog').open, true);
+    s.node('update-close').click();
+    await tick();
+    assert.equal(s.node('update-dialog').open, false);
+    assert.equal(s.ui.state.playerState.isPlaying, true);
+});
+
+test('update choice remains open and retryable on IPC errors; Escape is Later', async t => {
+    const s = setup(t);
+    const responses = [];
+    let fail = true;
+    s.window.api.updates = { check: async () => ({ version: '1.2.0', currentVersion: '1.1.3' }),
+        respond: async (...args) => { responses.push(args); if (fail) throw new Error('IPC disconnected'); return { success: true }; } };
+    await s.ui.checkUpdates();
+    s.node('update-download').click();
+    assert.equal(s.node('update-later').disabled, true);
+    await tick();
+    assert.equal(s.node('update-dialog').open, true);
+    assert.equal(s.node('update-download').disabled, false);
+    assert.match(s.node('update-error').textContent, /Please try again/);
+    fail = false;
+    const cancel = new s.window.Event('cancel', { cancelable: true });
+    s.node('update-dialog').dispatchEvent(cancel);
+    assert.equal(cancel.defaultPrevented, true);
+    await tick();
+    assert.deepEqual(responses, [['1.2.0', 'download'], ['1.2.0', 'later']]);
+    assert.equal(s.node('update-dialog').open, false);
+});
+
+test('failed and empty background update checks do not show a dialog or disturb playback', async t => {
+    const s = setup(t);
+    s.window.api.updates = { check: async () => { throw new Error('Offline'); } };
+    await s.ui.checkUpdates();
+    s.window.api.updates.check = async () => null;
+    await s.ui.checkUpdates();
+    assert.equal(s.node('update-dialog').open, false);
+    assert.equal(s.ui.state.playerState.isPlaying, true);
+    assert.deepEqual(s.calls, []);
+});
 
 test('footer thumbs follow the visible player through expanded view, mini mode and navigation', async t => {
     const s = setup(t);
