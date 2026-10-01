@@ -521,7 +521,9 @@ async function loadStationModes(stationId) {
     sendPlayerState(getCurrentState());
     operation.promise = (async () => {
         try {
-            const result = await api.getStationModes(stationId);
+            const result = await api.getStationModes(stationId, {
+                isCurrent: () => operation.generation === playbackGeneration && stationModesRead === operation
+            });
             if (operation.generation !== playbackGeneration || stationModesRead !== operation) return { success: false };
             stationModes = result.success
                 ? { ...result, status: 'ready', error: null }
@@ -566,16 +568,16 @@ function changeStationMode(stationId, modeId) {
     const isCurrent = () => operation.generation === playbackGeneration && !streamReclaimed;
     operation.promise = (async () => {
         try {
-            const result = await api.setStationMode(stationId, modeId);
-            if (!isCurrent()) return { success: false };
+            const result = await api.setStationMode(stationId, modeId, { isCurrent });
+            if (!isCurrent() || result.cancelled) return { success: false };
             if (result.streamConflict) {
                 await showStreamConflict(stationId, operation.generation);
                 return { success: false };
             }
             if (!result.success) {
-                // A lost response may have applied the change on Pandora. Read
-                // back the actual mode; never keep an optimistic selection.
-                const actual = result.modes ? result : await api.getStationModes(stationId);
+                // Read back a lost setter response, but never recover a change
+                // rejected before submission (such as a failed Premium check).
+                const actual = result.modes || result.modeRequestSent === false ? result : await api.getStationModes(stationId);
                 if (!isCurrent()) return { success: false };
                 if (actual.streamConflict) {
                     await showStreamConflict(stationId, operation.generation);
@@ -1026,7 +1028,7 @@ app.whenReady().then(() => {
 
     // Handle session expiration
     let isRelogging = false;
-    api.onSessionExpired = async () => {
+    api.onSessionExpired = async (options = {}) => {
         if (isRelogging) return false;
         isRelogging = true;
 
@@ -1041,7 +1043,9 @@ app.whenReady().then(() => {
                     throw new Error('No saved credentials');
                 }
                 console.log('[Main] Attempting sign-in with saved credentials...');
-                const result = await api.login(creds.email, creds.password);
+                const result = await api.login(creds.email, creds.password, { ...options, refreshSession: true });
+                // A newer sign-in, logout or station change owns the UI now.
+                if (result.cancelled) return false;
                 if (result.success) {
                     console.log('[Main] Auto-relogin successful.');
 

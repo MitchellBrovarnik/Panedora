@@ -17,7 +17,8 @@ function setup(responses) {
         } },
         net: { fetch: async (url, options) => {
             calls.push({ url, ...options });
-            const next = responses.shift();
+            const fixture = responses.shift();
+            const next = typeof fixture === 'function' ? await fixture() : fixture;
             assert.ok(next, 'Unexpected extra request');
             if (next instanceof Error) throw next;
             return { ok: next.status === 200, status: next.status, text: async () => JSON.stringify(next.body) };
@@ -34,7 +35,7 @@ function setup(responses) {
         clearAll: () => { state.authToken = null; state.credentials = null; }
     };
     const API = loadModule(path.join(__dirname, '..', 'pandora-api.js'), { electron, './config': config });
-    return { api: new API(), state, cookies, calls };
+    return { api: new API(), state, cookies, calls, electron };
 }
 
 const blocked = () => ({ status: 403, body: { ...challenge } });
@@ -200,6 +201,169 @@ test('Premium proof is cleared when logging out or restoring a saved token', asy
     assert.equal(api.hasPremiumAccess(), true);
     api.logout();
     assert.equal(api.hasPremiumAccess(), false);
+});
+
+test('an expired Premium mode request cannot retry after reauthentication downgrades the account', async () => {
+    const available = modeResponse();
+    available.availableModes.find(mode => mode.modeId === 5).isModeAvailable = true;
+    const { api, calls } = setup([
+        premium(), { status: 200, body: available }, premium(),
+        { status: 401, body: { errorCode: 1000 } }, paid(),
+        { status: 200, body: { ...available, currentModeId: 5 } }
+    ]);
+    await api.login('test@example.invalid', 'test-password');
+    api.onSessionExpired = async options => (await api.login('test@example.invalid', 'test-password', { ...options, refreshSession: true })).success;
+    const result = await api.setStationMode('station-1', 5);
+    assert.equal(result.success, false);
+    assert.equal(result.cancelled, false, 'The Premium gate, not session cancellation, must stop the retry');
+    assert.equal(api.isAuthenticated(), true);
+    assert.equal(api.hasPremiumAccess(), false);
+    assert.equal(calls.filter(call => call.url.endsWith('/setAndGetAvailableModes')).length, 1);
+});
+
+test('an eligible Premium mode still retries successfully after session renewal or CAPTCHA', async () => {
+    for (const verification of [false, true]) {
+        const available = modeResponse();
+        available.availableModes.find(mode => mode.modeId === 5).isModeAvailable = true;
+        const { api, calls } = setup([
+            premium(), { status: 200, body: available }, premium(),
+            verification ? blocked() : { status: 401, body: { errorCode: 1000 } },
+            ...(verification ? [] : [premium()]),
+            { status: 200, body: { ...available, currentModeId: 5 } }
+        ]);
+        await api.login('test@example.invalid', 'test-password');
+        api.onSessionExpired = async options => (await api.login('test@example.invalid', 'test-password', { ...options, refreshSession: true })).success;
+        api.onVerificationRequired = async () => true;
+        assert.equal((await api.setStationMode('station-1', 5)).success, true);
+        assert.equal(calls.filter(call => call.url.endsWith('/setAndGetAvailableModes')).length, 2);
+        assert.equal(api.hasPremiumAccess(), true);
+    }
+});
+
+test('logging out during a Premium check cannot restore credentials or submit the mode', async () => {
+    const available = modeResponse();
+    available.availableModes.find(mode => mode.modeId === 5).isModeAvailable = true;
+    let completeLogin;
+    let loginStarted;
+    const checking = new Promise(resolve => { loginStarted = resolve; });
+    const { api, state, calls } = setup([
+        premium(), { status: 200, body: available },
+        () => { loginStarted(); return new Promise(resolve => { completeLogin = resolve; }); },
+        { status: 200, body: { ...available, currentModeId: 5 } }
+    ]);
+    await api.login('test@example.invalid', 'test-password');
+    const change = api.setStationMode('station-1', 5);
+    await checking;
+    api.logout();
+    completeLogin(premium());
+    await change;
+    assert.equal(api.isAuthenticated(), false);
+    assert.equal(api.hasPremiumAccess(), false);
+    assert.equal(state.credentials, null);
+    assert.equal(calls.some(call => call.url.endsWith('/setAndGetAvailableModes')), false);
+});
+
+test('a cancelled station change stops after preflight, Premium verification or CAPTCHA', async () => {
+    for (const stage of ['preflight', 'premium', 'captcha']) {
+        const available = modeResponse();
+        available.availableModes.find(mode => mode.modeId === 5).isModeAvailable = true;
+        let complete;
+        let started;
+        const waiting = new Promise(resolve => { started = resolve; });
+        const deferred = () => { started(); return new Promise(resolve => { complete = resolve; }); };
+        const { api, calls } = setup([
+            premium(),
+            stage === 'preflight' ? deferred : { status: 200, body: available },
+            stage === 'premium' ? deferred : premium(),
+            blocked()
+        ]);
+        await api.login('test@example.invalid', 'test-password');
+        api.onVerificationRequired = deferred;
+        let current = true;
+        const changing = api.setStationMode('station-1', 5, { isCurrent: () => current });
+        await waiting;
+        current = false;
+        complete(stage === 'preflight' ? { status: 200, body: available } : stage === 'premium' ? premium() : true);
+        const result = await changing;
+        assert.equal(result.success, false);
+        assert.equal(result.cancelled, true);
+        assert.equal(calls.filter(call => call.url.endsWith('/setAndGetAvailableModes')).length, stage === 'captcha' ? 1 : 0);
+        assert.equal(api.hasPremiumAccess(), true, 'Station cancellation must not erase the existing account proof');
+    }
+});
+
+test('eligibility and cancellation are checked again after asynchronous cookie access', async () => {
+    for (const cancel of [false, true]) {
+        const available = modeResponse();
+        available.availableModes.find(mode => mode.modeId === 5).isModeAvailable = true;
+        const { api, calls, electron, cookies } = setup([premium(), { status: 200, body: available }, premium()]);
+        await api.login('test@example.invalid', 'test-password');
+        let finishCookieRead;
+        let started;
+        const waiting = new Promise(resolve => { started = resolve; });
+        let reads = 0;
+        electron.session.defaultSession.cookies.get = async () => {
+            if (++reads === 3) {
+                started();
+                return new Promise(resolve => { finishCookieRead = resolve; });
+            }
+            return cookies;
+        };
+        let current = true;
+        const changing = api.setStationMode('station-1', 5, { isCurrent: () => current });
+        await waiting;
+        if (cancel) current = false;
+        else api.premiumAuthToken = null;
+        finishCookieRead(cookies);
+        assert.equal((await changing).success, false);
+        assert.equal(calls.some(call => call.url.endsWith('/setAndGetAvailableModes')), false);
+    }
+});
+
+test('a late login or subscription check cannot overwrite logout, restore or a newer account', async () => {
+    for (const action of ['logout', 'restore', 'new-login', 'verify-logout']) {
+        let complete;
+        let started;
+        const waiting = new Promise(resolve => { started = resolve; });
+        const { api, state } = setup([
+            () => { started(); return new Promise(resolve => { complete = resolve; }); }, paid()
+        ]);
+        const oldLogin = action === 'verify-logout' ? api.verifySubscription() : api.login('old@example.invalid', 'old-password');
+        await waiting;
+        if (action === 'restore') api.restoreAuth();
+        else if (action === 'new-login') await api.login('new@example.invalid', 'new-password');
+        else api.logout();
+        const expected = { ...state };
+        complete(premium());
+        const result = await oldLogin;
+        if (action === 'verify-logout') assert.equal(result, false);
+        else assert.equal(result.cancelled, true);
+        assert.deepEqual(state, expected);
+        assert.equal(api.hasPremiumAccess(), false);
+        assert.equal(api.authToken, expected.authToken);
+    }
+});
+
+test('a late expired request cannot reauthenticate a logged-out or replaced session', async () => {
+    for (const replace of [false, true]) {
+        let complete;
+        let started;
+        const waiting = new Promise(resolve => { started = resolve; });
+        const { api, calls, state } = setup([
+            () => { started(); return new Promise(resolve => { complete = resolve; }); }, paid()
+        ]);
+        api.onSessionExpired = () => assert.fail('A stale request must not start another login');
+        const request = api.request('/v1/station/getStations');
+        const rejection = assert.rejects(request, error => error.cancelled === true);
+        await waiting;
+        if (replace) await api.login('new@example.invalid', 'new-password');
+        else api.logout();
+        const expected = { ...state };
+        complete({ status: 401, body: { errorCode: 1000 } });
+        await rejection;
+        assert.deepEqual(state, expected);
+        assert.equal(calls.length, replace ? 2 : 1);
+    }
 });
 
 test('blocked sign-in waits for verification and uses its cookies for one retry', async () => {

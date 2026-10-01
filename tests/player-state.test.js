@@ -485,16 +485,22 @@ test('station switches and sign-out discard delayed mode reads and changes', asy
             s.seed([track()]);
             let complete;
             let pending;
+            let isCurrent;
             if (readOnly) {
                 s.api.getStationModes = async () => new Promise(resolve => { complete = resolve; });
                 pending = s.loadStationModes('station-1');
             } else {
                 await s.loadStationModes('station-1');
-                s.api.setStationMode = async () => new Promise(resolve => { complete = resolve; });
+                s.api.setStationMode = async (stationId, modeId, options) => {
+                    isCurrent = options.isCurrent;
+                    return new Promise(resolve => { complete = resolve; });
+                };
                 pending = s.changeStationMode('station-1', 1091989);
+                assert.equal(isCurrent(), true);
             }
             if (logout) await s.handlers.get('AUTH:LOGOUT')();
             else await s.playStation('station-2');
+            if (!readOnly) assert.equal(isCurrent(), false, 'The API must be able to cancel before submitting the mode');
             complete(modes(1091989));
             await pending;
             assert.equal(s.getCurrentState().stationId, logout ? null : 'station-2');
@@ -503,6 +509,21 @@ test('station switches and sign-out discard delayed mode reads and changes', asy
             assert.equal(s.getCurrentState().stationModes.changing, false);
         }
     }
+});
+
+test('a mode rejected before submission cannot recover through a matching read-back', async () => {
+    const s = setup();
+    s.seed([track(1, 'current')]);
+    await s.pausePlayer();
+    await s.loadStationModes('station-1');
+    s.api.setStationMode = async () => ({ success: false, modeRequestSent: false, error: 'Subscription verification failed' });
+    s.api.getStationModes = () => assert.fail('No lost-response recovery for a request that was never sent');
+    s.api.getPlaylist = () => assert.fail('No fresh playlist for an unverified mode');
+    assert.equal((await s.changeStationMode('station-1', 1091989)).success, false);
+    assert.equal(s.getCurrentState().trackToken, 'current');
+    assert.equal(s.getCurrentState().isPlaying, false);
+    assert.equal(s.getCurrentState().stationModes.error, 'Subscription verification failed');
+    assert.equal(s.started.length, 0);
 });
 
 test('mode change conflicts retain the explicit device choice and reset tuning after takeover', async () => {

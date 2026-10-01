@@ -12,6 +12,8 @@ class PandoraAPI {
         this.authToken = config.getAuthToken();
         // Stored tokens alone do not prove a Premium subscription.
         this.premiumAuthToken = null;
+        this.sessionGeneration = 0;
+        this.loginGeneration = 0;
         this.onSessionExpired = null; // Callback for main process
         this.onVerificationRequired = null;
 
@@ -60,19 +62,33 @@ class PandoraAPI {
         return headers;
     }
 
-    /**
-     * Make an API request
-     */
-    async request(endpoint, data = {}) {
+    static assertCurrent(isCurrent) {
+        if (!isCurrent()) {
+            throw Object.assign(new Error('The session or station changed. Please try again.'), { cancelled: true });
+        }
+    }
+
+    /** Make an API request, respecting cancellation across recovery attempts. */
+    async request(endpoint, data = {}, options = {}) {
         const url = `https://${this.baseUrl}${this.apiPath}${endpoint}`;
+        const generation = this.sessionGeneration;
+        const isCurrent = () => generation === this.sessionGeneration && (options.isCurrent?.() ?? true);
+        const beforeRequest = () => {
+            PandoraAPI.assertCurrent(isCurrent);
+            options.beforeRequest?.();
+        };
         let verificationUsed = false;
         let sessionRefreshUsed = false;
         // Each recovery can run once. Verification may reveal an expired auth
         // token, so let the normal session refresh handle that next response.
         while (true) {
             try {
-                return await this._requestInternal(url, endpoint, data);
+                PandoraAPI.assertCurrent(isCurrent);
+                const response = await this._requestInternal(url, endpoint, data, beforeRequest);
+                PandoraAPI.assertCurrent(isCurrent);
+                return response;
             } catch (error) {
+                PandoraAPI.assertCurrent(isCurrent);
                 if (PandoraAPI.needsVerification(error) && this.onVerificationRequired && !verificationUsed) {
                     verificationUsed = true;
                     let verified;
@@ -91,7 +107,7 @@ class PandoraAPI {
                 if ((error.status === 401 || error.errorCode === 1000) &&
                     endpoint !== '/v1/auth/login' && this.onSessionExpired && !sessionRefreshUsed) {
                     sessionRefreshUsed = true;
-                    const relogged = await this.onSessionExpired();
+                    const relogged = await this.onSessionExpired({ isCurrent });
                     if (relogged) continue;
                 }
                 throw error;
@@ -102,7 +118,7 @@ class PandoraAPI {
     /**
      * Internal request method to retry without infinite loops
      */
-    async _requestInternal(url, endpoint, data) {
+    async _requestInternal(url, endpoint, data, beforeRequest) {
         const { net, session } = require('electron');
         const cookies = await session.defaultSession.cookies.get({ url, name: 'csrftoken' });
         // Prefer the most specific cookie if Pandora supplied a scoped token.
@@ -121,6 +137,9 @@ class PandoraAPI {
                 secure: true
             });
         }
+        // Cookie access, verification and reauthentication can all yield. Check
+        // cancellation and eligibility again immediately before sending anything.
+        beforeRequest();
         const headers = this._buildHeaders(endpoint);
 
         const controller = new AbortController();
@@ -158,18 +177,35 @@ class PandoraAPI {
         }
     }
 
-    /**
-     * Login with username/password
-     */
-    async login(username, password) {
-        this.premiumAuthToken = null;
+    // Explicit sign-ins replace the session. Refreshes stay in that session,
+    // but only the newest login attempt may save authentication or credentials.
+    _beginLogin({ isCurrent = () => true, refreshSession = false } = {}) {
+        PandoraAPI.assertCurrent(isCurrent);
+        if (!refreshSession) this.sessionGeneration++;
+        const session = this.sessionGeneration;
+        const attempt = ++this.loginGeneration;
+        return () => session === this.sessionGeneration && attempt === this.loginGeneration && isCurrent();
+    }
+
+    async login(username, password, options = {}) {
+        let isCurrent;
+        try {
+            isCurrent = this._beginLogin(options);
+        } catch (error) {
+            return { success: false, cancelled: true, error: error.message };
+        }
+        // A cancelled refresh must not erase the existing session's proof. A
+        // mode change still requires this refresh to succeed before submission.
+        if (!options.refreshSession) this.premiumAuthToken = null;
         try {
             const response = await this.request('/v1/auth/login', {
                 username,
                 password,
                 existingAuthToken: null,
                 keepLoggedIn: true
-            });
+            }, { isCurrent });
+            PandoraAPI.assertCurrent(isCurrent);
+            this.premiumAuthToken = null;
 
             if (response.authToken) {
                 // Check subscription: require positive proof of paid status
@@ -203,6 +239,8 @@ class PandoraAPI {
 
             return { success: false, error: 'No auth token received' };
         } catch (error) {
+            if (error.cancelled || !isCurrent()) return { success: false, cancelled: true, error: error.message };
+            this.premiumAuthToken = null;
             console.error('[API] Login failed:', {
                 status: error.status,
                 message: error.message,
@@ -287,6 +325,8 @@ class PandoraAPI {
      * Clear local auth state and logout
      */
     logout() {
+        this.sessionGeneration++;
+        this.loginGeneration++;
         this.authToken = null;
         this.premiumAuthToken = null;
         this.csrfToken = this.generateCsrfToken();
@@ -379,47 +419,64 @@ class PandoraAPI {
         };
     }
 
-    async getStationModes(stationId) {
+    async getStationModes(stationId, options = {}) {
         try {
-            const response = await this.request('/v1/interactiveradio/getAvailableModesSimple', { stationId });
+            const response = await this.request('/v1/interactiveradio/getAvailableModesSimple', { stationId }, options);
             if (PandoraAPI.isStreamConflict(response)) throw response;
             return PandoraAPI.parseStationModes(response, this.hasPremiumAccess());
         } catch (error) {
             return {
                 success: false,
+                cancelled: error.cancelled === true,
                 streamConflict: PandoraAPI.isStreamConflict(error),
                 error: 'Could not load station modes. Please try again.'
             };
         }
     }
 
-    async setStationMode(stationId, modeId) {
+    async setStationMode(stationId, modeId, options = {}) {
         if (!Number.isSafeInteger(modeId) || modeId < 0) {
-            return { success: false, error: 'Choose a mode offered by this station.' };
+            return { success: false, modeRequestSent: false, error: 'Choose a mode offered by this station.' };
         }
+        const generation = this.sessionGeneration;
+        const isCurrent = () => generation === this.sessionGeneration && (options.isCurrent?.() ?? true);
+        let modeRequestSent = false;
         try {
             // Re-read Pandora's offered modes so a stale menu or direct IPC call
             // cannot select an unavailable mode.
-            const offered = await this.getStationModes(stationId);
-            if (!offered.success) return offered;
+            const offered = await this.getStationModes(stationId, { isCurrent });
+            PandoraAPI.assertCurrent(isCurrent);
+            if (!offered.success) return { ...offered, modeRequestSent: false };
             const selected = offered.modes.find(mode => mode.id === modeId);
             if (!offered.available || !selected?.available) {
-                return { ...offered, success: false, error: 'Choose a mode available for your station and subscription.' };
+                return { ...offered, success: false, modeRequestSent: false, error: 'Choose a mode available for your station and subscription.' };
             }
             if (selected.premiumOnly) {
                 // Re-confirm the subscription before every Premium-only change,
                 // including an account downgraded since the menu was loaded.
-                this.premiumAuthToken = null;
                 const creds = config.getCredentials();
                 if (!creds?.email || !creds?.password) {
-                    return { success: false, error: 'Sign in again to confirm your Pandora Premium subscription.' };
+                    this.premiumAuthToken = null;
+                    return { success: false, modeRequestSent: false, error: 'Sign in again to confirm your Pandora Premium subscription.' };
                 }
-                const login = await this.login(creds.email, creds.password);
+                const login = await this.login(creds.email, creds.password, { isCurrent, refreshSession: true });
+                PandoraAPI.assertCurrent(isCurrent);
                 if (!login.success || !this.hasPremiumAccess()) {
-                    return { success: false, error: 'This mode requires a verified Pandora Premium subscription.' };
+                    return { success: false, modeRequestSent: false, error: 'This mode requires a verified Pandora Premium subscription.' };
                 }
             }
-            const response = await this.request('/v1/interactiveradio/setAndGetAvailableModes', { stationId, modeId });
+            const response = await this.request('/v1/interactiveradio/setAndGetAvailableModes', { stationId, modeId }, {
+                isCurrent,
+                beforeRequest: () => {
+                    // Automatic login may have downgraded the account since the
+                    // first attempt. Every retry must pass the same Premium gate.
+                    if (selected.premiumOnly && !this.hasPremiumAccess()) {
+                        throw new Error('This mode requires a verified Pandora Premium subscription.');
+                    }
+                    modeRequestSent = true;
+                }
+            });
+            PandoraAPI.assertCurrent(isCurrent);
             if (PandoraAPI.isStreamConflict(response)) throw response;
             const result = PandoraAPI.parseStationModes(response, this.hasPremiumAccess());
             // Pandora can return HTTP 200 while silently keeping the old mode.
@@ -430,6 +487,8 @@ class PandoraAPI {
         } catch (error) {
             return {
                 success: false,
+                cancelled: error.cancelled === true,
+                modeRequestSent,
                 streamConflict: PandoraAPI.isStreamConflict(error),
                 error: 'Could not confirm the station mode. Please try again.'
             };
@@ -584,6 +643,7 @@ class PandoraAPI {
      * Returns true if paid, false if free/unknown.
      */
     async verifySubscription() {
+        const isCurrent = this._beginLogin({ refreshSession: true });
         this.premiumAuthToken = null;
         try {
             const creds = config.getCredentials();
@@ -596,7 +656,8 @@ class PandoraAPI {
                 password: creds.password,
                 existingAuthToken: null,
                 keepLoggedIn: true
-            });
+            }, { isCurrent });
+            PandoraAPI.assertCurrent(isCurrent);
 
             if (!response.authToken) {
                 return false;
@@ -609,6 +670,7 @@ class PandoraAPI {
 
             return this._checkLoginSubscription(response);
         } catch (e) {
+            if (e.cancelled) return false;
             console.error('[API] Subscription re-check failed:', e?.message || '');
             // If we can't verify, allow — better than locking out paying users
             return true;
@@ -619,6 +681,8 @@ class PandoraAPI {
      * Restore auth from stored config
      */
     restoreAuth() {
+        this.sessionGeneration++;
+        this.loginGeneration++;
         this.authToken = config.getAuthToken();
         this.premiumAuthToken = null;
         this.csrfToken = config.getCsrfToken();
