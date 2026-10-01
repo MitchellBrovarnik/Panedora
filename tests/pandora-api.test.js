@@ -140,3 +140,39 @@ test('an invalid refreshed session does not create a re-login loop', async () =>
     assert.equal(refreshes, 1);
     assert.equal(calls.length, 2);
 });
+
+test('a successful playlist response containing a stream violation is not retried automatically', async () => {
+    const { api, calls } = setup([{ status: 200, body: { tracks: [{ trackType: 'SimStreamViolation' }] } }]);
+    const result = await api.getPlaylist('station');
+    assert.equal(result.streamConflict, true);
+    assert.equal(result.tracks.length, 0);
+    assert.equal(calls.length, 1);
+    assert.ok(calls[0].url.endsWith('/playlist/getFragment'));
+});
+
+test('HTTP 429 stream violations are distinguished from ordinary rate limits', async () => {
+    const { api, calls } = setup([
+        { status: 429, body: { errorString: 'STREAM_VIOLATION' } },
+        { status: 429, body: { errorString: 'RATE_LIMITED' } }
+    ]);
+    assert.equal((await api.getPlaylist('station')).streamConflict, true);
+    assert.equal((await api.getPlaylist('station')).streamConflict, undefined);
+    assert.equal(calls.length, 2);
+});
+
+test('normal resumption does not request takeover; explicit takeover uses the resume endpoint', async () => {
+    const { api, calls } = setup([{ status: 200, body: {} }, { status: 200, body: {} }]);
+    assert.equal((await api.playbackResumed()).success, true);
+    assert.equal(JSON.parse(calls[0].body).forceActive, false);
+    assert.equal((await api.playbackResumed(true)).success, true);
+    assert.equal(JSON.parse(calls[1].body).forceActive, true);
+    assert.ok(calls[1].url.endsWith('/station/playbackResumed'));
+});
+
+test('a rejected takeover stops after one request', async () => {
+    const { api, calls } = setup([{ status: 429, body: { errorString: 'STREAM_VIOLATION' } }]);
+    const result = await api.playbackResumed(true);
+    assert.equal(result.success, false);
+    assert.equal(result.streamConflict, true);
+    assert.equal(calls.length, 1);
+});

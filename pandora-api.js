@@ -328,9 +328,16 @@ class PandoraAPI {
     /**
      * Get playlist tracks for a station
      */
-    async getPlaylist(stationId, isStationStart = false, startingAtTrackId = null, { skipRetry = false } = {}) {
+    static isStreamConflict(value) {
+        return value?.errorString === 'STREAM_VIOLATION' ||
+            ['SimStreamViolation', 'SimStreamViolationItem'].includes(value?.trackType) ||
+            value?.tracks?.some(track => PandoraAPI.isStreamConflict(track)) === true ||
+            /SimStreamViolation/.test(value?.message || '');
+    }
+
+    async getPlaylist(stationId, isStationStart = false, startingAtTrackId = null) {
         try {
-            const payload = {
+            const response = await this.request('/v1/playlist/getFragment', {
                 stationId,
                 isStationStart,
                 fragmentRequestReason: 'Normal',
@@ -338,66 +345,37 @@ class PandoraAPI {
                 startingAtTrackId: startingAtTrackId || null,
                 onDemandArtistMessageArtistUidHex: null,
                 onDemandArtistMessageIdHex: null
-            };
-
-            let response = await this.request('/v1/playlist/getFragment', payload);
-
-            // Check for SimStreamViolation (another device is streaming) - success path
-            if (response.tracks?.length > 0 && response.tracks[0].trackType === 'SimStreamViolation') {
-                if (skipRetry) {
-                    return { tracks: [], error: 'Another device is streaming.' };
-                }
-                response = await this._retryAfterSimStreamViolation(payload);
+            });
+            if (PandoraAPI.isStreamConflict(response)) {
+                return { tracks: [], streamConflict: true, error: 'Another device is streaming.' };
             }
-
             return { tracks: response.tracks || [], error: response.error || null };
         } catch (error) {
-            // Check for SimStreamViolation in error response
-            const errorStr = JSON.stringify(error);
-            if (errorStr.includes('SimStreamViolation')) {
-                if (skipRetry) {
-                    return { tracks: [], error: 'Another device is streaming.' };
-                }
-                try {
-                    const retryResponse = await this._retryAfterSimStreamViolation(payload);
-                    return { tracks: retryResponse.tracks || [], error: retryResponse.error || null };
-                } catch (retryError) {
-                    return { tracks: [], error: 'Failed to load playlist. Please try again.' };
-                }
+            if (PandoraAPI.isStreamConflict(error)) {
+                return { tracks: [], streamConflict: true, error: 'Another device is streaming.' };
             }
-            console.error('[API] Failed to get playlist:', errorStr);
-            return { tracks: [], error: 'Failed to load playlist.' };
+            console.error('[API] Failed to get playlist:', error.message || error.errorString || error.status);
+            return { tracks: [], error: 'Failed to load playlist. Please try again.' };
         }
     }
 
     /**
-     * Retry getFragment after SimStreamViolation with delays
+     * Resume normally, or take over only after the user chooses Let me listen.
      */
-    async _retryAfterSimStreamViolation(payload) {
-        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-        for (let attempt = 1; attempt <= 3; attempt++) {
-            await delay(attempt * 2000);  // 2s, 4s, 6s
-
-            try {
-                const response = await this.request('/v1/playlist/getFragment', payload);
-
-                // Check if still SimStreamViolation
-                if (response.tracks?.length > 0 && response.tracks[0].trackType === 'SimStreamViolation') {
-                    continue;
-                }
-
-                return response;
-            } catch (e) {
-                const eStr = JSON.stringify(e);
-                if (eStr.includes('SimStreamViolation')) {
-                    continue;
-                }
-                throw e;  // Different error, don't retry
+    async playbackResumed(forceActive = false) {
+        try {
+            const response = await this.request('/v1/station/playbackResumed', { forceActive: forceActive === true });
+            if (PandoraAPI.isStreamConflict(response)) {
+                return { success: false, streamConflict: true, error: 'Another device is streaming.' };
             }
+            return { success: true };
+        } catch (error) {
+            return {
+                success: false,
+                streamConflict: PandoraAPI.isStreamConflict(error),
+                error: 'Could not resume Pandora playback. Please try again.'
+            };
         }
-
-        return { tracks: [], error: 'Another device is streaming. Please pause it and try again.' };
     }
 
     /**
