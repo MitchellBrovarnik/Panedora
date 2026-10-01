@@ -2024,7 +2024,13 @@ body::before {
 .stream-dialog-actions button { flex: 1; padding: 11px 14px; border: 1px solid var(--glass-border-hover); border-radius: var(--r-pill); font: inherit; font-weight: 600; white-space: nowrap; }
 .stream-dialog-secondary { background: var(--glass); color: var(--text-1); }
 .stream-dialog-secondary:hover { background: var(--glass-hover); }
-.stream-dialog-primary { background: var(--accent-grad); color: #fff; box-shadow: 0 4px 18px var(--accent-glow); }
+.stream-dialog-primary {
+    border-color: transparent;
+    background: var(--accent-grad);
+    color: #fff;
+    /* Paint the outline inside the gradient so both use the same rounded edge. */
+    box-shadow: inset 0 0 0 1px var(--glass-border-hover), 0 4px 18px var(--accent-glow);
+}
 .stream-dialog-primary:hover { filter: brightness(1.12); }
 .stream-dialog button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .stream-dialog button:disabled { opacity: 0.55; cursor: default; }

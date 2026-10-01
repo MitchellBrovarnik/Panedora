@@ -154,6 +154,10 @@ app.whenReady().then(async () => {
     assert.equal(await run("document.activeElement.id"), 'stream-keep-listening');
     assert.equal(await run("document.querySelector('.station-item.active')?.dataset.id"), 'fixture-station');
     await capture('device-takeover');
+    const savedTakeoverTheme = await run('document.documentElement.style.cssText');
+    await run("Object.entries({'--bg-base':'#0a0a0a','--accent':'rgb(132,115,133)','--accent-soft':'rgba(132,115,133,.15)','--accent-glow':'rgba(132,115,133,.5)','--accent-grad':'linear-gradient(135deg, rgb(132,115,133), #000000)'}).forEach(([key, value]) => document.documentElement.style.setProperty(key, value))");
+    await capture('device-takeover-adaptive');
+    await run('document.documentElement.style.cssText = ' + JSON.stringify(savedTakeoverTheme));
     assert.equal(calls.filter(c => c.path.endsWith('/playbackResumed')).length, 0);
     await run("document.getElementById('stream-keep-listening').click()");
     await waitFor(() => run('AppState.playerState.streamBlocked && !AppState.isLoading'), 'declined takeover');
