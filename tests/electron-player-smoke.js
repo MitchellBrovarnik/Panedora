@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { app, BrowserWindow, dialog, session } = require('electron');
+const { app, BrowserWindow, session } = require('electron');
 
 const testData = fs.mkdtempSync(path.join(os.tmpdir(), 'panedora-player-test-'));
 app.setPath('userData', testData);
@@ -54,7 +54,6 @@ app.whenReady().then(async () => {
         ]
     });
     const calls = [];
-    const prompts = [];
     const art = [{ size: 500, url: 'https://fixture.invalid/art.svg' }];
     const audio = silentWav();
     const tracks = [1, 2, 3, 4].map(n => ({
@@ -63,7 +62,6 @@ app.whenReady().then(async () => {
         audioURL: 'https://fixture.invalid/audio-' + n + '.wav', trackLength: 60,
         rating: n === 1 ? 1 : n === 2 ? '1' : 0
     }));
-    dialog.showMessageBox = (parent, options) => new Promise(resolve => prompts.push({ parent, options, resolve }));
     const json = (value, status = 200) => new Response(JSON.stringify(value), {
         status, headers: { 'Content-Type': 'application/json' }
     });
@@ -138,11 +136,12 @@ app.whenReady().then(async () => {
     await capture('search-artwork');
 
     await run("void window.api.content.playItem({type:'station', id:'fixture-station'})");
-    await waitFor(() => prompts.length === 1, 'first listening choice');
-    assert.equal(prompts[0].parent, win);
-    assert.deepEqual(prompts[0].options.buttons, ['Let me listen', 'Let them listen']);
+    await waitFor(() => run("document.getElementById('stream-conflict-dialog').open"), 'first listening choice');
+    assert.equal(await run("document.activeElement.id"), 'stream-keep-listening');
+    assert.equal(await run("document.querySelector('.station-item.active')?.dataset.id"), 'fixture-station');
+    await capture('device-takeover');
     assert.equal(calls.filter(c => c.path.endsWith('/playbackResumed')).length, 0);
-    prompts[0].resolve({ response: 1 });
+    await run("document.getElementById('stream-keep-listening').click()");
     await waitFor(() => run('AppState.playerState.streamBlocked && !AppState.isLoading'), 'declined takeover');
     assert.equal(await run('AppState.playerState.isPlaying'), false);
 
@@ -150,8 +149,12 @@ app.whenReady().then(async () => {
     assert.equal(win.getBounds().height, 80);
     // Use the actual Play button to verify a declined conflict can be revisited.
     await run("document.getElementById('play-pause-btn').click()");
-    await waitFor(() => prompts.length === 2, 'mini player listening choice');
-    prompts[1].resolve({ response: 0 });
+    await waitFor(() => run("document.getElementById('stream-conflict-dialog').open"), 'mini player listening choice');
+    win.setSize(480, 70);
+    assert.equal(await run("document.getElementById('stream-take-over').getBoundingClientRect().bottom <= innerHeight && document.getElementById('stream-take-over').getBoundingClientRect().right <= innerWidth"), true, 'The takeover buttons fit the smallest mini player');
+    assert.equal(await run("document.getElementById('stream-conflict-dialog').scrollHeight <= document.getElementById('stream-conflict-dialog').clientHeight"), true, 'Mini prompt must not need vertical scrolling');
+    await capture('device-takeover-mini');
+    await run("document.getElementById('stream-take-over').click()");
     await waitFor(() => run("AppState.playerState.trackToken === 'fixture-track-1' && !document.querySelector('audio')?.paused"), 'takeover audio');
     assert.equal(calls.filter(c => c.path.endsWith('/playbackResumed') && c.body.forceActive).length, 1);
     assert.equal(await run("document.getElementById('mini-thumb-up').classList.contains('liked')"), true);
@@ -189,14 +192,14 @@ app.whenReady().then(async () => {
     assert.equal(await run("AppState.playerState.history[0].feedback"), 'liked');
 
     // Keep the current audio while pending, then switch immediately to the new mix.
-    assert.equal(await run("document.querySelector('#np-mode-select option[value=\"5\"]') === null"), true);
-    assert.equal(await run("document.querySelector('#np-mode-select option[value=\"987654\"]').textContent.includes('Curated <Mix>')"), true);
+    assert.equal(await run("document.querySelector('#np-mode-option-5') === null"), true);
+    assert.equal(await run("document.querySelector('#np-mode-option-987654').textContent.includes('Curated <Mix>')"), true);
     assert.equal(await run("document.querySelectorAll('#np-station-tuning mix').length"), 0);
     const audioBefore = await run("document.querySelector('audio').src");
     let finishMode;
     modeGate = new Promise(resolve => { finishMode = resolve; });
     loseModeResponse = true;
-    await run("document.querySelector('audio').currentTime = 12; document.getElementById('np-mode-select').value = '1091989'; document.getElementById('np-mode-select').dispatchEvent(new Event('change'))");
+    await run("document.querySelector('audio').currentTime = 12; document.getElementById('np-mode-select').click(); document.getElementById('np-mode-option-1091989').click()");
     await waitFor(() => run("AppState.playerState.stationModes.changing"), 'pending tuning');
     assert.equal(await run("document.getElementById('np-mode-select').value"), '0');
     assert.equal(await run("document.getElementById('np-mode-select').disabled"), true);
@@ -217,15 +220,22 @@ app.whenReady().then(async () => {
     assert.equal(fragments[fragments.length - 1].body.isStationStart, false);
     assert.deepEqual(calls.find(c => c.path.endsWith('/setAndGetAvailableModes')).body, { stationId: 'fixture-station', modeId: 1091989 });
     await capture('station-tuning');
+    await run("document.getElementById('np-mode-select').click()");
+    assert.equal(await run("document.getElementById('np-mode-menu').hidden"), false);
+    await capture('station-mode-menu');
     win.setSize(900, 600);
+    await run("document.getElementById('np-mode-select').scrollIntoView({block:'center'})");
     await capture('station-tuning-small');
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+    await waitFor(() => run("document.getElementById('np-mode-menu').hidden"), 'keyboard menu dismissal');
     assert.equal(await run("document.querySelector('.np-right').getBoundingClientRect().right <= innerWidth"), true);
     win.setSize(1200, 800);
 
     await run("document.querySelector('audio').pause()");
     await waitFor(() => run('!AppState.playerState.isPlaying'), 'paused before changing modes');
     rejectMode = true;
-    await run("document.getElementById('np-mode-select').value = '0'; document.getElementById('np-mode-select').dispatchEvent(new Event('change'))");
+    await run("document.getElementById('np-mode-select').click(); document.getElementById('np-mode-option-0').click()");
     await waitFor(() => run("!AppState.playerState.stationModes.changing && !!AppState.playerState.stationModes.error"), 'rejected mode');
     assert.equal(await run("document.getElementById('np-mode-select').value"), '1091989');
     assert.match(await run("document.getElementById('np-mode-status').textContent"), /did not enable/);
@@ -242,12 +252,12 @@ app.whenReady().then(async () => {
     artistOnlyAvailable = true;
     rejectMode = false;
     await run("document.getElementById('np-back-btn').click(); document.getElementById('now-playing-art').click()");
-    await waitFor(() => run("!!document.querySelector('#np-mode-select option[value=\"5\"]')"), 'eligible Artist Only');
+    await waitFor(() => run("!!document.querySelector('#np-mode-option-5')"), 'eligible Artist Only');
     const reusedAudioURL = await run("document.querySelector('audio').src");
     const resumesBeforeMode = calls.filter(c => c.path.endsWith('/playbackResumed')).length;
     let approveModeResume;
     resumeGate = new Promise(resolve => { approveModeResume = resolve; });
-    await run("document.querySelector('audio').currentTime = 12; document.getElementById('np-mode-select').value = '5'; document.getElementById('np-mode-select').dispatchEvent(new Event('change'))");
+    await run("document.querySelector('audio').currentTime = 12; document.getElementById('np-mode-select').click(); document.getElementById('np-mode-option-5').click()");
     await waitFor(() => calls.filter(c => c.path.endsWith('/playbackResumed')).length > resumesBeforeMode, 'mode resume approval');
     assert.equal(calls.filter(c => c.path.endsWith('/playbackResumed')).at(-1).body.forceActive, false);
     assert.equal(await run("document.querySelector('audio').paused"), true);
@@ -275,7 +285,12 @@ app.whenReady().then(async () => {
 
     modesUnavailable = false;
     const modeRequestsBeforeShuffle = calls.filter(c => c.path.includes('interactiveradio')).length;
-    await run('window.api.content.playShuffle()');
+    await run("document.getElementById('shuffle-stations-btn').click()");
+    await waitFor(() => run('AppState.playerState.isShuffle'), 'sidebar Shuffle');
+    assert.equal(await run("document.querySelectorAll('#stations-list .active').length"), 1);
+    assert.equal(await run("document.querySelector('#stations-list .active').id"), 'shuffle-stations-btn');
+    await run('renderStationsList()');
+    assert.equal(await run("document.querySelector('#stations-list .active').id"), 'shuffle-stations-btn');
     await run("document.getElementById('now-playing-art').click()");
     assert.equal(await run('AppState.playerState.isShuffle'), true);
     assert.equal(await run("getComputedStyle(document.getElementById('np-station-tuning')).display"), 'none');
@@ -284,12 +299,18 @@ app.whenReady().then(async () => {
     await waitFor(() => run("!document.querySelector('audio').paused"), 'Shuffle audio');
     await capture('shuffle-without-tuning');
 
+    await run("window.api.content.playItem({type:'station', id:'fixture-station'})");
+    assert.equal(await run("document.querySelector('#stations-list .active')?.dataset.id"), 'fixture-station');
+    assert.equal(await run("document.getElementById('shuffle-stations-btn').classList.contains('active')"), false);
+
     // A later conflict must stop already buffered audio before asking again.
     canStream = false;
     await run('void window.api.player.getMoreTracks()');
-    await waitFor(() => prompts.length === 3, 'background stream conflict');
+    await waitFor(() => run("document.getElementById('stream-conflict-dialog').open"), 'background stream conflict');
     await waitFor(() => run("document.querySelector('audio').paused"), 'buffered audio stopped');
-    prompts[2].resolve({ response: 1 });
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+    await waitFor(() => run("!document.getElementById('stream-conflict-dialog').open"), 'Escape keeps this player paused');
     assert.equal(calls.filter(c => c.path.endsWith('/playbackResumed') && c.body.forceActive).length, 1);
     console.log('Native player smoke test passed: device takeover, saved thumbs, immediate mode changes and approved auto-resume, Artist Only eligibility, Shuffle exclusion, mode failures and retry.');
     console.log('Screenshots: ' + testData);

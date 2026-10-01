@@ -3,7 +3,7 @@
  * Direct API-based architecture (no hidden browser)
  */
 
-const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 
 // Disable GPU caching to prevent 'Access is denied' cache_util_win errors on Windows startup
@@ -31,6 +31,7 @@ let streamReclaimed = false;
 let isPaused = false; // Track pause state so we don't force-play on state updates
 let playbackGeneration = 0;
 let streamPrompt = null;
+let nextStreamPromptId = 0;
 let pauseRevision = 0;
 let resumeOperation = null;
 let skipOperation = null;
@@ -77,9 +78,12 @@ function createUIWindow() {
 
     uiWindow.on('closed', () => {
         playbackGeneration++;
+        cancelStreamPrompt();
         verification.cancel();
         uiWindow = null;
     });
+    uiWindow.webContents.on('did-start-loading', () => cancelStreamPrompt());
+    uiWindow.webContents.on('render-process-gone', () => cancelStreamPrompt());
 }
 
 // ============================================================================
@@ -188,6 +192,8 @@ function getCurrentState() {
         trackToken: track?.trackToken || null,
         audioURL: streamReclaimed ? null : track?.audioURL || null,
         streamBlocked: streamReclaimed,
+        streamPrompt: streamPrompt?.generation === playbackGeneration
+            ? { id: streamPrompt.id, pending: !streamPrompt.resolveChoice } : null,
         feedback: currentFeedback, // Send current feedback to UI
         trackIndex: currentTrackIndex,
         playlistLength: currentPlaylist.length,
@@ -218,6 +224,12 @@ function rememberTrack(track) {
     if (songHistory.length > 50) songHistory.shift();
 }
 
+function cancelStreamPrompt() {
+    const prompt = streamPrompt;
+    streamPrompt = null;
+    prompt?.resolveChoice?.(false);
+}
+
 function showStreamConflict(stationId, generation = playbackGeneration) {
     if (generation !== playbackGeneration || currentStation?.stationId !== stationId) return Promise.resolve();
     streamReclaimed = true;
@@ -225,27 +237,17 @@ function showStreamConflict(stationId, generation = playbackGeneration) {
     sendPlayerState(getCurrentState());
     if (streamPrompt) {
         if (streamPrompt.generation === generation) return streamPrompt.promise;
-        // A prior station's dialog cannot make the choice for this station.
-        return streamPrompt.promise.then(() => showStreamConflict(stationId, generation));
+        cancelStreamPrompt();
     }
     if (!uiWindow || uiWindow.isDestroyed()) return Promise.resolve();
 
-    const prompt = { generation };
+    const prompt = { id: ++nextStreamPromptId, generation };
+    const choice = new Promise(resolve => { prompt.resolveChoice = resolve; });
     streamPrompt = prompt;
     prompt.promise = (async () => {
         try {
-            // Native modal dialogs remain usable in the compact mini player.
-            const { response } = await dialog.showMessageBox(uiWindow, {
-                type: 'question',
-                title: 'Someone else is listening',
-                message: 'Your Pandora account is playing on another device.',
-                detail: 'Choose Let me listen to continue in Panedora, or Let them listen to keep this app paused.',
-                buttons: ['Let me listen', 'Let them listen'],
-                defaultId: 1,
-                cancelId: 1,
-                noLink: true
-            });
-            if (response !== 0 || generation !== playbackGeneration ||
+            const takeOver = await choice;
+            if (!takeOver || streamPrompt !== prompt || generation !== playbackGeneration ||
                 !uiWindow || uiWindow.isDestroyed()) return;
 
             const resumed = await api.playbackResumed(true);
@@ -276,11 +278,28 @@ function showStreamConflict(stationId, generation = playbackGeneration) {
                 sendToUI('UI:ERROR', { message: 'Could not switch playback to Panedora. Please try again.' });
             }
         } finally {
-            if (streamPrompt === prompt) streamPrompt = null;
+            if (streamPrompt === prompt) {
+                streamPrompt = null;
+                sendPlayerState(getCurrentState());
+            }
         }
     })();
+    sendPlayerState(getCurrentState());
     return prompt.promise;
 }
+
+ipcMain.handle('PLAYER:RESOLVE_STREAM_CONFLICT', (event, { promptId, takeOver } = {}) => {
+    const prompt = streamPrompt;
+    if (event.sender !== uiWindow?.webContents || !prompt?.resolveChoice ||
+        prompt.id !== promptId || prompt.generation !== playbackGeneration || typeof takeOver !== 'boolean') {
+        return { success: false };
+    }
+    const resolve = prompt.resolveChoice;
+    prompt.resolveChoice = null;
+    resolve(takeOver);
+    sendPlayerState(getCurrentState());
+    return { success: true };
+});
 
 async function resumePlayer() {
     if (stationLoading) return { success: false };
@@ -389,6 +408,7 @@ async function loadStations() {
 
 async function playStation(stationId, startingAtTrackId = null) {
     const generation = ++playbackGeneration;
+    cancelStreamPrompt();
     stationLoading = true;
     resetStationModes();
     isLoadingMoreTracks = false;
@@ -698,6 +718,7 @@ ipcMain.handle('AUTH:LOGIN', async (event, { username, password }) => {
 // Logout
 ipcMain.handle('AUTH:LOGOUT', async () => {
     playbackGeneration++;
+    cancelStreamPrompt();
     stationLoading = false;
     resetStationModes();
     try {

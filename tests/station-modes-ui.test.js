@@ -20,11 +20,18 @@ function setup(t) {
         url: 'https://panedora.test/', runScripts: 'outside-only', pretendToBeVisual: true
     });
     const { window } = dom;
+    window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+    window.HTMLDialogElement.prototype.close = function () { this.open = false; };
     const calls = [];
     const player = {
         getStationModes: async stationId => {
             calls.push(['get', stationId]);
             window.testUI.update({ stationModes: modes() });
+            return { success: true };
+        },
+        resolveStreamConflict: async (id, takeOver) => {
+            calls.push(['takeover', id, takeOver]);
+            window.testUI.update({ streamPrompt: null });
             return { success: true };
         },
         setStationMode: async (stationId, modeId) => {
@@ -37,7 +44,7 @@ function setup(t) {
     window.eval(fs.readFileSync(path.join(root, 'components.js'), 'utf8') + '\n' +
         fs.readFileSync(path.join(root, 'renderer.js'), 'utf8') + `
         document.removeEventListener('DOMContentLoaded', init);
-        window.testUI = { state: AppState, update: updatePlayerUI, render: renderPage };
+        window.testUI = { state: AppState, update: updatePlayerUI, render: renderPage, renderStations: renderStationsList };
         initEventListeners();
     `);
     const ui = window.testUI;
@@ -54,9 +61,8 @@ function setup(t) {
     const node = id => window.document.getElementById(id);
     const open = () => node('now-playing-art').click();
     const select = value => {
-        const element = node('np-mode-select');
-        element.value = String(value);
-        element.dispatchEvent(new window.Event('change'));
+        node('np-mode-select').click();
+        node('np-mode-option-' + value).click();
     };
     return { window, ui, player, calls, node, open, select };
 }
@@ -69,8 +75,8 @@ test('artwork opens tuning above history with only available API options and esc
     await tick();
     assert.deepEqual(s.calls, [['get', 'station-1']]);
     assert.equal(s.node('np-mode-select').value, '0');
-    assert.deepEqual(Array.from(s.node('np-mode-select').options, option => option.value), ['0', '1091989', '987654']);
-    assert.match(s.node('np-mode-select').options[2].textContent, /Curated <Mix>/);
+    assert.deepEqual(Array.from(s.node('np-mode-menu').children, option => option.dataset.modeId), ['0', '1091989', '987654']);
+    assert.match(s.node('np-mode-option-987654').textContent, /Curated <Mix>/);
     assert.match(s.node('np-mode-status').textContent, /starts a new song/);
     assert.equal(s.window.document.querySelector('#np-station-tuning mix'), null);
     assert.equal(s.node('np-station-tuning').nextElementSibling.className, 'np-history');
@@ -152,16 +158,16 @@ test('Artist Only appears only when the API offers it and marks it available, ev
     const s = setup(t);
     s.open();
     await tick();
-    assert.equal(s.window.document.querySelector('#np-mode-select option[value="5"]'), null);
+    assert.equal(s.window.document.querySelector('#np-mode-option-5'), null);
     const eligible = modes();
     eligible.modes.find(mode => mode.id === 5).available = true;
     s.ui.update({ stationModes: eligible });
-    assert.equal(s.window.document.querySelector('#np-mode-select option[value="5"]').disabled, false);
+    assert.equal(s.window.document.querySelector('#np-mode-option-5').disabled, false);
     s.select(5);
     await tick();
     assert.deepEqual(s.calls.at(-1), ['set', 'station-1', 5]);
     s.ui.update({ stationModes: modes(0, { modes: eligible.modes.filter(mode => mode.id !== 5) }) });
-    assert.equal(s.window.document.querySelector('#np-mode-select option[value="5"]'), null);
+    assert.equal(s.window.document.querySelector('#np-mode-option-5'), null);
 });
 
 test('Shuffle hides tuning and sends no mode requests; switching back restores eligible options', async t => {
@@ -229,4 +235,88 @@ test('restarting the same station loads fresh modes without waiting for an old r
     assert.equal(s.node('np-mode-select').value, '1091989');
     assert.equal(s.node('np-mode-select').disabled, false);
     assert.equal(s.node('np-mode-retry'), null);
+});
+
+test('the custom mode menu supports keyboard navigation, dismissal and stable focus', async t => {
+    const s = setup(t);
+    s.open();
+    await tick();
+    const key = name => s.window.document.activeElement.dispatchEvent(new s.window.KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true }));
+    s.node('np-mode-select').focus();
+    key('ArrowDown');
+    assert.equal(s.node('np-mode-select').getAttribute('aria-expanded'), 'true');
+    assert.equal(s.window.document.activeElement.id, 'np-mode-option-0');
+    key('ArrowDown');
+    assert.equal(s.window.document.activeElement.id, 'np-mode-option-1091989');
+    s.ui.update({ isPlaying: false });
+    assert.equal(s.window.document.activeElement.id, 'np-mode-option-1091989');
+    key('End');
+    assert.equal(s.window.document.activeElement.id, 'np-mode-option-987654');
+    key('Home');
+    key('Escape');
+    assert.equal(s.node('np-mode-menu').hidden, true);
+    assert.equal(s.window.document.activeElement.id, 'np-mode-select');
+    assert.equal(s.calls.some(call => call[0] === 'set'), false, 'Browsing or dismissing never changes the mode');
+    s.node('np-mode-select').click();
+    s.window.document.body.dispatchEvent(new s.window.Event('pointerdown', { bubbles: true }));
+    assert.equal(s.node('np-mode-menu').hidden, true);
+    s.node('np-mode-select').click();
+    s.node('np-back-btn').focus();
+    assert.equal(s.node('np-mode-menu').hidden, true, 'Tabbing out dismisses the menu');
+});
+
+test('sidebar follows station IDs and Shuffle across song changes and collection rerenders', t => {
+    const s = setup(t);
+    s.ui.state.stations = [
+        { id: 'station-1', name: 'First Radio', type: 'station' },
+        { id: 'station-2', name: 'The Current Artist Radio', type: 'station' }
+    ];
+    s.ui.renderStations();
+    const active = () => Array.from(s.window.document.querySelectorAll('#stations-list .active'), item => item.id || item.dataset.id);
+    assert.deepEqual(active(), ['station-1']);
+    s.ui.update({ artist: 'The Current Artist' });
+    assert.deepEqual(active(), ['station-1'], 'The song artist must not determine the station');
+    s.ui.update({ stationId: 'shuffle-id', isShuffle: true });
+    assert.deepEqual(active(), ['shuffle-stations-btn']);
+    s.ui.renderStations();
+    assert.deepEqual(active(), ['shuffle-stations-btn']);
+    assert.equal(s.node('shuffle-stations-btn').getAttribute('aria-current'), 'true');
+    s.ui.update({ stationId: 'station-2', isShuffle: false, track: null, stationLoading: true });
+    assert.deepEqual(active(), ['station-2'], 'Station selection updates even while the first song loads');
+    assert.equal(s.node('shuffle-stations-btn').hasAttribute('aria-current'), false);
+    s.ui.update({ stationId: null });
+    assert.deepEqual(active(), []);
+});
+
+test('the in-app listening dialog defaults to keeping playback paused and only submits explicit choices', async t => {
+    const s = setup(t);
+    s.ui.update({ streamBlocked: true, streamPrompt: { id: 7, pending: false } });
+    assert.equal(s.node('stream-conflict-dialog').open, true);
+    assert.equal(s.window.document.activeElement.id, 'stream-keep-listening');
+    assert.equal(s.calls.length, 0);
+    s.node('stream-conflict-dialog').dispatchEvent(new s.window.Event('cancel', { cancelable: true }));
+    await tick();
+    assert.deepEqual(s.calls, [['takeover', 7, false]]);
+    assert.equal(s.node('stream-conflict-dialog').open, false);
+    s.ui.update({ streamPrompt: { id: 8, pending: false } });
+    s.node('stream-dialog-close').click();
+    await tick();
+    assert.deepEqual(s.calls.at(-1), ['takeover', 8, false]);
+    let finish;
+    s.player.resolveStreamConflict = async (id, takeOver) => {
+        s.calls.push(['takeover', id, takeOver]);
+        return new Promise(resolve => { finish = resolve; });
+    };
+    s.ui.update({ streamPrompt: { id: 9, pending: false } });
+    s.node('stream-take-over').click();
+    s.node('stream-take-over').click();
+    s.node('stream-conflict-dialog').dispatchEvent(new s.window.Event('cancel', { cancelable: true }));
+    assert.equal(s.calls.filter(call => call[1] === 9).length, 1);
+    assert.deepEqual(s.calls.at(-1), ['takeover', 9, true]);
+    assert.equal(s.node('stream-keep-listening').disabled, true);
+    assert.equal(s.node('stream-dialog-status').hidden, false);
+    s.ui.update({ streamPrompt: null });
+    finish({ success: true });
+    await tick();
+    assert.equal(s.node('stream-conflict-dialog').open, false);
 });

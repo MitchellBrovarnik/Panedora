@@ -739,6 +739,7 @@ body::before {
 
 .station-item.active {
     color: var(--accent);
+    background: var(--accent-soft);
 }
 
 .station-name {
@@ -1886,20 +1887,79 @@ body::before {
 }
 
 .station-mode-select {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
     width: 100%;
-    padding: 10px 12px;
-    border: 1px solid var(--glass-border);
+    min-height: 46px;
+    padding: 11px 14px;
+    border: 1px solid var(--glass-border-hover);
     border-radius: var(--r-sm);
-    background: var(--glass);
+    background: var(--glass-hover);
     color: var(--text-1);
     font: inherit;
     font-size: 13px;
-    color-scheme: dark;
+    font-weight: 500;
+    text-align: left;
+    transition: background 150ms var(--ease), border-color 150ms var(--ease);
 }
 
-.station-mode-select option {
-    background: #202027;
-    color: #fff;
+.station-mode-select:not(:disabled):hover,
+.station-mode-select[aria-expanded="true"] {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+}
+
+.station-mode-select svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    color: var(--text-2);
+    transition: transform 150ms var(--ease);
+}
+
+.station-mode-select[aria-expanded="true"] svg { transform: rotate(180deg); }
+
+.station-mode-menu {
+    margin-top: 8px;
+    padding: 5px;
+    max-height: min(340px, 45vh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    border: 1px solid var(--glass-border-hover);
+    border-radius: var(--r-sm);
+    background: linear-gradient(var(--glass), var(--glass)), var(--bg-base);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
+}
+
+.station-mode-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 42px;
+    padding: 10px;
+    border-radius: 8px;
+    text-align: left;
+    color: var(--text-2);
+    font: inherit;
+}
+
+.station-mode-option + .station-mode-option { margin-top: 2px; }
+.station-mode-option:hover,
+.station-mode-option:focus-visible { background: var(--glass-hover); color: var(--text-1); }
+.station-mode-option[aria-selected="true"] { background: var(--accent-soft); color: var(--text-1); }
+.station-mode-option-copy { flex: 1; min-width: 0; }
+.station-mode-option-name { display: block; font-weight: 500; overflow-wrap: anywhere; }
+.station-mode-option-description { display: block; margin-top: 3px; color: var(--text-2); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
+.station-mode-option svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--accent); opacity: 0; }
+.station-mode-option[aria-selected="true"] svg { opacity: 1; }
+.station-mode-option:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+
+.station-mode-picker:has(.station-mode-select:disabled) .station-mode-menu {
+    display: none;
 }
 
 .station-mode-select:disabled {
@@ -1935,6 +1995,52 @@ body::before {
     font: inherit;
     font-size: 12px;
 }
+
+/* The listening choice belongs to the app, including the compact player. */
+.stream-dialog {
+    inset: 0;
+    margin: auto;
+    width: min(440px, calc(100vw - 40px));
+    max-height: calc(100vh - 40px);
+    padding: 28px;
+    overflow: auto;
+    border: 1px solid var(--glass-border-hover);
+    border-radius: var(--r-lg);
+    background: linear-gradient(145deg, var(--accent-soft), var(--glass)), var(--bg-base);
+    color: var(--text-1);
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+    -webkit-app-region: no-drag;
+}
+
+.stream-dialog::backdrop { background: rgba(4, 4, 12, 0.55); backdrop-filter: blur(7px); }
+.stream-dialog-icon { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 20px; border-radius: 15px; background: var(--accent-soft); color: var(--accent); }
+.stream-dialog-icon svg { width: 28px; height: 28px; }
+.stream-dialog h2 { padding-right: 6px; font-size: 22px; font-weight: 600; line-height: 1.3; letter-spacing: -0.4px; }
+.stream-dialog-copy p { margin-top: 12px; font-size: 13px; line-height: 1.65; color: var(--text-2); }
+.stream-dialog-copy .stream-dialog-status { color: var(--accent); }
+.stream-dialog-close { position: absolute; top: 14px; right: 14px; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: var(--text-2); }
+.stream-dialog-close svg { width: 16px; height: 16px; }
+.stream-dialog-close:hover { background: var(--glass-hover); color: var(--text-1); }
+.stream-dialog-actions { display: flex; gap: 10px; margin-top: 24px; }
+.stream-dialog-actions button { flex: 1; padding: 11px 14px; border: 1px solid var(--glass-border-hover); border-radius: var(--r-pill); font: inherit; font-weight: 600; white-space: nowrap; }
+.stream-dialog-secondary { background: var(--glass); color: var(--text-1); }
+.stream-dialog-secondary:hover { background: var(--glass-hover); }
+.stream-dialog-primary { background: var(--accent-grad); color: #fff; box-shadow: 0 4px 18px var(--accent-glow); }
+.stream-dialog-primary:hover { filter: brightness(1.12); }
+.stream-dialog button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.stream-dialog button:disabled { opacity: 0.55; cursor: default; }
+
+body.mini-mode .stream-dialog[open] { display: flex; align-items: center; gap: 10px; width: calc(100vw - 8px); max-width: none; max-height: calc(100vh - 8px); margin: auto; padding: 9px 12px; border-radius: 16px; }
+body.mini-mode .stream-dialog-icon { flex-shrink: 0; width: 30px; height: 30px; margin: 0; border-radius: 9px; }
+body.mini-mode .stream-dialog-icon svg { width: 21px; height: 21px; }
+body.mini-mode .stream-dialog-copy { flex: 1; min-width: 0; }
+body.mini-mode .stream-dialog h2 { padding: 0; font-size: 12px; letter-spacing: 0; }
+body.mini-mode .stream-dialog-copy p { margin-top: 3px; font-size: 10px; line-height: 1.3; }
+body.mini-mode .stream-dialog-copy p span,
+body.mini-mode .stream-dialog-close { display: none; }
+body.mini-mode .stream-dialog[aria-busy="true"] #stream-dialog-description { display: none; }
+body.mini-mode .stream-dialog-actions { flex-shrink: 0; gap: 6px; margin: 0; }
+body.mini-mode .stream-dialog-actions button { padding: 8px 10px; font-size: 11px; }
 
 .tune-title {
     font-size: 10px;

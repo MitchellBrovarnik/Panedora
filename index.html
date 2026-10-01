@@ -241,6 +241,24 @@
         </footer>
     </div>
 
+    <dialog class="stream-dialog" id="stream-conflict-dialog" aria-labelledby="stream-dialog-title" aria-describedby="stream-dialog-description">
+        <button class="stream-dialog-close" id="stream-dialog-close" type="button" aria-label="Keep Panedora paused">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+        </button>
+        <div class="stream-dialog-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="13" height="10" rx="2"/><path d="M6 18h7m-3-4v4"/><rect x="16" y="9" width="5" height="11" rx="1.5"/></svg>
+        </div>
+        <div class="stream-dialog-copy">
+            <h2 id="stream-dialog-title">Playing on another device</h2>
+            <p id="stream-dialog-description">Your Pandora account is listening somewhere else.<span> Switch playback here, or let them keep listening.</span></p>
+            <p class="stream-dialog-status" id="stream-dialog-status" role="status" hidden>Switching playback to Panedora…</p>
+        </div>
+        <div class="stream-dialog-actions">
+            <button class="stream-dialog-secondary" id="stream-keep-listening" type="button" autofocus>Let them listen</button>
+            <button class="stream-dialog-primary" id="stream-take-over" type="button">Let me listen</button>
+        </div>
+    </dialog>
+
     <script src="components.js"></script>
     <script src="visualizer.js"></script>
     <script src="renderer.js"></script>

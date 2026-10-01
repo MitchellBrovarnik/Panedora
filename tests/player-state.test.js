@@ -19,7 +19,7 @@ function modes(currentModeId = 0) {
 
 function setup() {
     const handlers = new Map();
-    const dialogs = [];
+    const prompts = [];
     const messages = [];
     const calls = [];
     const started = [];
@@ -27,8 +27,7 @@ function setup() {
     let activeMode = 0;
     const electron = {
         app: { commandLine: { appendSwitch() {} }, on() {}, whenReady: () => new Promise(() => {}) },
-        ipcMain: { handle: (name, fn) => handlers.set(name, fn) },
-        dialog: { showMessageBox: (parent, options) => new Promise(resolve => dialogs.push({ parent, options, resolve })) }
+        ipcMain: { handle: (name, fn) => handlers.set(name, fn) }
     };
     const api = {
         getPlaylist: async () => playlists.shift() || { tracks: [track()] },
@@ -41,7 +40,14 @@ function setup() {
         deleteFeedback: async id => { calls.push(['deleteFeedback', id]); return { success: true }; },
         logout() {}
     };
-    const window = { isDestroyed: () => false, webContents: { send: (name, data) => messages.push({ name, data }) } };
+    const window = { isDestroyed: () => false, webContents: { send: (name, data) => {
+        messages.push({ name, data });
+        if (name === 'UI:PLAYER_STATE' && data.streamPrompt && !prompts.some(p => p.id === data.streamPrompt.id)) {
+            const id = data.streamPrompt.id;
+            prompts.push({ id, choose: takeOver => handlers.get('PLAYER:RESOLVE_STREAM_CONFLICT')(
+                { sender: window.webContents }, { promptId: id, takeOver }) });
+        }
+    } } };
     const module = { exports: {} };
     const source = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8') + `
         api = testApi;
@@ -63,7 +69,7 @@ function setup() {
         setTimeout, clearTimeout,
         console: { log() {}, error() {} }
     });
-    return { ...module.exports, api, handlers, dialogs, messages, calls, started, playlists };
+    return { ...module.exports, api, handlers, prompts, window, messages, calls, started, playlists };
 }
 
 test('modes load on request, preserve zero, and reject unavailable or arbitrary selections', async () => {
@@ -211,10 +217,10 @@ test('resuming through a mode change still asks before device takeover', async (
     s.api.playbackResumed = async force => { s.calls.push(['resume', force]); return { success: false, streamConflict: true }; };
     const changing = s.changeStationMode('station-1', 1091989);
     await tick();
-    assert.equal(s.dialogs.length, 1);
+    assert.equal(s.prompts.length, 1);
     assert.equal(s.getCurrentState().streamBlocked, true);
     assert.deepEqual(s.calls.filter(call => call[0] === 'resume'), [['resume', false]]);
-    s.dialogs[0].resolve({ response: 1 });
+    s.prompts[0].choose(false);
     await changing;
     assert.equal(s.getCurrentState().isPlaying, false);
     assert.equal(s.started.length, 0);
@@ -352,7 +358,7 @@ test('a delayed pre-change playlist cannot overwrite tuning', async () => {
     await s.changeStationMode('station-1', 1091989);
     oldPlaylist({ tracks: [track(0, 'stale')], streamConflict: true });
     await pending;
-    assert.equal(s.dialogs.length, 0);
+    assert.equal(s.prompts.length, 0);
     assert.equal(s.getCurrentState().playlistLength, 4);
     assert.equal(s.getCurrentState().trackToken, 'tuned');
     await s.skipTrack();
@@ -417,10 +423,10 @@ test('mode change conflicts retain the explicit device choice and reset tuning a
         s.api.setStationMode = async () => ({ success: false, streamConflict: true });
         const pending = s.changeStationMode('station-1', 1091989);
         await tick();
-        assert.equal(s.dialogs.length, 1);
+        assert.equal(s.prompts.length, 1);
         assert.equal(s.calls.some(c => c[0] === 'resume'), false);
         assert.equal(s.getCurrentState().streamBlocked, true);
-        s.dialogs[0].resolve({ response });
+        s.prompts[0].choose(response === 0);
         await pending;
         assert.equal(s.getCurrentState().streamBlocked, response !== 0);
         if (response === 0) assert.equal(s.getCurrentState().stationModes.status, 'idle');
@@ -468,7 +474,7 @@ test('a skip conflict followed by takeover releases the queue refill guard', asy
     s.playlists.push({ tracks: [], streamConflict: true }, { tracks: [track(0, 'reclaimed')] });
     const skip = s.skipTrack();
     await tick();
-    s.dialogs[0].resolve({ response: 0 });
+    s.prompts[0].choose(true);
     await skip;
     s.playlists.push({ tracks: [track(0, 'next-after-takeover')] });
     await s.skipTrack();
@@ -480,12 +486,12 @@ test('Let them listen pauses without sending a takeover request', async () => {
     s.playlists.push({ tracks: [], streamConflict: true });
     const pending = s.playStation('station-1');
     await tick();
-    assert.equal(s.dialogs.length, 1);
+    assert.equal(s.prompts.length, 1);
     assert.equal(s.getCurrentState().streamBlocked, true);
     assert.equal(s.getCurrentState().audioURL, null);
     assert.deepEqual(s.calls, []);
-    assert.deepEqual(Array.from(s.dialogs[0].options.buttons), ['Let me listen', 'Let them listen']);
-    s.dialogs[0].resolve({ response: 1 });
+    assert.deepEqual(JSON.parse(JSON.stringify(s.getCurrentState().streamPrompt)), { id: s.prompts[0].id, pending: false });
+    s.prompts[0].choose(false);
     await pending;
     assert.equal(s.getCurrentState().isPlaying, false);
     assert.deepEqual(s.calls, []);
@@ -496,12 +502,43 @@ test('Let me listen takes over once and loads the new queue with saved feedback'
     s.playlists.push({ tracks: [], streamConflict: true }, { tracks: [track(1)] });
     const pending = s.playStation('station-1');
     await tick();
-    s.dialogs[0].resolve({ response: 0 });
+    s.prompts[0].choose(true);
     await pending;
     assert.deepEqual(s.calls, [['resume', true]]);
     assert.equal(s.getCurrentState().streamBlocked, false);
     assert.equal(s.getCurrentState().isPlaying, true);
     assert.equal(s.getCurrentState().feedback, 'thumbUp');
+});
+
+test('in-app takeover requires the current prompt, the app renderer, and an explicit boolean choice', async () => {
+    const s = setup();
+    s.seed([track()]);
+    const pending = s.showStreamConflict('station-1');
+    const handler = s.handlers.get('PLAYER:RESOLVE_STREAM_CONFLICT');
+    const promptId = s.prompts[0].id;
+    for (const [sender, payload] of [
+        [{}, { promptId, takeOver: true }],
+        [s.window.webContents, { promptId: promptId + 1, takeOver: true }],
+        [s.window.webContents, { promptId, takeOver: 'true' }]
+    ]) assert.equal(handler({ sender }, payload).success, false);
+    assert.equal(s.calls.length, 0);
+    assert.equal(s.prompts[0].choose(false).success, true);
+    assert.equal(s.prompts[0].choose(true).success, false, 'A answered prompt cannot be reused');
+    await pending;
+    assert.equal(s.calls.length, 0);
+    assert.equal(s.getCurrentState().streamPrompt, null);
+    assert.equal(s.getCurrentState().isPlaying, false);
+});
+
+test('switching stations cancels the pending in-app prompt without waiting for a response', async () => {
+    const s = setup();
+    s.seed([track()]);
+    const pending = s.showStreamConflict('station-1');
+    await s.playStation('station-2');
+    await pending;
+    assert.equal(s.getCurrentState().streamPrompt, null);
+    assert.equal(s.prompts[0].choose(true).success, false);
+    assert.equal(s.calls.length, 0);
 });
 
 test('concurrent detections share one choice and rejected takeover does not loop', async () => {
@@ -511,10 +548,10 @@ test('concurrent detections share one choice and rejected takeover does not loop
     const first = s.showStreamConflict('station-1');
     const second = s.showStreamConflict('station-1');
     assert.equal(first, second);
-    assert.equal(s.dialogs.length, 1);
-    s.dialogs[0].resolve({ response: 0 });
+    assert.equal(s.prompts.length, 1);
+    s.prompts[0].choose(true);
     await first;
-    assert.equal(s.dialogs.length, 1);
+    assert.equal(s.prompts.length, 1);
     assert.equal(s.getCurrentState().isPlaying, false);
     assert.equal(s.calls.length, 1);
 });
@@ -524,9 +561,9 @@ test('a repeated playlist conflict after takeover stays paused without another p
     s.playlists.push({ tracks: [], streamConflict: true }, { tracks: [], streamConflict: true, error: 'Still blocked' });
     const pending = s.playStation('station-1');
     await tick();
-    s.dialogs[0].resolve({ response: 0 });
+    s.prompts[0].choose(true);
     await pending;
-    assert.equal(s.dialogs.length, 1);
+    assert.equal(s.prompts.length, 1);
     assert.equal(s.getCurrentState().streamBlocked, true);
     assert.equal(s.getCurrentState().isPlaying, false);
 });
@@ -542,14 +579,14 @@ test('a late pre-takeover playlist conflict cannot stop successfully reclaimed p
     };
     const oldRequest = s.handlers.get('PLAYER:GET_MORE_TRACKS')();
     const choice = s.showStreamConflict('station-1');
-    s.dialogs[0].resolve({ response: 0 });
+    s.prompts[0].choose(true);
     await choice;
     finishOldRequest({ tracks: [], streamConflict: true });
     await tick();
     // Clean up the unexpected dialog on the unfixed implementation before asserting.
-    if (s.dialogs[1]) s.dialogs[1].resolve({ response: 1 });
+    if (s.prompts[1]) s.prompts[1].choose(false);
     await oldRequest;
-    assert.equal(s.dialogs.length, 1);
+    assert.equal(s.prompts.length, 1);
     assert.equal(s.getCurrentState().trackToken, 'reclaimed-track');
     assert.equal(s.getCurrentState().isPlaying, true);
 });
@@ -559,7 +596,7 @@ test('an old popup cannot reclaim playback after switching stations', async () =
     s.seed([track()]);
     const pending = s.showStreamConflict('station-1');
     await s.playStation('station-2');
-    s.dialogs[0].resolve({ response: 0 });
+    s.prompts[0].choose(true);
     await pending;
     assert.equal(s.getCurrentState().stationId, 'station-2');
     assert.deepEqual(s.calls, []);
@@ -572,12 +609,12 @@ test('a conflict on the newly selected station gets its own choice after an old 
     s.playlists.push({ tracks: [], streamConflict: true }, { tracks: [track(1)] });
     const nextStation = s.playStation('station-2');
     await tick();
-    s.dialogs[0].resolve({ response: 0 });
+    s.prompts[0].choose(true);
     await oldPrompt;
     await tick();
     assert.deepEqual(s.calls, [], 'The old choice must not reclaim the new station');
-    assert.equal(s.dialogs.length, 2);
-    s.dialogs[1].resolve({ response: 0 });
+    assert.equal(s.prompts.length, 2);
+    s.prompts[1].choose(true);
     await nextStation;
     assert.equal(s.getCurrentState().stationId, 'station-2');
     assert.equal(s.getCurrentState().isPlaying, true);
@@ -589,7 +626,7 @@ test('an old popup cannot reclaim playback after sign-out', async () => {
     s.seed([track()]);
     const pending = s.showStreamConflict('station-1');
     await s.handlers.get('AUTH:LOGOUT')();
-    s.dialogs[0].resolve({ response: 0 });
+    s.prompts[0].choose(true);
     await pending;
     assert.deepEqual(s.calls, []);
     assert.equal(s.getCurrentState().trackToken, null);
@@ -599,7 +636,7 @@ test('ordinary playlist errors do not open a device conflict popup', async () =>
     const s = setup();
     s.playlists.push({ tracks: [], error: 'Network error' });
     await s.playStation('station-1');
-    assert.equal(s.dialogs.length, 0);
+    assert.equal(s.prompts.length, 0);
     assert.equal(s.getCurrentState().streamBlocked, false);
 });
 
@@ -610,7 +647,7 @@ test('normal pause and resume notify Pandora without forcing takeover', async ()
     await s.pausePlayer();
     await s.resumePlayer();
     assert.deepEqual(s.calls, [['pause'], ['resume', false]]);
-    assert.equal(s.dialogs.length, 0);
+    assert.equal(s.prompts.length, 0);
     assert.equal(s.getCurrentState().feedback, 'thumbUp');
 });
 
