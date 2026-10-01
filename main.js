@@ -581,7 +581,8 @@ function changeStationMode(stationId, modeId) {
                     await showStreamConflict(stationId, operation.generation);
                     return { success: false };
                 }
-                if (!actual.success || actual.currentModeId !== modeId) {
+                if (!actual.success || !actual.available || actual.currentModeId !== modeId ||
+                    !actual.modes?.some(item => item.id === modeId && item.available)) {
                     stationModes = actual.modes
                         ? { ...actual, status: 'ready', error: result.error }
                         : { ...emptyStationModes(), status: 'error', error: result.error };
@@ -609,7 +610,8 @@ function changeStationMode(stationId, modeId) {
                 stationModes = { ...emptyStationModes(), status: 'error', error: confirmed.error };
                 return { success: false };
             }
-            const keptMode = confirmed.currentModeId === modeId;
+            const keptMode = confirmed.available && confirmed.currentModeId === modeId &&
+                confirmed.modes?.some(item => item.id === modeId && item.available);
             const nextTrack = playlist.tracks?.[0];
             const canAdvance = !!(keptMode && !playlist.error && nextTrack?.audioURL && nextTrack?.trackToken);
             stationModes = {

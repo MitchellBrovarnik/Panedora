@@ -406,6 +406,35 @@ test('lost setter responses recover from confirmed read-back; failed verificatio
     assert.equal(s.getCurrentState().trackToken, 'recovered-mode-song');
 });
 
+test('mode read-back cannot start a song when station or account eligibility is revoked', async () => {
+    for (const lostSetter of [false, true]) {
+        for (const stationUnavailable of [false, true]) {
+            const s = setup();
+            s.seed([track()]);
+            await s.loadStationModes('station-1');
+            s.pausePlayer();
+            const revoked = modes(1091989);
+            if (stationUnavailable) revoked.available = false;
+            else revoked.modes.find(mode => mode.id === 1091989).available = false;
+            s.api.setStationMode = async () => lostSetter
+                ? { success: false, error: 'Subscription verification failed' }
+                : modes(1091989);
+            s.api.getStationModes = async () => revoked;
+            let playlists = 0;
+            s.api.getPlaylist = async () => {
+                playlists++;
+                return { tracks: [track(0, 'unavailable-mode-song')] };
+            };
+            assert.equal((await s.changeStationMode('station-1', 1091989)).success, false);
+            assert.equal(s.getCurrentState().trackToken, 'track-1');
+            assert.equal(s.getCurrentState().isPlaying, false);
+            assert.equal(s.started.length, 0);
+            assert.equal(playlists, lostSetter ? 0 : 1);
+            assert.ok(s.getCurrentState().stationModes.error);
+        }
+    }
+});
+
 test('a delayed pre-change playlist cannot overwrite tuning', async () => {
     const s = setup();
     s.seed([track()]);

@@ -25,10 +25,13 @@ function setup(responses) {
     };
     const config = {
         getAuthToken: () => state.authToken,
+        getCsrfToken: () => state.csrfToken,
+        getCredentials: () => state.credentials,
         setAuthToken: value => { state.authToken = value; },
         setCsrfToken: value => { state.csrfToken = value; },
         setCredentials: (email, password) => { state.credentials = { email, password }; },
-        setListenerId: value => { state.listenerId = value; }
+        setListenerId: value => { state.listenerId = value; },
+        clearAll: () => { state.authToken = null; state.credentials = null; }
     };
     const API = loadModule(path.join(__dirname, '..', 'pandora-api.js'), { electron, './config': config });
     return { api: new API(), state, cookies, calls };
@@ -36,6 +39,7 @@ function setup(responses) {
 
 const blocked = () => ({ status: 403, body: { ...challenge } });
 const paid = () => ({ status: 200, body: { authToken: 'new-token', listenerId: 'listener', config: { branding: 'PandoraPlus' } } });
+const premium = () => ({ status: 200, body: { authToken: 'premium-token', config: { branding: 'PandoraPremium', flags: ['onDemand'] } } });
 
 function modeResponse(currentModeId = 0) {
     return {
@@ -69,11 +73,14 @@ test('station modes use the interactive-radio endpoint and normalize actual IDs 
 
 test('setting a mode sends its numeric API ID and requires the returned mode to match', async () => {
     for (const currentModeId of [1091989, '1091989', 0, null]) {
-        const { api, calls } = setup([{ status: 200, body: modeResponse(currentModeId) }]);
+        const { api, calls } = setup([
+            { status: 200, body: modeResponse() },
+            { status: 200, body: modeResponse(currentModeId) }
+        ]);
         const result = await api.setStationMode('station-1', 1091989);
         assert.equal(result.success, Number(currentModeId) === 1091989);
-        assert.equal(calls[0].url, 'https://www.pandora.com/api/v1/interactiveradio/setAndGetAvailableModes');
-        assert.deepEqual(JSON.parse(calls[0].body), { stationId: 'station-1', modeId: 1091989 });
+        assert.equal(calls[1].url, 'https://www.pandora.com/api/v1/interactiveradio/setAndGetAvailableModes');
+        assert.deepEqual(JSON.parse(calls[1].body), { stationId: 'station-1', modeId: 1091989 });
     }
 });
 
@@ -97,6 +104,102 @@ test('invalid IDs are rejected without requests and mode conflicts never force t
     const result = await api.setStationMode('station-1', 1091989);
     assert.equal(result.streamConflict, true);
     assert.equal(calls.length, 1);
+});
+
+test('Artist Only is hidden for Plus, unknown and stored-token accounts even when offered by the station', async () => {
+    for (const login of [null, paid(), {
+        status: 200, body: { authToken: 'plus-token', config: {
+            branding: 'PandoraPlus', flags: ['onDemand', 'adFreeSkip', 'highQualityStreamingAvailable']
+        }, highQualityStreamingEnabled: true }
+    }, { status: 200, body: { authToken: 'unknown-token', config: { branding: 'UnknownPaidPlan' } } }]) {
+        const available = modeResponse();
+        available.availableModes.find(mode => mode.modeId === 5).isModeAvailable = true;
+        const { api, calls } = setup([
+            ...(login ? [login] : []),
+            { status: 200, body: available },
+            { status: 200, body: available }
+        ]);
+        if (login) assert.equal((await api.login('test@example.invalid', 'test-password')).success, true);
+        const modes = await api.getStationModes('station-1');
+        assert.equal(modes.modes.find(mode => mode.id === 5).available, false);
+        assert.equal(modes.modes.find(mode => mode.id === 1091989).available, true);
+        assert.equal((await api.setStationMode('station-1', 5)).success, false);
+        assert.equal(calls.some(call => call.url.endsWith('/setAndGetAvailableModes')), false);
+    }
+});
+
+test('verified Premium still requires an eligible station and does not depend on the premium-only flag', async () => {
+    for (const eligible of [true, false]) {
+        const available = modeResponse();
+        const artistOnly = available.availableModes.find(mode => mode.modeId === 5);
+        artistOnly.isModeAvailable = eligible;
+        delete artistOnly.isPremiumOnly;
+        const { api } = setup([premium(), { status: 200, body: available }]);
+        await api.login('test@example.invalid', 'test-password');
+        const result = await api.getStationModes('station-1');
+        assert.equal(result.modes.find(mode => mode.id === 5).available, eligible);
+        assert.equal(result.modes.find(mode => mode.id === 5).premiumOnly, true);
+    }
+});
+
+test('Premium-only selections recheck the account and require Pandora to confirm the mode', async () => {
+    const available = modeResponse();
+    available.availableModes.find(mode => mode.modeId === 5).isModeAvailable = true;
+    const confirmed = { ...available, currentModeId: 5 };
+    const { api, calls } = setup([
+        premium(), { status: 200, body: available }, premium(), { status: 200, body: confirmed }
+    ]);
+    await api.login('test@example.invalid', 'test-password');
+    assert.equal((await api.setStationMode('station-1', 5)).success, true);
+    assert.deepEqual(calls.slice(1).map(call => new URL(call.url).pathname), [
+        '/api/v1/interactiveradio/getAvailableModesSimple',
+        '/api/v1/auth/login',
+        '/api/v1/interactiveradio/setAndGetAvailableModes'
+    ]);
+});
+
+test('downgrades, failed verification and missing credentials block Premium mode requests', async () => {
+    const available = modeResponse();
+    available.availableModes.find(mode => mode.modeId === 5).isModeAvailable = true;
+    for (const nextLogin of [paid(), { status: 401, body: { message: 'Session expired' } }, null]) {
+        const { api, state, calls } = setup([
+            premium(), { status: 200, body: available }, ...(nextLogin ? [nextLogin] : []),
+            { status: 200, body: available }
+        ]);
+        await api.login('test@example.invalid', 'test-password');
+        if (!nextLogin) state.credentials = null;
+        assert.equal((await api.setStationMode('station-1', 5)).success, false);
+        assert.equal(calls.some(call => call.url.endsWith('/setAndGetAvailableModes')), false);
+        assert.equal(api.hasPremiumAccess(), false);
+        assert.equal((await api.getStationModes('station-1')).modes.find(mode => mode.id === 5).available, false);
+    }
+});
+
+test('unoffered, unavailable and unconfirmed modes cannot succeed through a direct API call', async () => {
+    for (const id of [5, 987654]) {
+        const { api, calls } = setup([{ status: 200, body: modeResponse() }]);
+        assert.equal((await api.setStationMode('station-1', id)).success, false);
+        assert.equal(calls.length, 1);
+    }
+    for (const stationUnavailable of [false, true]) {
+        const revoked = modeResponse(1091989);
+        if (stationUnavailable) revoked.interactiveRadioAvailable = false;
+        else revoked.availableModes.find(mode => mode.modeId === 1091989).isModeAvailable = false;
+        const { api } = setup([{ status: 200, body: modeResponse() }, { status: 200, body: revoked }]);
+        assert.equal((await api.setStationMode('station-1', 1091989)).success, false);
+    }
+});
+
+test('Premium proof is cleared when logging out or restoring a saved token', async () => {
+    const { api } = setup([premium(), premium()]);
+    await api.login('test@example.invalid', 'test-password');
+    assert.equal(api.hasPremiumAccess(), true);
+    api.restoreAuth();
+    assert.equal(api.hasPremiumAccess(), false);
+    await api.login('test@example.invalid', 'test-password');
+    assert.equal(api.hasPremiumAccess(), true);
+    api.logout();
+    assert.equal(api.hasPremiumAccess(), false);
 });
 
 test('blocked sign-in waits for verification and uses its cookies for one retry', async () => {
