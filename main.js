@@ -3,7 +3,7 @@
  * Direct API-based architecture (no hidden browser)
  */
 
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
 
 // Disable GPU caching to prevent 'Access is denied' cache_util_win errors on Windows startup
@@ -29,6 +29,10 @@ let savedBounds = null; // Save window position/size before entering mini mode
 let isLoadingMoreTracks = false;
 let streamReclaimed = false;
 let isPaused = false; // Track pause state so we don't force-play on state updates
+let playbackGeneration = 0;
+let streamPrompt = null;
+let pauseRevision = 0;
+let resumeOperation = null;
 
 // ============================================================================
 // Window Creation
@@ -50,13 +54,14 @@ function createUIWindow() {
         }
     });
 
-    uiWindow.loadFile('index.html');
+    uiWindow.loadFile(path.join(__dirname, 'index.html'));
 
     if (process.argv.includes('--dev')) {
         uiWindow.webContents.openDevTools();
     }
 
     uiWindow.on('closed', () => {
+        playbackGeneration++;
         verification.cancel();
         uiWindow = null;
     });
@@ -142,16 +147,7 @@ function sendStations(stations) {
 
 function getCurrentState() {
     const track = currentPlaylist[currentTrackIndex];
-    let currentFeedback = null;
-
-    if (track) {
-        // Find current track in history to get active feedback
-        const histItem = songHistory.find(h => h.trackToken === track.trackToken);
-        if (histItem) {
-            if (histItem.feedback === 'liked') currentFeedback = 'thumbUp';
-            else if (histItem.feedback === 'disliked') currentFeedback = 'thumbDown';
-        }
-    }
+    const currentFeedback = feedbackForTrack(track);
 
     return {
         track: track?.songTitle || null,
@@ -162,14 +158,156 @@ function getCurrentState() {
         coverArt: PandoraAPI.getHighResArt(track?.albumArt),
         time: 0, // UI will track via audio element
         duration: track?.trackLength || 0,
-        isPlaying: !!(track?.audioURL) && !isPaused, // Respect pause state
+        isPlaying: !!(track?.audioURL) && !isPaused && !streamReclaimed,
         trackToken: track?.trackToken || null,
-        audioURL: track?.audioURL || null,
+        audioURL: streamReclaimed ? null : track?.audioURL || null,
+        streamBlocked: streamReclaimed,
         feedback: currentFeedback, // Send current feedback to UI
         trackIndex: currentTrackIndex,
         playlistLength: currentPlaylist.length,
         history: songHistory.slice(-20) // Send last 20 played
     };
+}
+
+function feedbackForTrack(track) {
+    // REST playlists use rating; older playlist formats use songRating.
+    const rating = Number(track?.rating ?? track?.songRating);
+    if (rating === 1) return 'thumbUp';
+    if (rating === -1) return 'thumbDown';
+    return null;
+}
+
+function rememberTrack(track) {
+    if (!track || songHistory[songHistory.length - 1]?.trackToken === track.trackToken) return;
+    const feedback = feedbackForTrack(track);
+    songHistory.push({
+        songTitle: track.songTitle,
+        artistName: track.artistName,
+        albumTitle: track.albumTitle,
+        coverArt: PandoraAPI.getHighResArt(track.albumArt),
+        trackToken: track.trackToken,
+        feedbackId: track.feedbackId || null,
+        feedback: feedback === 'thumbUp' ? 'liked' : feedback === 'thumbDown' ? 'disliked' : null
+    });
+    if (songHistory.length > 50) songHistory.shift();
+}
+
+function showStreamConflict(stationId, generation = playbackGeneration) {
+    if (generation !== playbackGeneration || currentStation?.stationId !== stationId) return Promise.resolve();
+    streamReclaimed = true;
+    isPaused = true;
+    sendPlayerState(getCurrentState());
+    if (streamPrompt) {
+        if (streamPrompt.generation === generation) return streamPrompt.promise;
+        // A prior station's dialog cannot make the choice for this station.
+        return streamPrompt.promise.then(() => showStreamConflict(stationId, generation));
+    }
+    if (!uiWindow || uiWindow.isDestroyed()) return Promise.resolve();
+
+    const prompt = { generation };
+    streamPrompt = prompt;
+    prompt.promise = (async () => {
+        try {
+            // Native modal dialogs remain usable in the compact mini player.
+            const { response } = await dialog.showMessageBox(uiWindow, {
+                type: 'question',
+                title: 'Someone else is listening',
+                message: 'Your Pandora account is playing on another device.',
+                detail: 'Choose Let me listen to continue in Panedora, or Let them listen to keep this app paused.',
+                buttons: ['Let me listen', 'Let them listen'],
+                defaultId: 1,
+                cancelId: 1,
+                noLink: true
+            });
+            if (response !== 0 || generation !== playbackGeneration ||
+                !uiWindow || uiWindow.isDestroyed()) return;
+
+            const resumed = await api.playbackResumed(true);
+            if (generation !== playbackGeneration) return;
+            if (!resumed.success) {
+                sendToUI('UI:ERROR', { message: resumed.error });
+                return;
+            }
+            const result = await api.getPlaylist(stationId, true);
+            if (generation !== playbackGeneration) return;
+            if (result.streamConflict || result.error || !result.tracks?.length) {
+                sendToUI('UI:ERROR', { message: result.error || 'No tracks available. Please try playing the station again.' });
+                return;
+            }
+            // Discard playlist responses requested before this successful takeover.
+            playbackGeneration++;
+            currentPlaylist = result.tracks;
+            currentTrackIndex = 0;
+            streamReclaimed = false;
+            isPaused = false;
+            rememberTrack(currentPlaylist[0]);
+            api.trackStarted(stationId, currentPlaylist[0].trackToken);
+            sendPlayerState(getCurrentState());
+        } catch (error) {
+            if (generation === playbackGeneration) {
+                sendToUI('UI:ERROR', { message: 'Could not switch playback to Panedora. Please try again.' });
+            }
+        } finally {
+            if (streamPrompt === prompt) streamPrompt = null;
+        }
+    })();
+    return prompt.promise;
+}
+
+async function resumePlayer() {
+    if (!currentStation) return { success: false, error: 'Select a station first.' };
+    if (streamReclaimed) {
+        await showStreamConflict(currentStation.stationId);
+        return { success: !streamReclaimed && !isPaused };
+    }
+    if (!currentPlaylist[currentTrackIndex]?.audioURL) {
+        await playStation(currentStation.stationId);
+        return { success: !isPaused && !streamReclaimed };
+    }
+    if (!isPaused) return { success: true };
+    if (resumeOperation?.generation === playbackGeneration) return resumeOperation.promise;
+    const operation = { generation: playbackGeneration, pauseRevision };
+    resumeOperation = operation;
+    operation.promise = (async () => {
+        try {
+            const result = await api.playbackResumed(false);
+            if (operation.generation !== playbackGeneration) return { success: false };
+            // A later pause must win over a slow resume response.
+            if (operation.pauseRevision !== pauseRevision) {
+                if (result.success && isPaused && !streamReclaimed) {
+                    await api.playbackPaused(currentStation.stationId, currentPlaylist[currentTrackIndex]?.trackToken);
+                }
+                return { success: false };
+            }
+            if (result.streamConflict) {
+                await showStreamConflict(currentStation.stationId, operation.generation);
+                return { success: !streamReclaimed && !isPaused };
+            }
+            if (!result.success) {
+                isPaused = true;
+                sendPlayerState({ ...getCurrentState(), pausePlayback: true });
+                sendToUI('UI:ERROR', { message: result.error });
+                return result;
+            }
+            isPaused = false;
+            sendPlayerState({ ...getCurrentState(), resumePlayback: true });
+            return { success: true };
+        } finally {
+            if (resumeOperation === operation) resumeOperation = null;
+        }
+    })();
+    return operation.promise;
+}
+
+async function pausePlayer() {
+    pauseRevision++;
+    const wasPlaying = !isPaused && !streamReclaimed;
+    isPaused = true;
+    const track = currentPlaylist[currentTrackIndex];
+    if (wasPlaying && currentStation && track?.trackToken) {
+        await api.playbackPaused(currentStation.stationId, track.trackToken);
+    }
+    return { success: true };
 }
 
 // ============================================================================
@@ -214,110 +352,66 @@ async function loadStations() {
 }
 
 async function playStation(stationId, startingAtTrackId = null) {
-    if (currentStation) {
-        // Pause the existing stream cleanly before fetching a new one
-        const track = currentPlaylist[currentTrackIndex];
-        if (track && track.trackToken) {
-            await api.playbackPaused(currentStation.stationId, track.trackToken);
-        }
+    const generation = ++playbackGeneration;
+    const previousTrack = currentPlaylist[currentTrackIndex];
+    isPaused = true;
+    sendPlayerState({ ...getCurrentState(), pausePlayback: true });
+    if (!streamReclaimed && currentStation && previousTrack?.trackToken) {
+        await api.playbackPaused(currentStation.stationId, previousTrack.trackToken);
     }
-
-    currentStation = currentStations.find(s => s.stationId === stationId);
+    if (generation !== playbackGeneration) return getCurrentState();
+    currentStation = currentStations.find(s => s.stationId === stationId) || { stationId };
     streamReclaimed = false;
-    const playlistResult = await api.getPlaylist(stationId, true, startingAtTrackId);
-    currentPlaylist = playlistResult.tracks || [];
-    if (playlistResult.error) {
-        sendToUI('UI:ERROR', { message: playlistResult.error });
-    }
-
+    currentPlaylist = [];
     currentTrackIndex = 0;
-    isPaused = false; // New station = start playing
-
-    if (currentPlaylist.length > 0) {
-        // Report track started
-        const track = currentPlaylist[0];
-        api.trackStarted(stationId, track.trackToken);
-
-        // Record first track in history (cap at 50)
-        if (!songHistory.length || songHistory[songHistory.length - 1].trackToken !== track.trackToken) {
-            songHistory.push({
-                songTitle: track.songTitle,
-                artistName: track.artistName,
-                albumTitle: track.albumTitle,
-                coverArt: PandoraAPI.getHighResArt(track.albumArt),
-                trackToken: track.trackToken,
-                feedback: track.songRating === 1 ? 'liked' : null
-            });
-            if (songHistory.length > 50) songHistory.shift();
-        }
+    const result = await api.getPlaylist(stationId, true, startingAtTrackId);
+    if (generation !== playbackGeneration) return getCurrentState();
+    if (result.streamConflict) {
+        await showStreamConflict(stationId, generation);
+        return getCurrentState();
     }
-
+    currentPlaylist = result.tracks || [];
+    isPaused = currentPlaylist.length === 0;
+    if (result.error) sendToUI('UI:ERROR', { message: result.error });
+    if (currentPlaylist.length) {
+        rememberTrack(currentPlaylist[0]);
+        api.trackStarted(stationId, currentPlaylist[0].trackToken);
+    }
     sendPlayerState(getCurrentState());
     return getCurrentState();
 }
 
 async function skipTrack() {
-    // If stream was already reclaimed, block the skip immediately
-    if (streamReclaimed) {
-        sendToUI('UI:ERROR', { message: 'Another device is streaming. Playback stopped.' });
-        return getCurrentState();
-    }
-
-    isPaused = false; // Skipping implies intent to play
+    if (streamReclaimed) return getCurrentState();
+    const generation = playbackGeneration;
+    isPaused = false;
     currentTrackIndex++;
-
-    // Prefetch when 2 tracks remain (fast-fail — no 12s retry for background fetches)
     if (currentTrackIndex >= currentPlaylist.length - 2 && currentStation && !isLoadingMoreTracks) {
         isLoadingMoreTracks = true;
         try {
-            const result = await api.getPlaylist(currentStation.stationId, false, null, { skipRetry: true });
-            if (result.tracks?.length > 0) {
-                currentPlaylist.push(...result.tracks);
-            } else if (result.error) {
-                // Stream was reclaimed — trim buffer and flag it
-                streamReclaimed = true;
-                currentPlaylist = currentPlaylist.slice(0, currentTrackIndex + 1);
+            const result = await api.getPlaylist(currentStation.stationId);
+            if (generation !== playbackGeneration) return getCurrentState();
+            if (result.streamConflict) {
+                await showStreamConflict(currentStation.stationId, generation);
+                return getCurrentState();
             }
+            if (result.tracks?.length) currentPlaylist.push(...result.tracks);
+            else if (result.error) sendToUI('UI:ERROR', { message: result.error });
         } finally {
             isLoadingMoreTracks = false;
         }
     }
-
-    // No more tracks left
     if (currentTrackIndex >= currentPlaylist.length) {
-        streamReclaimed = true;
-        if (currentPlaylist.length === 0) {
-            currentTrackIndex = 0;
-            sendToUI('UI:ERROR', { message: 'No tracks available.' });
-            return getCurrentState();
-        }
-        sendToUI('UI:ERROR', { message: 'Another device is streaming. Playback stopped.' });
-        currentTrackIndex = currentPlaylist.length - 1;
+        currentTrackIndex = Math.max(0, currentPlaylist.length - 1);
+        isPaused = true;
+        sendToUI('UI:ERROR', { message: 'No more tracks available. Please try playing the station again.' });
+        sendPlayerState({ ...getCurrentState(), pausePlayback: true });
+        return getCurrentState();
     }
-
-    if (currentTrackIndex < currentPlaylist.length) {
-        const track = currentPlaylist[currentTrackIndex];
-        if (track && track.trackToken) {
-            api.trackStarted(currentStation?.stationId, track.trackToken);
-        }
-    }
-
+    const track = currentPlaylist[currentTrackIndex];
+    rememberTrack(track);
+    if (track?.trackToken) api.trackStarted(currentStation?.stationId, track.trackToken);
     sendPlayerState(getCurrentState());
-
-    // Record in history (skip duplicates, cap at 50)
-    const nowTrack = currentPlaylist[currentTrackIndex];
-    if (nowTrack && (!songHistory.length || songHistory[songHistory.length - 1].trackToken !== nowTrack.trackToken)) {
-        songHistory.push({
-            songTitle: nowTrack.songTitle,
-            artistName: nowTrack.artistName,
-            albumTitle: nowTrack.albumTitle,
-            coverArt: PandoraAPI.getHighResArt(nowTrack.albumArt),
-            trackToken: nowTrack.trackToken,
-            feedback: nowTrack.songRating === 1 ? 'liked' : null
-        });
-        if (songHistory.length > 50) songHistory.shift();
-    }
-
     return getCurrentState();
 }
 
@@ -327,35 +421,33 @@ async function replayTrack() {
     return getCurrentState();
 }
 
-async function thumbUp() {
+async function setTrackFeedback(isPositive) {
     const track = currentPlaylist[currentTrackIndex];
-    if (track?.trackToken) {
-        const result = await api.addFeedback(track.trackToken, true);
-        // Mark in history with feedbackId for undo
-        const histItem = songHistory.find(h => h.trackToken === track.trackToken);
-        if (histItem) {
-            histItem.feedback = 'liked';
-            histItem.feedbackId = result.feedbackId || null;
-        }
-        // Push updated history to UI
+    if (!track?.trackToken) return { success: false, error: 'No track selected.' };
+    const rating = isPositive ? 1 : -1;
+    if (feedbackForTrack(track) === (isPositive ? 'thumbUp' : 'thumbDown')) return { success: true };
+    const generation = playbackGeneration;
+    const result = await api.addFeedback(track.trackToken, isPositive);
+    if (!result.success) {
         sendPlayerState(getCurrentState());
+        return { success: false, error: 'Could not save your thumb. Please try again.' };
     }
+    track.rating = rating;
+    track.songRating = rating;
+    track.feedbackId = result.feedbackId || null;
+    const histItem = songHistory.find(h => h.trackToken === track.trackToken);
+    if (histItem) {
+        histItem.feedback = isPositive ? 'liked' : 'disliked';
+        histItem.feedbackId = track.feedbackId;
+    }
+    if (!isPositive && generation === playbackGeneration && currentPlaylist[currentTrackIndex] === track) {
+        await skipTrack();
+    } else sendPlayerState(getCurrentState());
+    return { success: true };
 }
 
-async function thumbDown() {
-    const track = currentPlaylist[currentTrackIndex];
-    if (track?.trackToken) {
-        const result = await api.addFeedback(track.trackToken, false);
-        // Mark in history with feedbackId for undo
-        const histItem = songHistory.find(h => h.trackToken === track.trackToken);
-        if (histItem) {
-            histItem.feedback = 'disliked';
-            histItem.feedbackId = result.feedbackId || null;
-        }
-        // Auto-skip on thumbs down
-        return skipTrack();
-    }
-}
+async function thumbUp() { return setTrackFeedback(true); }
+async function thumbDown() { return setTrackFeedback(false); }
 
 // ============================================================================
 // IPC Handlers
@@ -398,10 +490,11 @@ ipcMain.handle('AUTH:LOGIN', async (event, { username, password }) => {
 
 // Logout
 ipcMain.handle('AUTH:LOGOUT', async () => {
+    playbackGeneration++;
     try {
         // Tell Pandora to stop the stream for this session so it doesn't hang
         const track = currentPlaylist[currentTrackIndex];
-        if (currentStation && track && track.trackToken) {
+        if (!streamReclaimed && currentStation && track && track.trackToken) {
             await api.playbackPaused(currentStation.stationId, track.trackToken);
         }
 
@@ -412,6 +505,10 @@ ipcMain.handle('AUTH:LOGOUT', async () => {
 
     // Clear playback state
     currentPlaylist = [];
+    currentStation = null;
+    streamReclaimed = false;
+    isPaused = true;
+    songHistory = [];
     currentTrackIndex = -1;
     sendPlayerState(getCurrentState());
 
@@ -427,20 +524,15 @@ ipcMain.handle('PLAYER:CMD', async (event, { action, value }) => {
         case 'prev':
             return await replayTrack();
         case 'thumbUp':
-            await thumbUp();
-            return { success: true };
+            return await thumbUp();
         case 'thumbDown':
-            await thumbDown();
-            return { success: true };
+            return await thumbDown();
         case 'toggle':
-            isPaused = !isPaused;
-            return { success: true, action };
+            return isPaused || streamReclaimed ? await resumePlayer() : await pausePlayer();
         case 'play':
-            isPaused = false;
-            return { success: true, action };
+            return await resumePlayer();
         case 'pause':
-            isPaused = true;
-            return { success: true, action };
+            return await pausePlayer();
         case 'volume':
             return { success: true, volume: value };
         case 'seek':
@@ -453,16 +545,18 @@ ipcMain.handle('PLAYER:CMD', async (event, { action, value }) => {
 // Undo feedback
 ipcMain.handle('PLAYER:UNDO_FEEDBACK', async (event, { trackToken }) => {
     const histItem = songHistory.find(h => h.trackToken === trackToken);
-    if (histItem && histItem.feedbackId) {
-        const result = await api.deleteFeedback(histItem.feedbackId);
-        if (result.success) {
-            histItem.feedback = null;
-            histItem.feedbackId = null;
-            sendPlayerState(getCurrentState());
-        }
-        return result;
+    const track = currentPlaylist.find(t => t.trackToken === trackToken);
+    const feedbackId = track?.feedbackId || histItem?.feedbackId;
+    if (!feedbackId) {
+        return { success: false, error: 'This saved thumb could not be removed here. You can change it in Pandora.' };
     }
-    return { success: false, error: 'No feedback to undo' };
+    const result = await api.deleteFeedback(feedbackId);
+    if (result.success) {
+        if (track) { track.rating = 0; track.songRating = 0; track.feedbackId = null; }
+        if (histItem) { histItem.feedback = null; histItem.feedbackId = null; }
+        sendPlayerState(getCurrentState());
+    }
+    return result.success ? result : { success: false, error: 'Could not remove your thumb. Please try again.' };
 });
 
 // Play a station or item
@@ -637,16 +731,18 @@ ipcMain.handle('CONTENT:FETCH_LYRICS', async (event, artist, title) => {
 
 // Get more tracks
 ipcMain.handle('PLAYER:GET_MORE_TRACKS', async () => {
-    if (!currentStation) return { tracks: [] };
-
-    const result = await api.getPlaylist(currentStation.stationId, false, null, { skipRetry: true });
+    if (!currentStation || streamReclaimed) return { tracks: [] };
+    const generation = playbackGeneration;
+    const stationId = currentStation.stationId;
+    const result = await api.getPlaylist(stationId);
+    if (generation !== playbackGeneration) return { tracks: [] };
+    if (result.streamConflict) {
+        await showStreamConflict(stationId, generation);
+        return { tracks: [] };
+    }
     const moreTracks = result.tracks || [];
     currentPlaylist.push(...moreTracks);
-
-    if (moreTracks.length === 0 && result.error) {
-        streamReclaimed = true;
-    }
-
+    if (result.error) sendToUI('UI:ERROR', { message: result.error });
     return {
         tracks: moreTracks.map(t => ({
             audioURL: t.audioURL,
@@ -695,15 +791,19 @@ app.whenReady().then(() => {
                     console.log('[Main] Auto-relogin successful.');
 
                     // Refresh the playlist so audio URLs aren't expired
-                    if (currentStation) {
-                        const currentTrack = currentPlaylist[currentTrackIndex];
+                    if (currentStation && !streamReclaimed) {
+                        const generation = playbackGeneration;
+                        const stationId = currentStation.stationId;
                         console.log('[Main] Refreshing playlist for current station...');
-                        const playlistResult = await api.getPlaylist(currentStation.stationId, false, null, { skipRetry: true });
-                        if (playlistResult.tracks?.length > 0) {
+                        const playlistResult = await api.getPlaylist(stationId);
+                        if (generation === playbackGeneration && !streamReclaimed && playlistResult.streamConflict) {
+                            await showStreamConflict(stationId, generation);
+                        } else if (generation === playbackGeneration && !streamReclaimed && playlistResult.tracks?.length > 0) {
                             // Replace remaining tracks with fresh ones
                             currentPlaylist = currentPlaylist.slice(0, currentTrackIndex).concat(playlistResult.tracks);
                             // Stay on the first fresh track
                             currentTrackIndex = Math.min(currentTrackIndex, currentPlaylist.length - 1);
+                            rememberTrack(currentPlaylist[currentTrackIndex]);
                             sendPlayerState(getCurrentState());
                         }
                     }

@@ -331,7 +331,7 @@ function renderSearchPage() {
                 song.title,
                 song.artist,
                 '--:--',
-                song.coverArt
+                song.image || song.coverArt
             );
         });
         html += `
@@ -1173,44 +1173,8 @@ function renderNowPlayingPage() {
         document.getElementById('np-thumbdown')?.classList.add('disliked');
     }
 
-    // Thumb up — toggle liked state & call API or Undo
-    document.getElementById('np-thumbup')?.addEventListener('click', function () {
-        if (!rateLimitOk('thumb')) return;
-        const isCurrentlyLiked = this.classList.contains('liked');
-        const token = AppState.playerState.trackToken;
-
-        if (isCurrentlyLiked) {
-            // Undo the like
-            this.classList.remove('liked');
-            DOM.heartBtn?.classList.remove('liked');
-            if (token) window.api.player.undoFeedback(token);
-        } else {
-            // Add the like
-            this.classList.add('liked');
-            document.getElementById('np-thumbdown')?.classList.remove('disliked');
-            window.api.player.thumbUp();
-            DOM.heartBtn?.classList.add('liked');
-        }
-    });
-
-    // Thumb down — toggle disliked state & call API or Undo
-    document.getElementById('np-thumbdown')?.addEventListener('click', function () {
-        if (!rateLimitOk('thumb')) return;
-        const isCurrentlyDisliked = this.classList.contains('disliked');
-        const token = AppState.playerState.trackToken;
-
-        if (isCurrentlyDisliked) {
-            // Undo the dislike (if they somehow manage to click it before it skips)
-            this.classList.remove('disliked');
-            if (token) window.api.player.undoFeedback(token);
-        } else {
-            // Add the dislike
-            this.classList.add('disliked');
-            document.getElementById('np-thumbup')?.classList.remove('liked');
-            DOM.heartBtn?.classList.remove('liked');
-            window.api.player.thumbDown();
-        }
-    });
+    document.getElementById('np-thumbup')?.addEventListener('click', () => handleThumb(true));
+    document.getElementById('np-thumbdown')?.addEventListener('click', () => handleThumb(false));
 
     // History undo-dislike handlers
     document.querySelectorAll('.history-undo-btn').forEach(btn => {
@@ -1619,6 +1583,25 @@ function updatePlayerUI(state) {
     }
 }
 
+let feedbackPending = false;
+async function handleThumb(isPositive) {
+    if (feedbackPending || !AppState.playerState.trackToken || !rateLimitOk('thumb')) return;
+    feedbackPending = true;
+    try {
+        const wanted = isPositive ? 'thumbUp' : 'thumbDown';
+        const result = AppState.playerState.feedback === wanted
+            ? await window.api.player.undoFeedback(AppState.playerState.trackToken)
+            : await (isPositive ? window.api.player.thumbUp() : window.api.player.thumbDown());
+        if (!result?.success) showErrorToast(result?.error || 'Could not update your thumb. Please try again.');
+    } catch {
+        showErrorToast('Could not update your thumb. Please try again.');
+    } finally {
+        feedbackPending = false;
+        // Main sends the confirmed rating. Failed writes leave it unchanged.
+        updatePlayerUI({});
+    }
+}
+
 // ============================================================================
 // Player Controls
 // ============================================================================
@@ -1669,11 +1652,12 @@ function initEventListeners() {
     // Player controls
     DOM.playPauseBtn.addEventListener('click', () => {
         const audioEl = document.querySelector('audio');
-        if (audioEl) {
-            // Just toggle the audio element; the 'play'/'pause' event listeners
-            // on the audio element will handle syncing UI and notifying main.
+        if (AppState.playerState.streamBlocked || !AppState.playerState.audioURL) {
+            window.api.player.play();
+        } else if (audioEl) {
             if (audioEl.paused) {
-                audioEl.play().catch(e => console.error(e));
+                // Wait for Pandora's resume approval before playing buffered audio.
+                window.api.player.play();
             } else {
                 audioEl.pause();
             }
@@ -1684,11 +1668,7 @@ function initEventListeners() {
     });
     // DOM.prevBtn event listener moved down
     DOM.nextBtn.addEventListener('click', () => { if (rateLimitOk('skip')) window.api.player.next(); });
-    DOM.heartBtn.addEventListener('click', () => {
-        if (!rateLimitOk('thumb')) return;
-        DOM.heartBtn.classList.toggle('liked');
-        window.api.player.thumbUp();
-    });
+    DOM.heartBtn.addEventListener('click', () => handleThumb(true));
 
     // Handle window resizes (like toggling mini player mode) to recalculate scrolling text limits
     window.addEventListener('resize', debounce(() => {
@@ -1720,9 +1700,7 @@ function initEventListeners() {
             // If more than 3 sec in, restart current track
             audioEl.currentTime = 0;
             if (audioEl.paused) {
-                audioEl.play().catch(e => console.error(e));
-                AppState.playerState.isPlaying = true;
-                updatePlayerUI(AppState.playerState);
+                window.api.player.play();
             }
         } else {
             // Otherwise go to previous track
@@ -1790,49 +1768,8 @@ function initEventListeners() {
     if (titleMaxBtn) titleMaxBtn.addEventListener('click', () => window.api.window.maximize());
     if (titleCloseBtn) titleCloseBtn.addEventListener('click', () => window.api.window.close());
 
-    // Mini player thumb up/down buttons
-    const miniThumbUp = document.getElementById('mini-thumb-up');
-    const miniThumbDown = document.getElementById('mini-thumb-down');
-    if (miniThumbUp) {
-        miniThumbUp.addEventListener('click', async () => {
-            if (!rateLimitOk('thumb')) return;
-            const state = AppState.playerState;
-            if (state.feedback === 'thumbUp' && state.trackToken) {
-                // Already liked — undo it
-                const result = await window.api.player.undoFeedback(state.trackToken);
-                if (result && result.success) {
-                    miniThumbUp.classList.remove('liked');
-                    state.feedback = null;
-                }
-            } else {
-                // Not liked — send thumb up (show immediate feedback)
-                miniThumbUp.classList.add('liked');
-                miniThumbDown?.classList.remove('disliked');
-                state.feedback = 'thumbUp';
-                await window.api.player.thumbUp();
-            }
-        });
-    }
-    if (miniThumbDown) {
-        miniThumbDown.addEventListener('click', async () => {
-            if (!rateLimitOk('thumb')) return;
-            const state = AppState.playerState;
-            if (state.feedback === 'thumbDown' && state.trackToken) {
-                // Already disliked — undo it
-                const result = await window.api.player.undoFeedback(state.trackToken);
-                if (result && result.success) {
-                    miniThumbDown.classList.remove('disliked');
-                    state.feedback = null;
-                }
-            } else {
-                // Not disliked — send thumb down (show immediate feedback, skip will reset for new track)
-                miniThumbDown.classList.add('disliked');
-                miniThumbUp?.classList.remove('liked');
-                state.feedback = 'thumbDown';
-                await window.api.player.thumbDown();
-            }
-        });
-    }
+    document.getElementById('mini-thumb-up')?.addEventListener('click', () => handleThumb(true));
+    document.getElementById('mini-thumb-down')?.addEventListener('click', () => handleThumb(false));
 
     // Progress bar seeking
     DOM.progressBar.addEventListener('click', (e) => {
@@ -1864,6 +1801,7 @@ function initAPIListeners() {
     // Player state updates
     window.api.onState((state) => {
         updatePlayerUI(state);
+        if ((state.streamBlocked || state.pausePlayback) && currentAudio) currentAudio.pause();
 
         // Audio Playback override
         if (state.audioURL) {
@@ -1938,15 +1876,17 @@ function initAPIListeners() {
                         if (currentAudio && currentAudio.currentTime > 3) {
                             currentAudio.currentTime = 0;
                             if (currentAudio.paused) {
-                                currentAudio.play().catch(e => console.error(e));
+                                window.api.player.play();
                             }
                         } else {
                             window.api.player.prev();
                         }
                     });
                     navigator.mediaSession.setActionHandler('play', () => {
-                        if (currentAudio && currentAudio.paused) {
-                            currentAudio.play().catch(e => console.error(e));
+                        if (AppState.playerState.streamBlocked) {
+                            window.api.player.play();
+                        } else if (currentAudio && currentAudio.paused) {
+                            window.api.player.play();
                         }
                     });
                     navigator.mediaSession.setActionHandler('pause', () => {
@@ -1961,7 +1901,7 @@ function initAPIListeners() {
             if (currentAudio.src !== state.audioURL) {
                 console.log('[UI] Loading new audio source');
                 currentAudio.src = state.audioURL;
-                currentAudio.play().then(() => {
+                if (state.isPlaying !== false) currentAudio.play().then(() => {
                     consecutiveErrors = 0; // Reset on successful play
 
                     // Web Audio API requires a user gesture. This is a safe place to init.
@@ -1986,13 +1926,10 @@ function initAPIListeners() {
                     });
                 }
 
-                // Reset feedback state and buttons for the new track
-                AppState.playerState.feedback = null;
-                document.getElementById('np-thumbup')?.classList.remove('liked');
-                document.getElementById('np-thumbdown')?.classList.remove('disliked');
-                document.getElementById('mini-thumb-up')?.classList.remove('liked');
-                document.getElementById('mini-thumb-down')?.classList.remove('disliked');
-                DOM.heartBtn?.classList.remove('liked');
+                // updatePlayerUI already applied Pandora's saved feedback.
+                // Loading the audio must not clear the track's thumb state.
+            } else if (state.resumePlayback && currentAudio.paused) {
+                currentAudio.play().catch(e => console.error('[UI] Resume error:', e));
             }
         } else if (state.audioURL === null && currentAudio) {
             // Clear audio if specifically set to null
