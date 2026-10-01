@@ -233,12 +233,49 @@ app.whenReady().then(async () => {
     const fragments = calls.filter(c => c.path.endsWith('/getFragment'));
     assert.equal(fragments[fragments.length - 1].body.isStationStart, false);
     assert.deepEqual(calls.find(c => c.path.endsWith('/setAndGetAvailableModes')).body, { stationId: 'fixture-station', modeId: 1091989 });
+    await run("document.querySelectorAll('.error-toast').forEach(toast => toast.remove())");
     await capture('station-tuning');
+    const tuningLayout = () => run(`({
+        panelHeight: document.getElementById('np-station-tuning').getBoundingClientRect().height,
+        historyTop: document.querySelector('.np-history').getBoundingClientRect().top,
+        scrollTop: document.getElementById('main-scroll').scrollTop
+    })`);
+    const menuFits = () => run(`(() => {
+        const menu = document.getElementById('np-mode-menu');
+        const bounds = menu.getBoundingClientRect();
+        const viewport = document.getElementById('main-scroll').getBoundingClientRect();
+        return !menu.hidden && bounds.top >= viewport.top && bounds.bottom <= viewport.bottom &&
+            bounds.left >= viewport.left && bounds.right <= viewport.right;
+    })()`);
+    const closedLayout = await tuningLayout();
     await run("document.getElementById('np-mode-select').click()");
     assert.equal(await run("document.getElementById('np-mode-menu').hidden"), false);
+    assert.deepEqual(await tuningLayout(), closedLayout, 'Opening the menu must not grow the panel, move history or scroll the page');
+    assert.equal(await menuFits(), true, 'All dropdown controls fit the content viewport');
+    assert.equal(await run(`(() => {
+        const menu = document.getElementById('np-mode-menu');
+        const bounds = menu.getBoundingClientRect();
+        const history = document.querySelector('.np-history').getBoundingClientRect();
+        return menu.contains(document.elementFromPoint(bounds.left + bounds.width / 2, Math.max(bounds.top, history.top) + 8));
+    })()`), true, 'The dropdown draws above history instead of behind it');
     await capture('station-mode-menu');
     win.setSize(900, 600);
-    await run("document.getElementById('np-mode-select').scrollIntoView({block:'center'})");
+    await waitFor(() => run('innerWidth === 900 && innerHeight === 600'), 'small player dimensions');
+    await waitFor(menuFits, 'floating menu repositioned after resize');
+    await run("closeStationModeMenu(); document.getElementById('np-mode-select').scrollIntoView({block:'center'})");
+    const smallClosedLayout = await tuningLayout();
+    await run("document.getElementById('np-mode-select').click()");
+    assert.deepEqual(await tuningLayout(), smallClosedLayout, 'The small window also keeps the panel and history still');
+    assert.equal(await menuFits(), true);
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'End' });
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'End' });
+    await waitFor(() => run("document.activeElement.id === 'np-mode-option-987654'"), 'last dropdown option');
+    assert.deepEqual(await tuningLayout(), smallClosedLayout, 'Keyboard navigation scrolls only the menu');
+    assert.equal(await run(`(() => {
+        const option = document.activeElement.getBoundingClientRect();
+        const menu = document.getElementById('np-mode-menu').getBoundingClientRect();
+        return option.top >= menu.top && option.bottom <= menu.bottom;
+    })()`), true, 'The last option remains visible in the constrained menu');
     await capture('station-tuning-small');
     win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
     win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });

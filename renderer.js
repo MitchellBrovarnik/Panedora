@@ -1282,8 +1282,9 @@ function renderStationModes() {
         if (select.disabled) return;
         menu.hidden = false;
         select.setAttribute('aria-expanded', 'true');
+        positionStationModeMenu();
         const selected = menu.querySelector('[aria-selected="true"]');
-        (selected || optionButtons[last ? optionButtons.length - 1 : 0])?.focus();
+        focusStationModeOption(selected || optionButtons[last ? optionButtons.length - 1 : 0]);
     };
     select.addEventListener('click', () => menu.hidden ? openMenu() : closeStationModeMenu());
     picker.addEventListener('focusout', event => {
@@ -1300,7 +1301,7 @@ function renderStationModes() {
             const index = optionButtons.indexOf(document.activeElement);
             const next = event.key === 'Home' ? 0 : event.key === 'End' ? optionButtons.length - 1
                 : (index + (event.key === 'ArrowDown' ? 1 : -1) + optionButtons.length) % optionButtons.length;
-            optionButtons[next]?.focus();
+            focusStationModeOption(optionButtons[next]);
         }
     });
     optionButtons.forEach(option => option.addEventListener('click', async () => {
@@ -1324,6 +1325,39 @@ function renderStationModes() {
     }));
     document.getElementById('np-mode-retry')?.addEventListener('click', () => requestStationModes());
     if (restoreFocus && !disabled) select?.focus();
+}
+
+function focusStationModeOption(option) {
+    if (!option) return;
+    option.focus({ preventScroll: true });
+    // Scroll the options, never the page/history behind this floating menu.
+    const menu = option.parentElement;
+    if (option.offsetTop < menu.scrollTop) menu.scrollTop = option.offsetTop;
+    else if (option.offsetTop + option.offsetHeight > menu.scrollTop + menu.clientHeight) {
+        menu.scrollTop = option.offsetTop + option.offsetHeight - menu.clientHeight;
+    }
+}
+
+function positionStationModeMenu() {
+    const menu = document.getElementById('np-mode-menu');
+    const trigger = document.getElementById('np-mode-select');
+    if (!menu || menu.hidden || !trigger) return;
+    const anchor = trigger.getBoundingClientRect();
+    if (!anchor.width) return;
+    const viewport = document.getElementById('main-scroll').getBoundingClientRect();
+    const top = Math.max(0, viewport.top) + 8;
+    const bottom = Math.min(window.innerHeight, viewport.bottom) - 8;
+    if (anchor.bottom <= top || anchor.top >= bottom) {
+        closeStationModeMenu();
+        return;
+    }
+    const below = Math.max(0, bottom - anchor.bottom - 6);
+    const above = Math.max(0, anchor.top - top - 6);
+    const height = Math.min(282, menu.scrollHeight + 2);
+    const opensAbove = below < height && above > below;
+    menu.dataset.placement = opensAbove ? 'above' : 'below';
+    menu.style.maxHeight = Math.min(282, opensAbove ? above : below) + 'px';
+    if (menu.contains(document.activeElement)) focusStationModeOption(document.activeElement);
 }
 
 function closeStationModeMenu(restoreFocus = false) {
@@ -1892,6 +1926,8 @@ function initEventListeners() {
     document.addEventListener('pointerdown', event => {
         if (!event.target.closest('.station-mode-picker')) closeStationModeMenu();
     });
+    window.addEventListener('resize', positionStationModeMenu);
+    document.getElementById('main-scroll').addEventListener('scroll', positionStationModeMenu);
     // Navigation
     DOM.navItems.forEach(item => {
         item.addEventListener('click', (e) => {
