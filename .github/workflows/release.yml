@@ -1,18 +1,35 @@
 name: Build and Release
 
 on:
+  push:
+    tags:
+      - 'v*'
   release:
     types: [published]
 
+permissions:
+  contents: read
+
+# Creating a release with a new tag can emit both events. Serialize the
+# entire pipeline so uploads for the same version cannot overlap.
+concurrency:
+  group: panedora-release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
-    permissions:
-      contents: write
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        include:
+          - os: windows-latest
+            platform: win
+          - os: ubuntu-latest
+            platform: linux
+          - os: macos-latest
+            platform: mac
 
     steps:
       - name: Check out Git repository
@@ -76,8 +93,40 @@ jobs:
             cd ..
             npx electron-builder --linux --config electron-builder.config.js -p never
 
-      - name: Upload artifacts to release
-        shell: bash
-        run: gh release upload "$GITHUB_REF_NAME" release/*.*  --clobber
+      - name: Save release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: panedora-${{ matrix.platform }}
+          if-no-files-found: error
+          path: |
+            release/*.exe
+            release/*.dmg
+            release/*.AppImage
+            release/*.deb
+            release/*.blockmap
+            release/latest*.yml
+
+  release:
+    name: Upload release assets
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: panedora-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create or update GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          fail_on_unmatched_files: true
+          overwrite_files: true
+          generate_release_notes: true
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
