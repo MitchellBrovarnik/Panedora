@@ -121,12 +121,31 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      - name: Check existing release notes
+        id: release-notes
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const tag = context.payload.release?.tag_name || context.ref.replace(/^refs\/tags\//, '');
+            let generate = true;
+            try {
+              const { data: release } = await github.rest.repos.getReleaseByTag({
+                ...context.repo, tag
+              });
+              generate = !release.body?.trim();
+            } catch (error) {
+              // A new tag may not have a release yet. Other API failures must
+              // fail the upload job instead of regenerating existing notes.
+              if (error.status !== 404) throw error;
+            }
+            core.setOutput('generate', generate);
+
       - name: Create or update GitHub release
         uses: softprops/action-gh-release@v2
         with:
           files: artifacts/*
           fail_on_unmatched_files: true
           overwrite_files: true
-          generate_release_notes: true
+          generate_release_notes: ${{ steps.release-notes.outputs.generate == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

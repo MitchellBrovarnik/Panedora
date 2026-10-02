@@ -73,7 +73,7 @@ function setup(t) {
     return { window, ui, player, calls, node, open, select, events };
 }
 
-test('update notice is compact in content, escapes versions and restores focus without changing playback', async t => {
+test('update banner escapes versions and leaves focus, navigation and playback alone', async t => {
     const s = setup(t);
     const responses = [];
     s.window.api.updates = {
@@ -82,49 +82,69 @@ test('update notice is compact in content, escapes versions and restores focus w
     };
     const previous = s.node('play-pause-btn');
     previous.focus();
+    assert.equal(s.node('main-header').hidden, true, 'Home has no empty update row');
     await s.ui.checkUpdates();
-    assert.equal(s.node('update-dialog').open, true);
+    assert.equal(s.node('update-banner').hidden, false);
+    assert.equal(s.node('main-header').hidden, false);
     assert.equal(s.node('update-available-version').textContent, '<b>1.2.0</b>');
     assert.equal(s.node('update-available-version').children.length, 0);
-    assert.equal(s.window.document.activeElement.id, 'update-later');
+    assert.equal(s.window.document.activeElement, previous);
+    assert.equal(s.window.document.querySelector('dialog[open]'), null);
+    s.ui.render('search');
+    s.node('search-input').focus();
+    assert.equal(s.window.document.activeElement, s.node('search-input'));
+    assert.equal(s.node('update-banner').hidden, false);
+    s.ui.render('home');
+    previous.focus();
     s.node('update-download').click();
     s.node('update-download').click();
     await tick();
     assert.deepEqual(responses, [['<b>1.2.0</b>', 'download']]);
-    assert.equal(s.node('update-dialog').open, false);
+    assert.equal(s.node('update-banner').hidden, true);
+    assert.equal(s.node('main-header').hidden, true, 'Dismissing the pill removes its empty row');
     assert.equal(s.window.document.activeElement, previous);
     assert.equal(s.ui.state.playerState.isPlaying, true);
     assert.deepEqual(s.calls, []);
+    s.ui.render('search');
+    assert.equal(s.node('main-header').hidden, false, 'Search keeps its input after update dismissal');
+    assert.equal(s.node('search-container').style.display, 'block');
+    s.ui.render('home');
+    assert.equal(s.node('main-header').hidden, true);
 });
 
-test('update notice waits for mini mode and higher priority dialogs, preserving its original focus', async t => {
+test('update banner waits for mini mode and higher priority dialogs without taking focus', async t => {
     const s = setup(t);
     s.window.api.updates = { check: async () => ({ version: '1.2.0', currentVersion: '1.1.3' }),
         respond: async () => ({ success: true }) };
     s.events.MiniMode({ isMini: true });
     await s.ui.checkUpdates();
-    assert.equal(s.node('update-dialog').open, false);
+    assert.equal(s.node('update-banner').hidden, true);
     s.events.MiniMode({ isMini: false });
-    assert.equal(s.node('update-dialog').open, true);
+    assert.equal(s.node('update-banner').hidden, false);
     s.ui.update({ streamPrompt: { id: 1, pending: false } });
-    assert.equal(s.node('update-dialog').open, false);
+    assert.equal(s.node('update-banner').hidden, true);
     assert.equal(s.node('stream-conflict-dialog').open, true);
     s.ui.update({ streamPrompt: null });
     assert.equal(s.node('stream-conflict-dialog').open, false);
-    assert.equal(s.node('update-dialog').open, true);
+    assert.equal(s.node('update-banner').hidden, false);
     s.ui.openRemoval({ id: 'station-1', name: 'Fixture Station' });
-    assert.equal(s.node('update-dialog').open, false);
+    assert.equal(s.node('update-banner').hidden, true);
     assert.equal(s.node('station-remove-dialog').open, true);
     s.ui.closeRemoval();
     assert.equal(s.node('station-remove-dialog').open, false);
-    assert.equal(s.node('update-dialog').open, true);
-    s.node('update-close').click();
+    assert.equal(s.node('update-banner').hidden, false);
+    s.ui.render('search');
+    s.events.MiniMode({ isMini: true });
+    s.node('search-input').focus();
+    s.events.MiniMode({ isMini: false });
+    assert.equal(s.window.document.activeElement, s.node('search-input'));
+    s.node('update-later').click();
     await tick();
-    assert.equal(s.node('update-dialog').open, false);
+    assert.equal(s.node('update-banner').hidden, true);
     assert.equal(s.ui.state.playerState.isPlaying, true);
 });
 
-test('update choice remains open and retryable on IPC errors; Escape is Later', async t => {
+test('update banner errors are retryable, disable only its buttons and leave Escape alone', async t => {
     const s = setup(t);
     const responses = [];
     let fail = true;
@@ -133,28 +153,47 @@ test('update choice remains open and retryable on IPC errors; Escape is Later', 
     await s.ui.checkUpdates();
     s.node('update-download').click();
     assert.equal(s.node('update-later').disabled, true);
+    assert.equal(s.node('play-pause-btn').disabled, false);
     await tick();
-    assert.equal(s.node('update-dialog').open, true);
+    assert.equal(s.node('update-banner').hidden, false);
     assert.equal(s.node('update-download').disabled, false);
     assert.match(s.node('update-error').textContent, /Please try again/);
     fail = false;
-    const cancel = new s.window.Event('cancel', { cancelable: true });
-    s.node('update-dialog').dispatchEvent(cancel);
-    assert.equal(cancel.defaultPrevented, true);
+    const escape = new s.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    s.window.document.dispatchEvent(escape);
+    assert.equal(escape.defaultPrevented, false);
+    assert.equal(s.node('update-banner').hidden, false);
+    assert.equal(responses.length, 1);
+    s.node('update-later').click();
     await tick();
     assert.deepEqual(responses, [['1.2.0', 'download'], ['1.2.0', 'later']]);
-    assert.equal(s.node('update-dialog').open, false);
+    assert.equal(s.node('update-banner').hidden, true);
 });
 
-test('failed and empty background update checks do not show a dialog or disturb playback', async t => {
+test('failed and empty background update checks keep the banner hidden and playback unchanged', async t => {
     const s = setup(t);
     s.window.api.updates = { check: async () => { throw new Error('Offline'); } };
     await s.ui.checkUpdates();
     s.window.api.updates.check = async () => null;
     await s.ui.checkUpdates();
-    assert.equal(s.node('update-dialog').open, false);
+    assert.equal(s.node('update-banner').hidden, true);
     assert.equal(s.ui.state.playerState.isPlaying, true);
     assert.deepEqual(s.calls, []);
+});
+
+test('a background update notice preserves an open station mode menu and its focus', async t => {
+    const s = setup(t);
+    s.open();
+    await tick();
+    s.node('np-mode-select').click();
+    const focusedOption = s.window.document.activeElement;
+    assert.equal(s.node('np-mode-menu').hidden, false);
+    s.window.api.updates = { check: async () => ({ version: '1.2.0', currentVersion: '1.1.3' }) };
+    await s.ui.checkUpdates();
+    assert.equal(s.node('update-banner').hidden, false);
+    assert.equal(s.node('np-mode-menu').hidden, false);
+    assert.equal(s.window.document.activeElement, focusedOption);
+    assert.equal(s.ui.state.playerState.isPlaying, true);
 });
 
 test('footer thumbs follow the visible player through expanded view, mini mode and navigation', async t => {
