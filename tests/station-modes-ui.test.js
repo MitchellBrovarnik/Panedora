@@ -82,8 +82,10 @@ test('update banner escapes versions and leaves focus, navigation and playback a
     };
     const previous = s.node('play-pause-btn');
     previous.focus();
+    assert.equal(s.node('main-header').hidden, true, 'Home has no empty update row');
     await s.ui.checkUpdates();
     assert.equal(s.node('update-banner').hidden, false);
+    assert.equal(s.node('main-header').hidden, false);
     assert.equal(s.node('update-available-version').textContent, '<b>1.2.0</b>');
     assert.equal(s.node('update-available-version').children.length, 0);
     assert.equal(s.window.document.activeElement, previous);
@@ -99,9 +101,15 @@ test('update banner escapes versions and leaves focus, navigation and playback a
     await tick();
     assert.deepEqual(responses, [['<b>1.2.0</b>', 'download']]);
     assert.equal(s.node('update-banner').hidden, true);
+    assert.equal(s.node('main-header').hidden, true, 'Dismissing the pill removes its empty row');
     assert.equal(s.window.document.activeElement, previous);
     assert.equal(s.ui.state.playerState.isPlaying, true);
     assert.deepEqual(s.calls, []);
+    s.ui.render('search');
+    assert.equal(s.node('main-header').hidden, false, 'Search keeps its input after update dismissal');
+    assert.equal(s.node('search-container').style.display, 'block');
+    s.ui.render('home');
+    assert.equal(s.node('main-header').hidden, true);
 });
 
 test('update banner waits for mini mode and higher priority dialogs without taking focus', async t => {

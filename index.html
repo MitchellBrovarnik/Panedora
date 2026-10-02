@@ -100,7 +100,7 @@
 
         <!-- Main Content -->
         <main class="main-content">
-            <header class="main-header">
+            <header class="main-header" id="main-header" hidden>
                 <div class="header-nav">
                     <button class="header-nav-btn" id="nav-back" aria-label="Go back">
                         <svg viewBox="0 0 24 24" fill="currentColor">
@@ -125,19 +125,17 @@
                         placeholder="What do you want to listen to?">
                 </div>
 
-                <div id="header-spacer">
-                    <aside class="update-banner" id="update-banner" aria-label="Panedora update" hidden>
-                        <div class="update-banner-row">
-                            <p class="update-banner-message" id="update-message" role="status" aria-live="polite" aria-atomic="true">
-                                <span id="update-label">Update available</span>
-                                <span class="update-banner-version" id="update-available-version"></span>
-                            </p>
-                            <button class="update-banner-download" id="update-download" type="button">Download update</button>
-                            <button class="update-banner-later" id="update-later" type="button" title="Remind me again after 24 hours">Later</button>
-                        </div>
-                        <p class="update-banner-error" id="update-error" role="alert" hidden></p>
-                    </aside>
-                </div>
+                <aside class="update-banner" id="update-banner" aria-label="Panedora update" hidden>
+                    <div class="update-banner-row">
+                        <p class="update-banner-message" id="update-message" role="status" aria-live="polite" aria-atomic="true">
+                            <span id="update-label">Update available</span>
+                            <span class="update-banner-version" id="update-available-version"></span>
+                        </p>
+                        <button class="update-banner-download" id="update-download" type="button">Download update</button>
+                        <button class="update-banner-later" id="update-later" type="button" title="Remind me again after 24 hours">Later</button>
+                    </div>
+                    <p class="update-banner-error" id="update-error" role="alert" hidden></p>
+                </aside>
             </header>
 
             <div class="main-scroll" id="main-scroll">

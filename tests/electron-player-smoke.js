@@ -158,8 +158,9 @@ app.whenReady().then(async () => {
     assert.equal(await run("document.fonts.check('16px Inter')"), true, 'App uses the bundled font');
     assert.equal(await run("document.querySelector('dialog[open]') === null && !document.getElementById('update-banner').contains(document.activeElement)"), true, 'Update banner does not open a modal or take focus');
     assert.equal(await run("document.getElementById('update-available-version').textContent"), '99.0.0');
-    assert.equal(await run("document.getElementById('update-banner').getBoundingClientRect().width <= 430 && document.getElementById('update-banner').getBoundingClientRect().height < 70"), true, 'Update banner remains compact');
+    assert.equal(await run("document.getElementById('update-banner').getBoundingClientRect().width <= 390 && document.getElementById('update-banner').getBoundingClientRect().height < 50"), true, 'Update pill remains compact');
     assert.equal(await run("document.getElementById('update-banner').scrollHeight <= document.getElementById('update-banner').clientHeight"), true, 'Update banner has no clipping or scrolling');
+    assert.equal(await run("(() => { const pill = document.getElementById('update-banner').getBoundingClientRect(); const main = document.querySelector('.main-content').getBoundingClientRect(); const header = getComputedStyle(document.getElementById('main-header')); return Math.abs((pill.left + pill.right - main.left - main.right) / 2) < 1 && header.backgroundColor === 'rgba(0, 0, 0, 0)' && header.borderBottomWidth === '0px'; })()"), true, 'Update pill is centered without a full-width background or divider');
     win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
     win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
     assert.equal(await run("document.getElementById('update-banner').hidden"), false, 'Escape does not trigger an update choice');
@@ -178,18 +179,20 @@ app.whenReady().then(async () => {
     await run("renderPage('search'); document.getElementById('search-input').focus()");
     win.setSize(900, 600);
     await waitFor(() => run('innerWidth === 900'), 'minimum app window');
-    assert.equal(await run("(() => { const banner = document.getElementById('update-banner').getBoundingClientRect(); const search = document.getElementById('search-container').getBoundingClientRect(); const header = document.querySelector('.main-header').getBoundingClientRect(); return banner.left >= search.right && banner.right <= header.right && banner.top >= header.top && banner.bottom <= header.bottom && document.documentElement.scrollWidth <= innerWidth; })()"), true, 'Banner and search fit the minimum window without overlap or horizontal scrolling');
+    assert.equal(await run("(() => { const pill = document.getElementById('update-banner').getBoundingClientRect(); const search = document.getElementById('search-container').getBoundingClientRect(); const header = document.getElementById('main-header').getBoundingClientRect(); return Math.abs((pill.left + pill.right - header.left - header.right) / 2) < 1 && pill.left >= search.right && search.width > 150 && pill.right <= header.right && pill.top >= header.top && pill.bottom <= header.bottom && document.documentElement.scrollWidth <= innerWidth; })()"), true, 'Pill stays centered and search fits the minimum window without overlap or horizontal scrolling');
     assert.equal(await run('document.activeElement.id'), 'search-input', 'Search remains focused with the banner visible');
     await capture('update-banner-search-small');
     win.setSize(1200, 800);
     await run("renderPage('home'); document.getElementById('update-later').click()");
     await waitFor(() => run("document.getElementById('update-banner').hidden"), 'Later postpones update');
+    assert.equal(await run("document.getElementById('main-header').hidden"), true, 'Home keeps no empty update row after dismissal');
     const snooze = require('../config').getUpdateSnooze();
     assert.equal(snooze.version, '99.0.0');
     assert.ok(snooze.until > Date.now() + 23 * 60 * 60 * 1000);
     assert.equal(calls.filter(c => c.host === 'api.github.com').length, 1);
 
     await run("AppState.searchQuery = 'fixture'; renderPage('search'); window.api.content.search('fixture')");
+    assert.equal(await run("document.getElementById('main-header').hidden"), false, 'Search input stays available after update dismissal');
     await waitFor(() => run("document.querySelector('#search-songs img')?.naturalWidth > 0"), 'search artwork');
     assert.equal(await run("document.querySelector('#search-songs img').src"), art[0].url);
     await run("document.querySelectorAll('.error-toast').forEach(toast => toast.remove())");
@@ -497,7 +500,7 @@ app.whenReady().then(async () => {
     assert.equal(calls.some(c => ['fonts.googleapis.com', 'fonts.gstatic.com', 'unpkg.com'].includes(c.host)), false, 'App and website make no external font or icon requests');
     site.close();
     console.log('Native player smoke test passed: device takeover, saved thumbs, immediate mode changes and approved auto-resume, Artist Only eligibility, Shuffle exclusion, mode failures and retry.');
-    console.log('Nonmodal update banner, minimum window layout, mini mode hiding, persistent Later choice, local fonts and desktop/mobile website checks passed.');
+    console.log('Centered update pill, minimum window layout, empty row removal, mini mode hiding, persistent Later choice, local fonts and desktop/mobile website checks passed.');
     console.log('Screenshots: ' + testData);
     clearTimeout(deadline);
     app.quit();

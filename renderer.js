@@ -93,6 +93,7 @@ function renderPage(page) {
 
     // Show/hide search bar
     DOM.searchContainer.style.display = page === 'search' ? 'block' : 'none';
+    updateHeaderVisibility();
 
     // Hide lyrics when leaving Now Playing page
     if (page !== 'nowplaying') {
@@ -1602,11 +1603,19 @@ async function checkForUpdateNotice() {
     }
 }
 
+function updateHeaderVisibility() {
+    const header = document.getElementById('main-header');
+    const banner = document.getElementById('update-banner');
+    if (header && banner) header.hidden = document.body.classList.contains('mini-mode') ||
+        (AppState.currentPage !== 'search' && banner.hidden);
+}
+
 function renderUpdateNotice() {
     const banner = document.getElementById('update-banner');
     if (!banner) return;
     const blocked = document.body.classList.contains('mini-mode') || stationRemoval || AppState.playerState.streamPrompt;
     banner.hidden = !updateNotice || !!blocked;
+    updateHeaderVisibility();
     if (!updateNotice || blocked) {
         return;
     }
