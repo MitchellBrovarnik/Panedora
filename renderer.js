@@ -1589,7 +1589,6 @@ function renderStationsList() {
 
 let stationRemoval = null;
 let updateNotice = null;
-let updateNoticeFocus = null;
 
 async function checkForUpdateNotice() {
     try {
@@ -1597,7 +1596,6 @@ async function checkForUpdateNotice() {
         if (!notice || typeof notice.version !== 'string' || typeof notice.currentVersion !== 'string' ||
             updateNotice?.version === notice.version) return;
         updateNotice = { ...notice, pending: false, error: null };
-        updateNoticeFocus = null;
         renderUpdateNotice();
     } catch {
         // Update checks never block sign-in or playback.
@@ -1605,30 +1603,24 @@ async function checkForUpdateNotice() {
 }
 
 function renderUpdateNotice() {
-    const modal = document.getElementById('update-dialog');
-    if (!modal) return;
+    const banner = document.getElementById('update-banner');
+    if (!banner) return;
     const blocked = document.body.classList.contains('mini-mode') || stationRemoval || AppState.playerState.streamPrompt;
+    banner.hidden = !updateNotice || !!blocked;
     if (!updateNotice || blocked) {
-        if (modal.open) modal.close();
         return;
     }
     document.getElementById('update-available-version').textContent = updateNotice.version;
-    document.getElementById('update-current-version').textContent = updateNotice.currentVersion;
+    document.getElementById('update-available-version').hidden = updateNotice.pending;
+    document.getElementById('update-message').title = `Available: ${updateNotice.version}. Installed: ${updateNotice.currentVersion}.`;
     document.getElementById('update-error').textContent = updateNotice.error || '';
     document.getElementById('update-error').hidden = !updateNotice.error;
-    document.getElementById('update-status').hidden = !updateNotice.pending;
-    document.getElementById('update-status').textContent = updateNotice.action === 'download'
-        ? 'Opening the download page…' : 'Saving your choice…';
-    modal.setAttribute('aria-busy', String(updateNotice.pending));
-    ['update-download', 'update-later', 'update-close'].forEach(id => {
+    document.getElementById('update-label').textContent = !updateNotice.pending ? 'Update available'
+        : updateNotice.action === 'download' ? 'Opening download…' : 'Saving your choice…';
+    banner.setAttribute('aria-busy', String(updateNotice.pending));
+    ['update-download', 'update-later'].forEach(id => {
         document.getElementById(id).disabled = updateNotice.pending;
     });
-    if (!modal.open) {
-        closeStationModeMenu();
-        if (!updateNoticeFocus) updateNoticeFocus = document.activeElement;
-        modal.showModal();
-        document.getElementById('update-later').focus();
-    }
 }
 
 async function answerUpdateNotice(action) {
@@ -1644,9 +1636,6 @@ async function answerUpdateNotice(action) {
         if (result?.success) {
             updateNotice = null;
             renderUpdateNotice();
-            if (!stationRemoval && !AppState.playerState.streamPrompt &&
-                !document.body.classList.contains('mini-mode') && updateNoticeFocus?.isConnected) updateNoticeFocus.focus();
-            updateNoticeFocus = null;
             return;
         }
         notice.error = result?.error || 'Could not save your choice. Please try again.';
@@ -1986,11 +1975,6 @@ const debouncedSearch = debounce(async (query) => {
 function initEventListeners() {
     document.getElementById('update-download')?.addEventListener('click', () => answerUpdateNotice('download'));
     document.getElementById('update-later')?.addEventListener('click', () => answerUpdateNotice('later'));
-    document.getElementById('update-close')?.addEventListener('click', () => answerUpdateNotice('later'));
-    document.getElementById('update-dialog')?.addEventListener('cancel', event => {
-        event.preventDefault();
-        answerUpdateNotice('later');
-    });
     document.getElementById('station-remove-confirm')?.addEventListener('click', () => removeSelectedStation());
     document.getElementById('station-remove-cancel')?.addEventListener('click', () => closeStationRemoval());
     document.getElementById('station-remove-close')?.addEventListener('click', () => closeStationRemoval());

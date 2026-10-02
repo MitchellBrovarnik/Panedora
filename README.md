@@ -92,7 +92,7 @@ Your selected effect is saved and restored automatically on next launch.
 *   **Clean Sign Out:** A dedicated sign-out process permanently wipes session tokens, pauses active streams, and safely tears down the player state to prevent ghost playback or infinite reload loops.
 
 ### Update Notices
-Release builds containing the update checker look for a newer stable GitHub release once per launch. A small themed notice offers **Download update** or **Later**. Download opens the project's GitHub release page; Later postpones that version's reminder for 24 hours. Checks run in the background and quietly stop if the network is unavailable. Notices wait while the mini player or another app dialog is open.
+Release builds containing the update checker look for a newer stable GitHub release once per launch. A small banner on the right side of the full app's top bar offers **Download update** or **Later**, while navigation and playback controls remain usable. Download opens the project's GitHub release page; Later postpones that version's reminder for 24 hours. Checks run in the background and quietly stop if the network is unavailable. The banner stays hidden in mini mode and while another app dialog is open, and does not move keyboard focus.
 
 Older versions without this checker need one manual update before they can display notices for later releases. Development checkouts do not check automatically.
 

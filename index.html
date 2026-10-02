@@ -125,7 +125,19 @@
                         placeholder="What do you want to listen to?">
                 </div>
 
-                <div id="header-spacer"></div>
+                <div id="header-spacer">
+                    <aside class="update-banner" id="update-banner" aria-label="Panedora update" hidden>
+                        <div class="update-banner-row">
+                            <p class="update-banner-message" id="update-message" role="status" aria-live="polite" aria-atomic="true">
+                                <span id="update-label">Update available</span>
+                                <span class="update-banner-version" id="update-available-version"></span>
+                            </p>
+                            <button class="update-banner-download" id="update-download" type="button">Download update</button>
+                            <button class="update-banner-later" id="update-later" type="button" title="Remind me again after 24 hours">Later</button>
+                        </div>
+                        <p class="update-banner-error" id="update-error" role="alert" hidden></p>
+                    </aside>
+                </div>
             </header>
 
             <div class="main-scroll" id="main-scroll">
@@ -266,23 +278,6 @@
         <div class="stream-dialog-actions">
             <button class="stream-dialog-secondary" id="station-remove-cancel" type="button" autofocus>Cancel</button>
             <button class="station-remove-confirm" id="station-remove-confirm" type="button">Remove station</button>
-        </div>
-    </dialog>
-
-    <dialog class="stream-dialog update-dialog" id="update-dialog" aria-labelledby="update-title" aria-describedby="update-description update-versions">
-        <button class="stream-dialog-close" id="update-close" type="button" aria-label="Remind me later">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 6 12 12M18 6 6 18"/></svg>
-        </button>
-        <div class="stream-dialog-copy">
-            <h2 id="update-title">Update available</h2>
-            <p id="update-description">Download the latest Panedora release for new features and fixes.</p>
-            <p id="update-versions">Version <span id="update-available-version"></span> · Installed <span id="update-current-version"></span></p>
-            <p class="stream-dialog-status" id="update-status" role="status" hidden>Opening the download page…</p>
-            <p class="update-error" id="update-error" role="alert" hidden></p>
-        </div>
-        <div class="stream-dialog-actions">
-            <button class="stream-dialog-secondary" id="update-later" type="button" title="Remind me again after 24 hours" autofocus>Later</button>
-            <button class="stream-dialog-primary" id="update-download" type="button">Download update</button>
         </div>
     </dialog>
 
