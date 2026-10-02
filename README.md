@@ -6,7 +6,7 @@
 
 **Station modes now work directly in Panedora.** Click the artwork in the play bar to open Now Playing, then choose a mode from **Tune your station** above Recently Played.
 
-The themed menu shows the modes Pandora makes available for your station and account, such as Discovery, Deep Cuts, or Artist Only. Artist Only requires verified Pandora Premium access and an eligible station. Tuning is hidden for Shuffle and stations without available modes.
+The themed menu shows the modes Pandora makes available for your station and account, such as Discovery, Deep Cuts, or Artist Only. Artist Only requires verified Pandora Premium access and an eligible station.
 
 ## Project Purpose
 Panedora is a personal, educational, and experimental project created purely for fun. It was built as a creative exercise to explore modern UI design (Glassmorphism) and Electron-based desktop application development. This project is intended for personal use only and was developed with zero intent to cause harm, bypass security, or interfere with Pandora's business operations. It is shared as a demonstration of UI/UX design and technical integration.
