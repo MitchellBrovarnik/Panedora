@@ -172,6 +172,8 @@ app.whenReady().then(async () => {
     await waitFor(() => run("!document.body.classList.contains('mini-mode') && !document.getElementById('update-banner').hidden"), 'full app restores update banner');
     assert.equal((await run("window.api.auth.login('fixture@example.invalid', 'fixture-password')")).success, true);
     await waitFor(() => run('AppState.stations.length === 2'), 'station collection');
+    // The empty test profile emits a startup sign-in toast before fixture login.
+    await run("document.querySelectorAll('.error-toast').forEach(toast => toast.remove())");
     await capture('update-banner');
     await run("renderPage('search'); document.getElementById('search-input').focus()");
     win.setSize(900, 600);
