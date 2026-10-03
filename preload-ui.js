@@ -34,7 +34,7 @@ contextBridge.exposeInMainWorld('api', {
         toggle: () => ipcRenderer.invoke('PLAYER:CMD', { action: 'toggle' }),
         play: () => ipcRenderer.invoke('PLAYER:CMD', { action: 'play' }),
         pause: () => ipcRenderer.invoke('PLAYER:CMD', { action: 'pause' }),
-        next: () => ipcRenderer.invoke('PLAYER:CMD', { action: 'next' }),
+        next: (expectedTrack) => ipcRenderer.invoke('PLAYER:CMD', { action: 'next', value: expectedTrack }),
         prev: () => ipcRenderer.invoke('PLAYER:CMD', { action: 'prev' }),
         seek: (seconds) => ipcRenderer.invoke('PLAYER:CMD', { action: 'seek', value: seconds }),
         setVolume: (value) => ipcRenderer.invoke('PLAYER:CMD', { action: 'volume', value }),

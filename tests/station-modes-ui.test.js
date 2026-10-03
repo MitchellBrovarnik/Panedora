@@ -20,6 +20,8 @@ function setup(t) {
         url: 'https://panedora.test/', runScripts: 'outside-only', pretendToBeVisual: true
     });
     const { window } = dom;
+    const images = [];
+    window.Image = class { constructor() { images.push(this); } };
     window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
     window.HTMLDialogElement.prototype.close = function () { this.open = false; };
     const calls = [];
@@ -70,8 +72,53 @@ function setup(t) {
         node('np-mode-select').click();
         node('np-mode-option-' + value).click();
     };
-    return { window, ui, player, calls, node, open, select, events };
+    return { window, ui, player, calls, node, open, select, events, images };
 }
+
+test('first-song artwork falls back to another supplied size and old loads cannot replace a newer cover', t => {
+    const s = setup(t);
+    s.ui.update({ coverArt: 'https://fixture.invalid/large.jpg', coverArtSources: ['https://fixture.invalid/small.jpg'] });
+    s.open();
+    const old = [...s.images];
+    old.forEach(image => image.onerror());
+    const fallback = s.images.filter(image => image.src.endsWith('/small.jpg'));
+    assert.equal(fallback.length, 2);
+    fallback.forEach(image => image.onload());
+    for (const id of ['now-playing-art', 'np-large-art']) assert.equal(s.node(id).src, 'https://fixture.invalid/small.jpg');
+    s.ui.update({ trackToken: 'next', coverArt: 'https://fixture.invalid/next.jpg', coverArtSources: [] });
+    for (const id of ['now-playing-art', 'np-large-art']) assert.match(s.node(id).src, /^data:image\/svg/);
+    old.forEach(image => image.onload());
+    fallback.forEach(image => image.onerror());
+    s.images.filter(image => image.src.endsWith('/next.jpg')).forEach(image => image.onload());
+    for (const id of ['now-playing-art', 'np-large-art']) assert.equal(s.node(id).src, 'https://fixture.invalid/next.jpg');
+    const count = s.images.length;
+    s.ui.update({ isPlaying: false, feedback: 'thumbUp' });
+    assert.equal(s.images.length, count, 'Partial updates do not reload images');
+    s.ui.update({ trackToken: 'no-art', coverArt: null, coverArtSources: [] });
+    for (const id of ['now-playing-art', 'np-large-art']) assert.match(s.node(id).src, /^data:image\/svg/);
+});
+
+test('a transient artwork failure retries once and repeated failures do not loop', t => {
+    const s = setup(t);
+    const retries = [];
+    const setTimer = s.window.setTimeout.bind(s.window);
+    s.window.setTimeout = (callback, delay) => {
+        if (delay === 1000) { retries.push(callback); return 12345; }
+        return setTimer(callback, delay);
+    };
+    s.ui.update({ coverArt: 'https://fixture.invalid/transient.jpg' });
+    s.images[0].onerror();
+    assert.equal(retries.length, 1);
+    retries[0]();
+    assert.equal(s.images.length, 2);
+    s.images[1].onerror();
+    s.ui.update({ isPlaying: false });
+    assert.equal(retries.length, 1);
+    assert.equal(s.images.length, 2);
+    s.ui.update({ trackToken: 'new-song', coverArt: 'https://fixture.invalid/new.jpg', coverArtSources: [] });
+    s.images.at(-1).onload();
+    assert.equal(s.node('now-playing-art').src, 'https://fixture.invalid/new.jpg');
+});
 
 test('update banner escapes versions and leaves focus, navigation and playback alone', async t => {
     const s = setup(t);

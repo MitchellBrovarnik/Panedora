@@ -9,6 +9,43 @@
 
 const COOLDOWN_MS = 1500;
 const _cooldowns = {};
+const PLAYER_ART_PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect fill='%23282828' width='180' height='180'/%3E%3Ctext x='90' y='100' text-anchor='middle' fill='%23555' font-size='36'%3E%E2%99%AA%3C/text%3E%3C/svg%3E";
+const playerArtworkLoads = new WeakMap();
+
+function renderPlayerArtwork() {
+    const state = AppState.playerState;
+    const sources = [...new Set([state.coverArt, ...(state.coverArtSources || [])]
+        .filter(url => typeof url === 'string' && url))];
+    const key = JSON.stringify([state.playbackGeneration, state.trackToken, sources]);
+    for (const image of [DOM.nowPlayingArt, document.getElementById('np-large-art')]) {
+        if (!image || playerArtworkLoads.get(image)?.key === key) continue;
+        const previous = playerArtworkLoads.get(image);
+        if (previous?.timer) clearTimeout(previous.timer);
+        const request = { key, retried: false, timer: null };
+        playerArtworkLoads.set(image, request);
+        image.src = PLAYER_ART_PLACEHOLDER;
+        const isCurrent = () => playerArtworkLoads.get(image) === request;
+        const load = index => {
+            if (!isCurrent() || !sources.length) return;
+            if (index >= sources.length) {
+                // One bounded retry also covers a transient failure on first play.
+                request.retried = true;
+                request.timer = setTimeout(() => { request.timer = null; load(0); }, 1000);
+                return;
+            }
+            const candidate = new Image();
+            candidate.onload = () => { if (isCurrent()) image.src = sources[index]; };
+            candidate.onerror = () => { if (isCurrent() && !request.retried) load(index + 1); };
+            candidate.src = sources[index];
+        };
+        load(0);
+    }
+}
+
+function nextPlayerTrack() {
+    return window.api.player.next({ trackToken: AppState.playerState.trackToken,
+        playbackGeneration: AppState.playerState.playbackGeneration });
+}
 
 /**
  * Returns true if the action is allowed (not on cooldown).
@@ -1133,7 +1170,7 @@ function renderNowPlayingPage() {
         <div class="np-content">
             <div class="np-left">
                 <div class="np-artwork">
-                    <img id="np-large-art" src="${coverArt || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300"%3E%3Crect fill="%23333" width="300" height="300"/%3E%3Ctext x="150" y="160" text-anchor="middle" fill="%23666" font-size="48"%3E♪%3C/text%3E%3C/svg%3E'}" alt="Album Art" />
+                    <img id="np-large-art" src="${PLAYER_ART_PLACEHOLDER}" alt="Album Art" />
                 </div>
                 <div class="np-track-info">
                     <h2 class="np-track" id="np-large-title">${track || 'Not Playing'}</h2>
@@ -1164,6 +1201,7 @@ function renderNowPlayingPage() {
     </div>`;
 
     // Attach event handlers
+    renderPlayerArtwork();
     document.getElementById('np-back-btn')?.addEventListener('click', () => renderPage('home'));
 
     // Sync thumb button states with current track feedback
@@ -1800,6 +1838,10 @@ function updatePlayerUI(state) {
         (state.playbackGeneration !== undefined && state.playbackGeneration !== AppState.playerState.playbackGeneration)) {
         stationModesRequest = null;
     }
+    if (state.trackToken !== undefined && state.trackToken !== AppState.playerState.trackToken) {
+        AppState.playerState.coverArt = null;
+        AppState.playerState.coverArtSources = [];
+    }
     AppState.playerState = { ...AppState.playerState, ...state };
     updateActiveStation();
     renderStreamPrompt();
@@ -1815,9 +1857,7 @@ function updatePlayerUI(state) {
     if (state.artist) {
         DOM.nowPlayingArtist.textContent = state.artist;
     }
-    if (state.coverArt) {
-        DOM.nowPlayingArt.src = state.coverArt;
-    }
+    renderPlayerArtwork();
 
     // Marquee scroll for overflowing text in mini mode
     if (state.track || state.artist) {
@@ -2042,7 +2082,7 @@ function initEventListeners() {
         }
     });
     // DOM.prevBtn event listener moved down
-    DOM.nextBtn.addEventListener('click', () => { if (rateLimitOk('skip')) window.api.player.next(); });
+    DOM.nextBtn.addEventListener('click', () => { if (rateLimitOk('skip')) nextPlayerTrack(); });
     DOM.heartBtn.addEventListener('click', () => handleThumb(true));
 
     // Handle window resizes (like toggling mini player mode) to recalculate scrolling text limits
@@ -2173,10 +2213,18 @@ function initAPIListeners() {
     let currentAudio = null;
     let currentAudioToken = null;
     let consecutiveErrors = 0; // Prevent chain-skipping on stale/expired URLs
+    let audioRevision = 0;
+    let recoveryTimer = null;
+    let endedRevision = null;
+    const cancelRecovery = () => {
+        if (recoveryTimer !== null) clearTimeout(recoveryTimer);
+        recoveryTimer = null;
+    };
 
     // Player state updates
     window.api.onState((state) => {
         updatePlayerUI(state);
+        if (state.isPlaying === false || state.streamBlocked || state.pausePlayback) cancelRecovery();
         if ((state.streamBlocked || state.pausePlayback) && currentAudio) currentAudio.pause();
 
         // Audio Playback override
@@ -2189,10 +2237,12 @@ function initAPIListeners() {
                 // Sync time with UI
                 currentAudio.addEventListener('timeupdate', () => {
                     if (!AppState.playerState.isPlaying) return;
-                    const progress = (currentAudio.currentTime / currentAudio.duration) * 100;
+                    const duration = Number.isFinite(currentAudio.duration) && currentAudio.duration > 0
+                        ? currentAudio.duration : AppState.playerState.duration || 0;
+                    const progress = duration > 0 ? Math.min(100, currentAudio.currentTime / duration * 100) : 0;
                     DOM.progressFill.style.width = `${progress}%`;
                     DOM.currentTime.textContent = formatTime(currentAudio.currentTime);
-                    DOM.totalTime.textContent = formatTime(currentAudio.duration || 0);
+                    DOM.totalTime.textContent = formatTime(duration);
 
                     // Sync lyrics
                     syncLyrics(currentAudio.currentTime);
@@ -2200,15 +2250,18 @@ function initAPIListeners() {
 
                 // Prevent rapid skipping by notifying main process only once per natural end
                 currentAudio.addEventListener('ended', () => {
+                    if (!currentAudio.ended || endedRevision === audioRevision || !currentAudio.getAttribute('src')) return;
+                    endedRevision = audioRevision;
                     console.log('[UI] Track ended naturally, requesting next');
-                    window.api.player.next();
+                    nextPlayerTrack();
                 });
 
                 currentAudio.addEventListener('error', (e) => {
                     console.error('[UI] Audio element error:', currentAudio.error);
 
                     // Don't auto-skip if the source was intentionally cleared
-                    if (!currentAudio.getAttribute('src') || currentAudio.getAttribute('src') === '') {
+                    if (!currentAudio.getAttribute('src') || !currentAudio.error || currentAudio.error.code === 1 ||
+                        recoveryTimer !== null || AppState.playerState.streamBlocked) {
                         console.log('[UI] Ignoring audio error: source is intentionally empty.');
                         return;
                     }
@@ -2218,34 +2271,47 @@ function initAPIListeners() {
                     // Stop chain-skipping after 3 consecutive errors (likely expired URLs)
                     if (consecutiveErrors >= 3) {
                         console.warn('[UI] Too many consecutive audio errors — stopping auto-skip. URLs may be expired.');
-                        consecutiveErrors = 0;
+                        updatePlayerUI({ isPlaying: false });
+                        window.api.player.pause();
+                        showError('Audio could not be loaded. Try playing the station again.');
                         return;
                     }
 
                     // Only auto-skip if we are actually logged in and trying to play
-                    if (AppState.isLoggedIn) {
-                        setTimeout(() => window.api.player.next(), 2000);
+                    if (AppState.isLoggedIn && AppState.playerState.isPlaying) {
+                        const revision = audioRevision;
+                        const expected = { trackToken: currentAudioToken, playbackGeneration: AppState.playerState.playbackGeneration };
+                        recoveryTimer = setTimeout(() => {
+                            recoveryTimer = null;
+                            if (revision === audioRevision && expected.playbackGeneration === AppState.playerState.playbackGeneration &&
+                                AppState.isLoggedIn && AppState.playerState.isPlaying && !AppState.playerState.streamBlocked && currentAudio.error) {
+                                window.api.player.next(expected);
+                            }
+                        }, 2000);
                     }
                 });
                 // Sync the play/pause icon whenever the audio element's state changes
                 // (covers OS media keys, headphone buttons, etc.)
                 currentAudio.addEventListener('play', () => {
+                    if (currentAudio.paused || !currentAudio.getAttribute('src') || AppState.playerState.streamBlocked) return;
                     AppState.playerState.isPlaying = true;
                     updatePlayerUI({ isPlaying: true });
                     window.api.player.play();
                 });
                 currentAudio.addEventListener('pause', () => {
                     // Ignore pause events if the track just ended (the 'ended' handler takes over)
-                    if (currentAudio.ended) return;
+                    if (currentAudio.ended || !currentAudio.paused || currentAudio.error || !currentAudio.getAttribute('src')) return;
+                    cancelRecovery();
                     AppState.playerState.isPlaying = false;
                     updatePlayerUI({ isPlaying: false });
                     window.api.player.pause();
                 });
+                currentAudio.addEventListener('playing', () => { cancelRecovery(); consecutiveErrors = 0; });
 
                 // Register OS media key handlers (skip, replay, play, pause)
                 if ('mediaSession' in navigator) {
                     navigator.mediaSession.setActionHandler('nexttrack', () => {
-                        if (rateLimitOk('skip')) window.api.player.next();
+                        if (rateLimitOk('skip')) nextPlayerTrack();
                     });
                     navigator.mediaSession.setActionHandler('previoustrack', () => {
                         if (!rateLimitOk('prev')) return;
@@ -2277,9 +2343,15 @@ function initAPIListeners() {
             // at the beginning, while ordinary state updates preserve position.
             if (currentAudio.src !== state.audioURL || currentAudioToken !== state.trackToken) {
                 console.log('[UI] Loading new audio source');
+                const revision = ++audioRevision;
+                cancelRecovery();
                 currentAudioToken = state.trackToken;
+                DOM.progressFill.style.width = '0%';
+                DOM.currentTime.textContent = '0:00';
+                DOM.totalTime.textContent = formatTime(state.duration || 0);
                 currentAudio.src = state.audioURL;
                 if (state.isPlaying !== false) currentAudio.play().then(() => {
+                    if (revision !== audioRevision || currentAudio.paused) return;
                     consecutiveErrors = 0; // Reset on successful play
 
                     // Web Audio API requires a user gesture. This is a safe place to init.
@@ -2292,7 +2364,9 @@ function initAPIListeners() {
                             if (cvs) window.visualizer.start(cvs, styleName);
                         }
                     }
-                }).catch(e => console.error('[UI] Play error:', e));
+                }).catch(e => {
+                    if (revision === audioRevision && e.name !== 'AbortError') console.error('[UI] Play error:', e);
+                });
 
                 // Update OS media session metadata (shows in Windows taskbar, lock screen, etc.)
                 if ('mediaSession' in navigator) {
@@ -2311,6 +2385,9 @@ function initAPIListeners() {
             }
         } else if (state.audioURL === null && currentAudio) {
             // Clear audio if specifically set to null
+            audioRevision++;
+            currentAudioToken = null;
+            cancelRecovery();
             currentAudio.pause();
             currentAudio.src = '';
         }
@@ -2320,12 +2397,6 @@ function initAPIListeners() {
         // We do NOT force-sync audio state from main's isPlaying here, as it causes
         // race conditions with media key toggles (the IPC round-trip can let stale
         // state re-toggle the audio before the new state arrives).
-
-        // Update large artwork if on Now Playing page
-        const largeArt = document.getElementById('np-large-art');
-        if (largeArt && state.coverArt) {
-            largeArt.src = state.coverArt;
-        }
 
         // Handle Adaptive Theme Color Extraction (only trigger once per new cover art)
         if (AppState.currentTheme === 'adaptive' && state.coverArt && window._lastExtractedArt !== state.coverArt) {
@@ -2426,6 +2497,9 @@ function initAPIListeners() {
             AppState.isLoading = false;
             AppState.stations = [];
             AppState.playerState = { volume: 50 };
+            audioRevision++;
+            currentAudioToken = null;
+            cancelRecovery();
 
             // Clear physical UI text and artwork
             if (DOM.nowPlayingTitle) DOM.nowPlayingTitle.textContent = 'Not Playing';
@@ -2490,7 +2564,7 @@ async function init() {
 
     // Replace broken images with a dark placeholder
     document.addEventListener('error', (e) => {
-        if (e.target.tagName === 'IMG' && !e.target.dataset.fallbackApplied) {
+        if (e.target.tagName === 'IMG' && !playerArtworkLoads.has(e.target) && !e.target.dataset.fallbackApplied) {
             e.target.dataset.fallbackApplied = 'true';
             e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect fill='%23282828' width='180' height='180'/%3E%3Ctext x='90' y='100' text-anchor='middle' fill='%23555' font-size='36'%3E%E2%99%AA%3C/text%3E%3C/svg%3E";
         }

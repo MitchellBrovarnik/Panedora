@@ -62,7 +62,7 @@ function setup(config = { getRememberedShuffle: () => null, rememberShuffle() {}
         module, testApi: api, testWindow: window,
         require: name => {
             if (name === 'electron') return electron;
-            if (name === './pandora-api') return { getHighResArt: () => null };
+            if (name === './pandora-api') return { getHighResArt: () => null, getArtUrls: () => [] };
             if (name === './update-checker') return require('../update-checker');
             if (name === './config') return config;
             if (name === './pandora-verification') return { PandoraVerification: class { cancel() {} } };
@@ -609,7 +609,7 @@ test('mode change conflicts retain the explicit device choice and reset tuning a
 
 test('a pending skip cannot advance the song or append its queue after tuning starts', async () => {
     const s = setup();
-    s.seed([track(1, 'current'), track(0, 'stale')]);
+    s.seed([track(1, 'current')]);
     await s.loadStationModes('station-1');
     let oldResult;
     let count = 0;
@@ -624,6 +624,60 @@ test('a pending skip cannot advance the song or append its queue after tuning st
     assert.equal(s.getCurrentState().trackToken, 'tuned');
     await s.skipTrack();
     assert.equal(s.getCurrentState().trackToken, 'tuned-2');
+});
+
+test('queued songs play immediately while skips share a slow refill, then wait only when empty', async () => {
+    const s = setup();
+    s.seed([track(1, 'current'), track(0, 'queued-1'), track(0, 'queued-2')]);
+    let finish;
+    let requests = 0;
+    s.api.getPlaylist = () => { requests++; return new Promise(resolve => { finish = resolve; }); };
+    const first = s.skipTrack();
+    assert.equal(s.getCurrentState().trackToken, 'queued-1', 'A ready song must not wait for the network');
+    await first;
+    await s.skipTrack();
+    assert.equal(s.getCurrentState().trackToken, 'queued-2');
+    const empty = s.skipTrack();
+    assert.equal(empty, s.skipTrack(), 'Repeated skips while empty share one advance');
+    assert.equal(requests, 1);
+    finish({ tracks: [track(0, 'fresh-1'), track(0, 'fresh-2')] });
+    await empty;
+    assert.equal(s.getCurrentState().trackToken, 'fresh-1');
+    assert.equal(s.getCurrentState().playlistLength, 5);
+});
+
+test('a background refill from the old mode cannot restore its queue after tuning', async () => {
+    const s = setup();
+    s.seed([track(1, 'current'), track(0, 'queued')]);
+    await s.loadStationModes('station-1');
+    let finish;
+    s.api.getPlaylist = () => new Promise(resolve => { finish = resolve; });
+    await s.skipTrack();
+    s.api.getPlaylist = async () => ({ tracks: [track(0, 'tuned'), track(0, 'tuned-2')] });
+    await s.changeStationMode('station-1', 1091989);
+    finish({ tracks: [track(0, 'stale')] });
+    await tick();
+    assert.equal(s.getCurrentState().trackToken, 'tuned');
+    assert.equal(s.getCurrentState().playlistLength, 4);
+    assert.equal(s.getCurrentState().history.some(t => t.trackToken === 'stale'), false);
+});
+
+test('late end/error commands cannot skip a newer song and an empty queue respects a later pause', async () => {
+    const s = setup();
+    s.seed([track(0, 'first'), track(0, 'second')]);
+    let finish;
+    s.api.getPlaylist = () => new Promise(resolve => { finish = resolve; });
+    const expected = { trackToken: 'first', playbackGeneration: s.getCurrentState().playbackGeneration };
+    await s.handlers.get('PLAYER:CMD')({}, { action: 'next', value: expected });
+    assert.equal(s.getCurrentState().trackToken, 'second');
+    await s.handlers.get('PLAYER:CMD')({}, { action: 'next', value: expected });
+    assert.equal(s.getCurrentState().trackToken, 'second');
+    const waiting = s.skipTrack();
+    await s.pausePlayer();
+    finish({ tracks: [track(0, 'third')] });
+    await waiting;
+    assert.equal(s.getCurrentState().trackToken, 'third');
+    assert.equal(s.getCurrentState().isPlaying, false);
 });
 
 test('a delayed thumbs-down updates the old song without skipping the new mode’s first song', async () => {
