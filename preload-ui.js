@@ -18,6 +18,9 @@ contextBridge.exposeInMainWorld('api', {
         check: () => ipcRenderer.invoke('APP:CHECK_UPDATES'),
         respond: (version, action) => ipcRenderer.invoke('APP:UPDATE_RESPONSE', { version, action })
     },
+    onUpdateNotice: callback => {
+        ipcRenderer.on('UI:UPDATE_NOTICE', (_event, notice) => callback(notice));
+    },
 
     // ========================================
     // Authentication

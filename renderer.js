@@ -1590,14 +1590,26 @@ function renderStationsList() {
 
 let stationRemoval = null;
 let updateNotice = null;
+let updateNoticeEventRevision = 0;
+
+function receiveUpdateNotice(notice) {
+    if (notice === null) {
+        updateNotice = null;
+        renderUpdateNotice();
+        return;
+    }
+    if (!notice || typeof notice.version !== 'string' || typeof notice.currentVersion !== 'string' ||
+        updateNotice?.version === notice.version) return;
+    updateNotice = { ...notice, pending: false, error: null };
+    renderUpdateNotice();
+}
 
 async function checkForUpdateNotice() {
+    const revision = updateNoticeEventRevision;
     try {
         const notice = await window.api.updates?.check();
-        if (!notice || typeof notice.version !== 'string' || typeof notice.currentVersion !== 'string' ||
-            updateNotice?.version === notice.version) return;
-        updateNotice = { ...notice, pending: false, error: null };
-        renderUpdateNotice();
+        // A pushed notice or dismissal is newer than a delayed startup response.
+        if (revision === updateNoticeEventRevision) receiveUpdateNotice(notice);
     } catch {
         // Update checks never block sign-in or playback.
     }
@@ -2169,6 +2181,10 @@ function initEventListeners() {
 // ============================================================================
 
 function initAPIListeners() {
+    window.api.onUpdateNotice?.(notice => {
+        updateNoticeEventRevision++;
+        receiveUpdateNotice(notice);
+    });
     // Manage a single Audio instance to prevent overlapping event listeners and track skipping
     let currentAudio = null;
     let currentAudioToken = null;
