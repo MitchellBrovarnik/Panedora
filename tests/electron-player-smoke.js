@@ -200,29 +200,6 @@ app.whenReady().then(async () => {
     assert.ok(snooze.until > Date.now() + 23 * 60 * 60 * 1000);
     assert.equal(calls.filter(c => c.host === 'api.github.com').length, 1);
 
-    updateClock += 2 * 60 * 60 * 1000;
-    win.emit('focus');
-    updateClock += 4 * 60 * 60 * 1000;
-    powerMonitor.emit('resume');
-    await run('window.api.updates.check()');
-    assert.equal(calls.filter(c => c.host === 'api.github.com').length, 1, 'Two hours open plus four asleep does not bypass the daily deadline');
-    await run('window.api.window.toggleMini()');
-    await waitFor(() => run("document.body.classList.contains('mini-mode')"), 'mini mode before scheduled notice');
-    releaseTag = 'v99.1.0';
-    updateClock += 18 * 60 * 60 * 1000;
-    powerMonitor.emit('resume');
-    win.emit('focus');
-    await waitFor(() => run("updateNotice?.version === '99.1.0'"), 'new release pushed on wake after 24 elapsed hours');
-    assert.equal(calls.filter(c => c.host === 'api.github.com').length, 2, 'Wake and focus share one due request');
-    assert.equal(await run("document.getElementById('update-banner').hidden && document.querySelector('dialog[open]') === null"), true, 'Scheduled notices never open over the mini player');
-    assert.equal(await run('AppState.playerState.isPlaying'), false, 'Paused playback does not prevent a scheduled check');
-    await run('window.api.window.toggleMini()');
-    await waitFor(() => run("!document.getElementById('update-banner').hidden && document.getElementById('update-available-version').textContent === '99.1.0'"), 'new notice appears after returning to full app');
-    assert.equal(await run("document.getElementById('update-banner').contains(document.activeElement)"), false, 'New notices leave keyboard focus alone');
-    await capture('scheduled-update-notice');
-    await run("document.getElementById('update-later').click()");
-    await waitFor(() => run("document.getElementById('update-banner').hidden"), 'Later postpones scheduled notice');
-
     await run("AppState.searchQuery = 'fixture'; renderPage('search'); window.api.content.search('fixture')");
     assert.equal(await run("document.getElementById('main-header').hidden"), false, 'Search input stays available after update dismissal');
     await waitFor(() => run("document.querySelector('#search-songs img')?.naturalWidth > 0"), 'search artwork');
@@ -282,6 +259,31 @@ app.whenReady().then(async () => {
     const pauses = calls.filter(c => c.path.endsWith('/playbackPaused')).length;
     await run("document.querySelector('audio').pause()");
     await waitFor(() => calls.filter(c => c.path.endsWith('/playbackPaused')).length > pauses, 'normal pause notification');
+
+    updateClock += 2 * 60 * 60 * 1000;
+    win.emit('focus');
+    updateClock += 4 * 60 * 60 * 1000;
+    powerMonitor.emit('resume');
+    await run('window.api.updates.check()');
+    assert.equal(calls.filter(c => c.host === 'api.github.com').length, 1, 'Two hours open plus four asleep does not bypass the daily deadline');
+    await run('window.api.window.toggleMini()');
+    await waitFor(() => run("document.body.classList.contains('mini-mode')"), 'mini mode before scheduled notice');
+    releaseTag = 'v99.1.0';
+    updateClock += 18 * 60 * 60 * 1000;
+    powerMonitor.emit('resume');
+    win.emit('focus');
+    await waitFor(() => run("updateNotice?.version === '99.1.0'"), 'new release pushed on wake after 24 elapsed hours');
+    assert.equal(calls.filter(c => c.host === 'api.github.com').length, 2, 'Wake and focus share one due request');
+    assert.equal(await run("document.getElementById('update-banner').hidden && document.querySelector('dialog[open]') === null"), true, 'Scheduled notices never open over the mini player');
+    assert.equal(await run('AppState.playerState.isPlaying'), false, 'Paused playback does not prevent a scheduled check');
+    assert.equal(await run("document.querySelector('audio').paused"), true, 'The update check leaves the song paused');
+    await run('window.api.window.toggleMini()');
+    await waitFor(() => run("!document.getElementById('update-banner').hidden && document.getElementById('update-available-version').textContent === '99.1.0'"), 'new notice appears after returning to full app');
+    assert.equal(await run("document.getElementById('update-banner').contains(document.activeElement)"), false, 'New notices leave keyboard focus alone');
+    await capture('scheduled-update-notice');
+    await run("document.getElementById('update-later').click()");
+    await waitFor(() => run("document.getElementById('update-banner').hidden"), 'Later postpones scheduled notice');
+
     let approveResume;
     resumeGate = new Promise(resolve => { approveResume = resolve; });
     await run("document.getElementById('play-pause-btn').click()");
