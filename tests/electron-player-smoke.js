@@ -218,6 +218,7 @@ app.whenReady().then(async () => {
         assert.equal(await run('AppState.playerState.trackToken'), 'fresh-3', 'The old audio error cannot skip the recovered song later');
         assert.equal(await run("document.querySelectorAll('audio').length"), 1);
         await capture('rapid-skip-recovered');
+        console.log('Rapid skips, slow audio and playlist responses, real natural song endings, stale error recovery, first-song artwork fallback and clearing missing covers passed.');
     }
 
     await waitFor(() => run("!!document.getElementById('login-form')"), 'login UI');
@@ -569,7 +570,6 @@ app.whenReady().then(async () => {
     site.close();
     await exerciseQueuedPlayback();
     console.log('Native player smoke test passed: device takeover, saved thumbs, immediate mode changes and approved auto-resume, Artist Only eligibility, Shuffle exclusion, mode failures and retry.');
-    console.log('Rapid skips, slow audio and playlist responses, real natural song endings, stale error recovery, first-song artwork fallback and clearing missing covers passed.');
     console.log('Centered update pill, minimum window layout, empty row removal, mini mode hiding, persistent Later choice, local fonts and desktop/mobile website checks passed.');
     console.log('Screenshots: ' + testData);
     clearTimeout(deadline);
