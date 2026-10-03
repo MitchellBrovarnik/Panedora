@@ -92,7 +92,7 @@ Your selected effect is saved and restored automatically on next launch.
 *   **Clean Sign Out:** A dedicated sign-out process permanently wipes session tokens, pauses active streams, and safely tears down the player state to prevent ghost playback or infinite reload loops.
 
 ### Update Notices
-Release builds containing the update checker look for a newer stable GitHub release once per launch. A small pill centered above the page content offers **Download update** or **Later**, while navigation and playback controls remain usable. Download opens the project's GitHub release page; Later postpones that version's reminder for 24 hours. Checks run in the background and quietly stop if the network is unavailable. The pill stays hidden in mini mode and while another app dialog is open, and does not move keyboard focus.
+Release builds containing the update checker look for a newer stable GitHub release at launch and every 24 hours while the app remains open. Time spent asleep or hibernating counts toward that interval; if a check is due, the app checks when the computer wakes or you return to its window. Music does not need to be playing. Failed checks retry quietly after 15 minutes, with longer waits for repeated failures or GitHub rate limits. A small pill centered above the page content offers **Download update** or **Later**, while navigation and playback controls remain usable. Download opens the project's GitHub release page; Later postpones that version's reminder for 24 hours. The pill stays hidden in mini mode and while another app dialog is open, and does not move keyboard focus.
 
 Older versions without this checker need one manual update before they can display notices for later releases. Development checkouts do not check automatically.
 

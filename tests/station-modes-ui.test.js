@@ -42,7 +42,7 @@ function setup(t) {
     };
     const events = {};
     window.api = { player, window: {}, content: {} };
-    for (const name of ['State', 'Collection', 'SearchResults', 'LoginStatus', 'MiniMode', 'Error']) {
+    for (const name of ['State', 'Collection', 'SearchResults', 'LoginStatus', 'MiniMode', 'Error', 'UpdateNotice']) {
         window.api['on' + name] = listener => { events[name] = listener; };
     }
     window.eval(fs.readFileSync(path.join(root, 'components.js'), 'utf8') + '\n' +
@@ -194,6 +194,43 @@ test('a background update notice preserves an open station mode menu and its foc
     assert.equal(s.node('np-mode-menu').hidden, false);
     assert.equal(s.window.document.activeElement, focusedOption);
     assert.equal(s.ui.state.playerState.isPlaying, true);
+});
+
+test('scheduled notices wait in mini mode and behind station dialogs without taking focus', t => {
+    const s = setup(t);
+    s.node('play-pause-btn').focus();
+    const focused = s.window.document.activeElement;
+    s.events.MiniMode({ isMini: true });
+    s.events.UpdateNotice({ version: '1.2.0', currentVersion: '1.1.3' });
+    assert.equal(s.node('update-banner').hidden, true);
+    s.events.MiniMode({ isMini: false });
+    assert.equal(s.node('update-banner').hidden, false);
+    assert.equal(s.window.document.activeElement, focused);
+    assert.equal(s.window.document.querySelector('dialog[open]'), null);
+    s.ui.openRemoval({ id: 'station-1', name: 'Fixture Station' });
+    s.events.UpdateNotice({ version: '1.3.0', currentVersion: '1.1.3' });
+    assert.equal(s.node('update-banner').hidden, true);
+    s.ui.closeRemoval();
+    assert.equal(s.node('update-available-version').textContent, '1.3.0');
+    assert.equal(s.ui.state.playerState.isPlaying, true);
+    assert.deepEqual(s.calls, []);
+});
+
+test('delayed startup checks cannot overwrite a newer pushed notice or reopen a dismissal', async t => {
+    const s = setup(t);
+    let finish;
+    s.window.api.updates = { check: () => new Promise(resolve => { finish = resolve; }) };
+    const pending = s.ui.checkUpdates();
+    s.events.UpdateNotice({ version: '1.3.0', currentVersion: '1.1.3' });
+    finish({ version: '1.2.0', currentVersion: '1.1.3' });
+    await pending;
+    assert.equal(s.node('update-available-version').textContent, '1.3.0');
+    const oldNotice = s.ui.checkUpdates();
+    s.events.UpdateNotice(null);
+    finish({ version: '1.3.0', currentVersion: '1.1.3' });
+    await oldNotice;
+    assert.equal(s.node('update-banner').hidden, true);
+    assert.equal(s.node('main-header').hidden, true);
 });
 
 test('footer thumbs follow the visible player through expanded view, mini mode and navigation', async t => {

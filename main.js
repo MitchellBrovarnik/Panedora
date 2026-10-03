@@ -3,7 +3,7 @@
  * Direct API-based architecture (no hidden browser)
  */
 
-const { app, BrowserWindow, ipcMain, shell, net } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, net, powerMonitor } = require('electron');
 const path = require('path');
 
 // Disable GPU caching to prevent 'Access is denied' cache_util_win errors on Windows startup
@@ -74,6 +74,9 @@ function createUIWindow() {
     });
 
     uiWindow.loadFile(path.join(__dirname, 'index.html'));
+    uiWindow.on('focus', () => {
+        if (app.isPackaged) void updateChecker?.check();
+    });
 
     if (process.argv.includes('--dev')) {
         uiWindow.webContents.openDevTools();
@@ -1046,7 +1049,8 @@ app.whenReady().then(() => {
     updateChecker = new UpdateChecker({
         version: app.getVersion(), fetch: (...args) => net.fetch(...args),
         getSnooze: config.getUpdateSnooze, setSnooze: config.setUpdateSnooze,
-        platform: process.platform, arch: process.arch
+        platform: process.platform, arch: process.arch,
+        onNotice: notice => sendToUI('UI:UPDATE_NOTICE', notice)
     });
     // Initialize API
     api = new PandoraAPI();
@@ -1117,6 +1121,10 @@ app.whenReady().then(() => {
     };
 
     createUIWindow();
+    if (app.isPackaged) {
+        void updateChecker.start();
+        powerMonitor.on('resume', () => void updateChecker.check());
+    }
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
@@ -1131,7 +1139,10 @@ app.on('window-all-closed', () => {
     }
 });
 
-app.on('before-quit', () => verification.cancel());
+app.on('before-quit', () => {
+    updateChecker?.stop();
+    verification.cancel();
+});
 
 // Handle certificate errors for development only
 app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {

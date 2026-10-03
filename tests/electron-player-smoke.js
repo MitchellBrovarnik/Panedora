@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { app, BrowserWindow, session } = require('electron');
+const { app, BrowserWindow, session, powerMonitor } = require('electron');
 
 const testData = fs.mkdtempSync(path.join(os.tmpdir(), 'panedora-player-test-'));
 app.setPath('userData', testData);
@@ -36,6 +36,8 @@ function silentWav() {
 }
 
 app.whenReady().then(async () => {
+    let updateClock = Date.now();
+    let releaseTag = 'v99.0.0';
     let canStream = false;
     let resumeGate = null;
     let modeGate = null;
@@ -91,9 +93,9 @@ app.whenReady().then(async () => {
         calls.push({ path: url.pathname, host: url.hostname, body });
         switch (url.pathname) {
             case '/repos/MitchellBrovarnik/Panedora/releases/latest':
-                return json({ tag_name: 'v99.0.0', draft: false, prerelease: false,
+                return json({ tag_name: releaseTag, draft: false, prerelease: false,
                     assets: ['Panedora.exe', 'Panedora-arm64.dmg', 'Panedora.AppImage'].map(name => ({
-                        name, browser_download_url: 'https://github.com/MitchellBrovarnik/Panedora/releases/download/v99.0.0/' + name
+                        name, browser_download_url: 'https://github.com/MitchellBrovarnik/Panedora/releases/download/' + releaseTag + '/' + name
                     })) });
             case '/api/v1/auth/login':
                 return json({ authToken: 'fixture-token', config: premiumAccount
@@ -140,7 +142,14 @@ app.whenReady().then(async () => {
         }
     });
 
+    // Advance only the checker clock; other authentication/playback clocks remain real.
+    const updates = require('../update-checker');
+    const RealUpdateChecker = updates.UpdateChecker;
+    updates.UpdateChecker = class extends RealUpdateChecker {
+        constructor(options) { super({ ...options, now: () => updateClock }); }
+    };
     require('../main');
+    updates.UpdateChecker = RealUpdateChecker;
     await waitFor(() => BrowserWindow.getAllWindows().length, 'main window');
     const win = BrowserWindow.getAllWindows()[0];
     const run = async script => {
@@ -250,6 +259,31 @@ app.whenReady().then(async () => {
     const pauses = calls.filter(c => c.path.endsWith('/playbackPaused')).length;
     await run("document.querySelector('audio').pause()");
     await waitFor(() => calls.filter(c => c.path.endsWith('/playbackPaused')).length > pauses, 'normal pause notification');
+
+    updateClock += 2 * 60 * 60 * 1000;
+    win.emit('focus');
+    updateClock += 4 * 60 * 60 * 1000;
+    powerMonitor.emit('resume');
+    await run('window.api.updates.check()');
+    assert.equal(calls.filter(c => c.host === 'api.github.com').length, 1, 'Two hours open plus four asleep does not bypass the daily deadline');
+    await run('window.api.window.toggleMini()');
+    await waitFor(() => run("document.body.classList.contains('mini-mode')"), 'mini mode before scheduled notice');
+    releaseTag = 'v99.1.0';
+    updateClock += 18 * 60 * 60 * 1000;
+    powerMonitor.emit('resume');
+    win.emit('focus');
+    await waitFor(() => run("updateNotice?.version === '99.1.0'"), 'new release pushed on wake after 24 elapsed hours');
+    assert.equal(calls.filter(c => c.host === 'api.github.com').length, 2, 'Wake and focus share one due request');
+    assert.equal(await run("document.getElementById('update-banner').hidden && document.querySelector('dialog[open]') === null"), true, 'Scheduled notices never open over the mini player');
+    assert.equal(await run('AppState.playerState.isPlaying'), false, 'Paused playback does not prevent a scheduled check');
+    assert.equal(await run("document.querySelector('audio').paused"), true, 'The update check leaves the song paused');
+    await run('window.api.window.toggleMini()');
+    await waitFor(() => run("!document.getElementById('update-banner').hidden && document.getElementById('update-available-version').textContent === '99.1.0'"), 'new notice appears after returning to full app');
+    assert.equal(await run("document.getElementById('update-banner').contains(document.activeElement)"), false, 'New notices leave keyboard focus alone');
+    await capture('scheduled-update-notice');
+    await run("document.getElementById('update-later').click()");
+    await waitFor(() => run("document.getElementById('update-banner').hidden"), 'Later postpones scheduled notice');
+
     let approveResume;
     resumeGate = new Promise(resolve => { approveResume = resolve; });
     await run("document.getElementById('play-pause-btn').click()");
@@ -475,12 +509,12 @@ app.whenReady().then(async () => {
     assert.equal(calls.filter(c => c.path.endsWith('/station/shuffle')).length, shuffleRequests + 1);
     assert.equal(await run("document.querySelectorAll('#home-recent [data-id=\"fixture-shuffle\"]').length"), 1);
     assert.equal(await run("document.getElementById('update-banner').hidden"), true, 'Renderer reload respects the update choice');
-    assert.equal(calls.filter(c => c.host === 'api.github.com').length, 1, 'App checks only once per launch');
+    assert.equal(calls.filter(c => c.host === 'api.github.com').length, 2, 'Reloads and station changes do not bypass the daily deadline');
 
     const site = new BrowserWindow({ width: 1440, height: 1000, show: false, webPreferences: { contextIsolation: true, nodeIntegration: false } });
     await site.loadFile(path.join(__dirname, '..', 'docs', 'index.html'));
     const siteRun = script => site.webContents.executeJavaScript(script);
-    await waitFor(() => siteRun("document.getElementById('latest-release-label').textContent === 'Latest release: v99.0.0'"), 'website release links');
+    await waitFor(() => siteRun("document.getElementById('latest-release-label').textContent === 'Latest release: v99.1.0'"), 'website release links');
     await siteRun('document.fonts.ready');
     assert.equal(await siteRun("document.fonts.check('16px Inter') && document.fonts.check('16px boxicons')"), true, 'Website fonts and icons load locally');
     assert.match(await siteRun("document.getElementById('download-mac').textContent"), /Apple Silicon/);
@@ -500,7 +534,7 @@ app.whenReady().then(async () => {
     assert.equal(calls.some(c => ['fonts.googleapis.com', 'fonts.gstatic.com', 'unpkg.com'].includes(c.host)), false, 'App and website make no external font or icon requests');
     site.close();
     console.log('Native player smoke test passed: device takeover, saved thumbs, immediate mode changes and approved auto-resume, Artist Only eligibility, Shuffle exclusion, mode failures and retry.');
-    console.log('Centered update pill, minimum window layout, empty row removal, mini mode hiding, persistent Later choice, local fonts and desktop/mobile website checks passed.');
+    console.log('Daily update checks, elapsed sleep time, wake/focus coalescing, scheduled notices while paused and in mini mode, persistent Later choice, centered pill and local website assets passed.');
     console.log('Screenshots: ' + testData);
     clearTimeout(deadline);
     app.quit();
