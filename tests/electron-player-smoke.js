@@ -175,6 +175,51 @@ app.whenReady().then(async () => {
         await run('new Promise(resolve => setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(resolve)), 500))');
         fs.writeFileSync(path.join(testData, name + '.png'), (await win.webContents.capturePage()).toPNG());
     };
+    async function exerciseQueuedPlayback() {
+        activeMode = 0;
+        stressTracks = tracks.map((track, index) => ({ ...track, trackToken: 'stress-' + (index + 1),
+            audioURL: index === 1 ? 'https://fixture.invalid/slow-audio.wav' : track.audioURL,
+            albumArt: index === 0 ? [{ size: 1080, url: 'https://fixture.invalid/missing-large.svg' }, ...art]
+                : index === 2 ? [] : [{ size: 500, url: 'https://fixture.invalid/next-art.svg' }] }));
+        freshTracks = tracks.slice(0, 3).map((track, index) => ({ ...track, trackToken: 'fresh-' + (index + 1),
+            audioURL: index === 1 ? 'https://fixture.invalid/audio-error.wav' : track.audioURL }));
+        await run("window.api.content.playItem({type:'station', id:'fixture-station'})");
+        await waitFor(() => run("AppState.playerState.trackToken === 'stress-1' && !document.querySelector('audio').paused && document.getElementById('now-playing-art').src === 'https://fixture.invalid/art.svg'"), 'first song plays with fallback artwork');
+        await run("document.getElementById('now-playing-art').click()");
+        await waitFor(() => run("document.getElementById('np-large-art').naturalWidth > 0 && document.getElementById('np-large-art').src === 'https://fixture.invalid/art.svg'"), 'expanded player uses the working supplied image size');
+        let finishAudio;
+        let finishRefill;
+        slowAudioGate = new Promise(resolve => { finishAudio = resolve; });
+        refillGate = new Promise(resolve => { finishRefill = resolve; });
+        const fragmentsBefore = calls.filter(c => c.path.endsWith('/getFragment')).length;
+        await run('nextPlayerTrack()');
+        await waitFor(() => audioRequests.includes('/slow-audio.wav'), 'second song starts loading');
+        await run('Promise.all([nextPlayerTrack(), nextPlayerTrack(), nextPlayerTrack()])');
+        await waitFor(() => run("AppState.playerState.trackToken === 'stress-3' && !document.querySelector('audio').paused"), 'rapid skips reach the ready queued song without waiting for the refill');
+        assert.equal(calls.filter(c => c.path.endsWith('/getFragment')).length, fragmentsBefore + 1);
+        assert.equal(await run("document.getElementById('now-playing-art').src.startsWith('data:image/svg') && document.getElementById('np-large-art').src.startsWith('data:image/svg')"), true, 'A song without artwork clears the previous cover in both players');
+        finishAudio();
+        await waitFor(() => run("Number.isFinite(document.querySelector('audio').duration) && document.querySelector('audio').duration > 0"), 'seekable song duration');
+        await run("document.querySelector('audio').currentTime = document.querySelector('audio').duration - 0.08");
+        await waitFor(() => run("AppState.playerState.trackToken === 'stress-4' && !document.querySelector('audio').paused"), 'natural ending plays the queued song while refill is still delayed');
+        await waitFor(() => run("document.getElementById('np-large-art').src === 'https://fixture.invalid/next-art.svg' && document.getElementById('np-large-art').naturalWidth > 0"), 'the next cover recovers after a missing image');
+        await waitFor(() => run("Number.isFinite(document.querySelector('audio').duration) && document.querySelector('audio').duration > 0"), 'last queued song duration');
+        await run("document.querySelector('audio').currentTime = document.querySelector('audio').duration - 0.08");
+        await waitFor(() => run("document.querySelector('audio').ended"), 'last queued song finishes');
+        await run("document.querySelector('audio').dispatchEvent(new Event('ended')); document.querySelector('audio').dispatchEvent(new Event('ended'))");
+        assert.equal(calls.filter(c => c.path.endsWith('/getFragment')).length, fragmentsBefore + 1, 'Natural endings share the existing refill');
+        finishRefill();
+        await waitFor(() => run("AppState.playerState.trackToken === 'fresh-1' && !document.querySelector('audio').paused"), 'empty queue resumes automatically when the refill arrives');
+        await run('nextPlayerTrack()');
+        await waitFor(() => run("AppState.playerState.trackToken === 'fresh-2' && !!document.querySelector('audio').error"), 'failed audio source');
+        await run('nextPlayerTrack()');
+        await waitFor(() => run("AppState.playerState.trackToken === 'fresh-3' && !document.querySelector('audio').paused"), 'manual skip recovers from failed audio');
+        await new Promise(resolve => setTimeout(resolve, 2200));
+        assert.equal(await run('AppState.playerState.trackToken'), 'fresh-3', 'The old audio error cannot skip the recovered song later');
+        assert.equal(await run("document.querySelectorAll('audio').length"), 1);
+        await capture('rapid-skip-recovered');
+    }
+
     await waitFor(() => run("!!document.getElementById('login-form')"), 'login UI');
     await waitFor(() => run("!document.getElementById('update-banner').hidden"), 'new release banner');
     await run('document.fonts.ready');
@@ -500,49 +545,6 @@ app.whenReady().then(async () => {
     assert.equal(await run("document.getElementById('update-banner').hidden"), true, 'Renderer reload respects the update choice');
     assert.equal(calls.filter(c => c.host === 'api.github.com').length, 1, 'App checks only once per launch');
 
-    activeMode = 0;
-    stressTracks = tracks.map((track, index) => ({ ...track, trackToken: 'stress-' + (index + 1),
-        audioURL: index === 1 ? 'https://fixture.invalid/slow-audio.wav' : track.audioURL,
-        albumArt: index === 0 ? [{ size: 1080, url: 'https://fixture.invalid/missing-large.svg' }, ...art]
-            : index === 2 ? [] : [{ size: 500, url: 'https://fixture.invalid/next-art.svg' }] }));
-    freshTracks = tracks.slice(0, 3).map((track, index) => ({ ...track, trackToken: 'fresh-' + (index + 1),
-        audioURL: index === 1 ? 'https://fixture.invalid/audio-error.wav' : track.audioURL }));
-    await run("window.api.content.playItem({type:'station', id:'fixture-station'})");
-    await waitFor(() => run("AppState.playerState.trackToken === 'stress-1' && !document.querySelector('audio').paused && document.getElementById('now-playing-art').src === 'https://fixture.invalid/art.svg'"), 'first song plays with fallback artwork');
-    await run("document.getElementById('now-playing-art').click()");
-    await waitFor(() => run("document.getElementById('np-large-art').naturalWidth > 0 && document.getElementById('np-large-art').src === 'https://fixture.invalid/art.svg'"), 'expanded player uses the working supplied image size');
-    let finishAudio;
-    let finishRefill;
-    slowAudioGate = new Promise(resolve => { finishAudio = resolve; });
-    refillGate = new Promise(resolve => { finishRefill = resolve; });
-    const fragmentsBefore = calls.filter(c => c.path.endsWith('/getFragment')).length;
-    await run('nextPlayerTrack()');
-    await waitFor(() => audioRequests.includes('/slow-audio.wav'), 'second song starts loading');
-    await run('Promise.all([nextPlayerTrack(), nextPlayerTrack(), nextPlayerTrack()])');
-    await waitFor(() => run("AppState.playerState.trackToken === 'stress-3' && !document.querySelector('audio').paused"), 'rapid skips reach the ready queued song without waiting for the refill');
-    assert.equal(calls.filter(c => c.path.endsWith('/getFragment')).length, fragmentsBefore + 1);
-    assert.equal(await run("document.getElementById('now-playing-art').src.startsWith('data:image/svg') && document.getElementById('np-large-art').src.startsWith('data:image/svg')"), true, 'A song without artwork clears the previous cover in both players');
-    finishAudio();
-    await waitFor(() => run("Number.isFinite(document.querySelector('audio').duration) && document.querySelector('audio').duration > 0"), 'seekable song duration');
-    await run("document.querySelector('audio').currentTime = document.querySelector('audio').duration - 0.08");
-    await waitFor(() => run("AppState.playerState.trackToken === 'stress-4' && !document.querySelector('audio').paused"), 'natural ending plays the queued song while refill is still delayed');
-    await waitFor(() => run("document.getElementById('np-large-art').src === 'https://fixture.invalid/next-art.svg' && document.getElementById('np-large-art').naturalWidth > 0"), 'the next cover recovers after a missing image');
-    await waitFor(() => run("Number.isFinite(document.querySelector('audio').duration) && document.querySelector('audio').duration > 0"), 'last queued song duration');
-    await run("document.querySelector('audio').currentTime = document.querySelector('audio').duration - 0.08");
-    await waitFor(() => run("document.querySelector('audio').ended"), 'last queued song finishes');
-    await run("document.querySelector('audio').dispatchEvent(new Event('ended')); document.querySelector('audio').dispatchEvent(new Event('ended'))");
-    assert.equal(calls.filter(c => c.path.endsWith('/getFragment')).length, fragmentsBefore + 1, 'Natural endings share the existing refill');
-    finishRefill();
-    await waitFor(() => run("AppState.playerState.trackToken === 'fresh-1' && !document.querySelector('audio').paused"), 'empty queue resumes automatically when the refill arrives');
-    await run('nextPlayerTrack()');
-    await waitFor(() => run("AppState.playerState.trackToken === 'fresh-2' && !!document.querySelector('audio').error"), 'failed audio source');
-    await run('nextPlayerTrack()');
-    await waitFor(() => run("AppState.playerState.trackToken === 'fresh-3' && !document.querySelector('audio').paused"), 'manual skip recovers from failed audio');
-    await new Promise(resolve => setTimeout(resolve, 2200));
-    assert.equal(await run('AppState.playerState.trackToken'), 'fresh-3', 'The old audio error cannot skip the recovered song later');
-    assert.equal(await run("document.querySelectorAll('audio').length"), 1);
-    await capture('rapid-skip-recovered');
-
     const site = new BrowserWindow({ width: 1440, height: 1000, show: false, webPreferences: { contextIsolation: true, nodeIntegration: false } });
     await site.loadFile(path.join(__dirname, '..', 'docs', 'index.html'));
     const siteRun = script => site.webContents.executeJavaScript(script);
@@ -565,6 +567,7 @@ app.whenReady().then(async () => {
     await captureSite('website-downloads-mobile');
     assert.equal(calls.some(c => ['fonts.googleapis.com', 'fonts.gstatic.com', 'unpkg.com'].includes(c.host)), false, 'App and website make no external font or icon requests');
     site.close();
+    await exerciseQueuedPlayback();
     console.log('Native player smoke test passed: device takeover, saved thumbs, immediate mode changes and approved auto-resume, Artist Only eligibility, Shuffle exclusion, mode failures and retry.');
     console.log('Rapid skips, slow audio and playlist responses, real natural song endings, stale error recovery, first-song artwork fallback and clearing missing covers passed.');
     console.log('Centered update pill, minimum window layout, empty row removal, mini mode hiding, persistent Later choice, local fonts and desktop/mobile website checks passed.');
