@@ -42,6 +42,16 @@ const blocked = () => ({ status: 403, body: { ...challenge } });
 const paid = () => ({ status: 200, body: { authToken: 'new-token', listenerId: 'listener', config: { branding: 'PandoraPlus' } } });
 const premium = () => ({ status: 200, body: { authToken: 'premium-token', config: { branding: 'PandoraPremium', flags: ['onDemand'] } } });
 
+test('artwork ignores missing URLs and retains valid resolutions in descending size order', () => {
+    const API = setup([]).api.constructor;
+    const art = [null, { size: 1080 }, { size: 900, url: ' ' }, { size: '100', url: 'https://fixture.invalid/small.jpg' },
+        { size: 500, url: 'https://fixture.invalid/large.jpg' }, { size: 50, url: 'https://fixture.invalid/small.jpg' }];
+    assert.equal(API.getHighResArt(art), 'https://fixture.invalid/large.jpg');
+    assert.deepEqual(Array.from(API.getArtUrls(art)), ['https://fixture.invalid/large.jpg', 'https://fixture.invalid/small.jpg']);
+    assert.equal(API.getHighResArt(null), null);
+    assert.equal(art[0], null, 'The original API array is not reordered');
+});
+
 function modeResponse(currentModeId = 0) {
     return {
         interactiveRadioAvailable: true,

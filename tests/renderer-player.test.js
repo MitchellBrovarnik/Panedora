@@ -6,7 +6,7 @@ const vm = require('node:vm');
 
 // Run the actual renderer listeners with a small DOM/audio stand-in. These
 // checks verify playback ordering; native Electron fixtures cover real media.
-function setup() {
+function setup({ deferPlay = false } = {}) {
     function element() {
         const listeners = new Map();
         const classes = new Set();
@@ -29,6 +29,13 @@ function setup() {
     let onState;
     let onMiniMode;
     let resumeRequests = 0;
+    let pauseRequests = 0;
+    const nextRequests = [];
+    const playRequests = [];
+    const timers = new Set();
+    const testWindow = { addEventListener() {} };
+    let visualizerInits = 0;
+    testWindow.visualizer = { init() { visualizerInits++; } };
     const mediaActions = new Map();
     const document = {
         getElementById: id => {
@@ -42,34 +49,48 @@ function setup() {
         createElement: type => {
             assert.equal(type, 'audio');
             audio = {
-                ...element(), src: '', paused: true, currentTime: 0, plays: 0,
-                play() { this.plays++; this.paused = false; this.dispatch('play'); return Promise.resolve(); },
+                ...element(), paused: true, currentTime: 0, plays: 0, error: null, ended: false,
+                get src() { return this._src || ''; },
+                set src(value) { this._src = value; this.currentTime = 0; this.error = null; this.ended = false; this.paused = true; },
+                play() {
+                    this.plays++; this.paused = false; this.dispatch('play');
+                    if (deferPlay) return new Promise((resolve, reject) => playRequests.push({ resolve, reject }));
+                    return Promise.resolve();
+                },
                 pause() { if (!this.paused) { this.paused = true; this.dispatch('pause'); } }
             };
             return audio;
         }
     };
     const api = {
-        player: { play: async () => { resumeRequests++; return { success: true }; }, pause: async () => ({ success: true }) },
+        player: { play: async () => { resumeRequests++; return { success: true }; },
+            pause: async () => { pauseRequests++; return { success: true }; },
+            next: async expected => { nextRequests.push(expected); } },
         onState: listener => { onState = listener; },
         onMiniMode: listener => { onMiniMode = listener; },
         onCollection() {}, onSearchResults() {}, onLoginStatus() {}, onError() {}
     };
     const source = fs.readFileSync(path.join(__dirname, '..', 'components.js'), 'utf8') + '\n' +
-        fs.readFileSync(path.join(__dirname, '..', 'renderer.js'), 'utf8') + '\ninitEventListeners(); initAPIListeners();';
+        fs.readFileSync(path.join(__dirname, '..', 'renderer.js'), 'utf8') + '\ninitEventListeners(); initAPIListeners(); window.testState = AppState;';
+    testWindow.api = api;
     vm.runInNewContext(source, {
-        document, window: { api, addEventListener() {} },
+        document, window: testWindow,
         navigator: { mediaSession: { setActionHandler: (action, handler) => mediaActions.set(action, handler) } },
         MediaMetadata: class {}, requestAnimationFrame: callback => callback(),
-        setTimeout, clearTimeout, console: { log() {}, error() {}, warn() {} }
+        setTimeout: (callback, delay) => { const timer = { callback, delay }; timers.add(timer); return timer; },
+        clearTimeout: timer => timers.delete(timer), console: { log() {}, error() {}, warn() {} }
     }, { filename: 'renderer.js' });
-    const state = (value = {}) => onState({ audioURL: 'https://fixture.invalid/buffer.wav', trackToken: 'saved-track', isPlaying: false, ...value });
+    const state = (value = {}) => onState({ audioURL: 'https://fixture.invalid/buffer.wav', trackToken: 'saved-track', playbackGeneration: 1, isPlaying: false, ...value });
+    testWindow.testState.isLoggedIn = true;
     return {
         state, node: document.getElementById,
         mini: () => onMiniMode({ isMini: true }),
         action: name => mediaActions.get(name)(),
         get audio() { return audio; },
-        get resumeRequests() { return resumeRequests; }
+        get resumeRequests() { return resumeRequests; },
+        get pauseRequests() { return pauseRequests; }, get visualizerInits() { return visualizerInits; },
+        nextRequests, playRequests, timers,
+        fireTimers: () => { for (const timer of [...timers]) { timers.delete(timer); timer.callback(); } }
     };
 }
 
@@ -87,6 +108,57 @@ test('normal and mini Play and Previous wait for the approved resume state', () 
             assert.equal(s.audio.paused, false);
         }
     }
+});
+
+test('a failed old song cannot auto-skip a new song or apply its late play completion', async () => {
+    const s = setup({ deferPlay: true });
+    s.state({ isPlaying: true });
+    s.audio.error = { code: 2 };
+    s.audio.dispatch('error');
+    s.audio.dispatch('error');
+    assert.equal(s.timers.size, 1, 'One recovery per failed source');
+    s.state({ trackToken: 'new-track', audioURL: 'https://fixture.invalid/new.wav', isPlaying: true });
+    assert.equal(s.timers.size, 0);
+    s.playRequests[0].resolve();
+    await Promise.resolve();
+    assert.equal(s.visualizerInits, 0, 'Old play completion is ignored');
+    s.playRequests[1].resolve();
+    await Promise.resolve();
+    assert.equal(s.visualizerInits, 1);
+    s.fireTimers();
+    assert.equal(s.nextRequests.length, 0);
+});
+
+test('current-song recovery carries its identity and is cancelled by pause or stream loss', () => {
+    for (const action of ['recover', 'pause', 'blocked']) {
+        const s = setup({ deferPlay: true });
+        s.state({ isPlaying: true });
+        s.audio.error = { code: 2 };
+        s.audio.dispatch('error');
+        if (action === 'pause') s.state({ isPlaying: false, pausePlayback: true });
+        if (action === 'blocked') s.state({ audioURL: null, streamBlocked: true });
+        s.fireTimers();
+        assert.equal(s.nextRequests.length, action === 'recover' ? 1 : 0);
+        if (action === 'recover') assert.equal(s.nextRequests[0].trackToken, 'saved-track');
+    }
+});
+
+test('natural ending advances once and stale pause/end events cannot interrupt a loading replacement', () => {
+    const s = setup({ deferPlay: true });
+    s.state({ isPlaying: true });
+    s.audio.dispatch('ended');
+    assert.equal(s.nextRequests.length, 0, 'A queued end event is ignored unless the current source ended');
+    s.audio.ended = true;
+    s.audio.dispatch('ended');
+    s.audio.dispatch('ended');
+    assert.equal(s.nextRequests.length, 1);
+    s.state({ trackToken: 'replacement', audioURL: 'https://fixture.invalid/replacement.wav', isPlaying: true, duration: 180 });
+    s.audio.dispatch('pause');
+    s.audio.dispatch('ended');
+    assert.equal(s.pauseRequests, 0);
+    assert.equal(s.nextRequests.length, 1);
+    assert.equal(s.node('current-time').textContent, '0:00');
+    assert.equal(s.node('progress-fill').style.width, '0%');
 });
 
 test('OS Play and Previous wait for Pandora approval before playing buffered audio', () => {

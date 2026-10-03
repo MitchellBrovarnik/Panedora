@@ -29,7 +29,7 @@ let currentTrackIndex = 0;
 let songHistory = []; // Track played songs for history display
 let isMiniPlayer = false;
 let savedBounds = null; // Save window position/size before entering mini mode
-let isLoadingMoreTracks = false;
+let playlistRefill = null;
 let streamReclaimed = false;
 let isPaused = false; // Track pause state so we don't force-play on state updates
 let playbackGeneration = 0;
@@ -192,6 +192,7 @@ function getCurrentState() {
         stationLoading,
         stationModes: { ...stationModes, changing: stationModeChange?.generation === playbackGeneration },
         coverArt: PandoraAPI.getHighResArt(track?.albumArt),
+        coverArtSources: PandoraAPI.getArtUrls(track?.albumArt),
         time: 0, // UI will track via audio element
         duration: track?.trackLength || 0,
         isPlaying: !!(track?.audioURL) && !isPaused && !streamReclaimed,
@@ -270,7 +271,7 @@ function showStreamConflict(stationId, generation = playbackGeneration) {
             }
             // Discard playlist responses requested before this successful takeover.
             playbackGeneration++;
-            isLoadingMoreTracks = false;
+            playlistRefill = null;
             resetStationModes();
             currentPlaylist = result.tracks;
             currentTrackIndex = 0;
@@ -430,7 +431,7 @@ async function playStation(stationId, startingAtTrackId = null) {
     cancelStreamPrompt();
     stationLoading = true;
     resetStationModes();
-    isLoadingMoreTracks = false;
+    playlistRefill = null;
     const previousTrack = currentPlaylist[currentTrackIndex];
     isPaused = true;
     sendPlayerState({ ...getCurrentState(), pausePlayback: true });
@@ -482,26 +483,43 @@ function skipTrack() {
     return operation.promise;
 }
 
-async function advanceTrack(generation, requestedPauseRevision) {
-    const nextIndex = currentTrackIndex + 1;
-    if (nextIndex >= currentPlaylist.length - 2 && currentStation && !isLoadingMoreTracks) {
-        isLoadingMoreTracks = true;
+function refillPlaylist(generation = playbackGeneration) {
+    if (generation !== playbackGeneration || !currentStation || streamReclaimed || stationLoading ||
+        stationModeChange?.generation === generation) return Promise.resolve({ tracks: [] });
+    if (playlistRefill?.generation === generation) return playlistRefill.promise;
+    const operation = { generation, stationId: currentStation.stationId };
+    playlistRefill = operation;
+    operation.promise = (async () => {
         try {
-            const result = await api.getPlaylist(currentStation.stationId);
-            if (generation !== playbackGeneration) return getCurrentState();
+            const result = await api.getPlaylist(operation.stationId);
+            if (generation !== playbackGeneration || streamReclaimed) return { tracks: [] };
             if (result.streamConflict) {
-                await showStreamConflict(currentStation.stationId, generation);
-                return getCurrentState();
+                await showStreamConflict(operation.stationId, generation);
+                return { tracks: [], streamConflict: true };
             }
             if (result.tracks?.length) currentPlaylist.push(...result.tracks);
-            else if (result.error) sendToUI('UI:ERROR', { message: result.error });
+            return result;
+        } catch {
+            return { tracks: [], error: 'Failed to load playlist. Please try again.' };
         } finally {
-            if (generation === playbackGeneration) isLoadingMoreTracks = false;
+            if (playlistRefill === operation) playlistRefill = null;
         }
+    })();
+    return operation.promise;
+}
+
+async function advanceTrack(generation, requestedPauseRevision) {
+    const nextIndex = currentTrackIndex + 1;
+    // Refill in the background; a playable queued song must never wait for it.
+    const refill = nextIndex >= currentPlaylist.length - 2 ? refillPlaylist(generation) : null;
+    let result;
+    if (nextIndex >= currentPlaylist.length) {
+        result = await refill;
+        if (generation !== playbackGeneration || streamReclaimed || result?.streamConflict) return getCurrentState();
     }
     if (nextIndex >= currentPlaylist.length) {
         isPaused = true;
-        sendToUI('UI:ERROR', { message: 'No more tracks available. Please try playing the station again.' });
+        sendToUI('UI:ERROR', { message: result?.error || 'No more tracks available. Please try playing the station again.' });
         sendPlayerState({ ...getCurrentState(), pausePlayback: true });
         return getCurrentState();
     }
@@ -565,7 +583,7 @@ function changeStationMode(stationId, modeId) {
     const operation = { generation: ++playbackGeneration };
     stationModeChange = operation;
     stationModesRead = null;
-    isLoadingMoreTracks = false;
+    playlistRefill = null;
     stationModes = { ...stationModes, error: null };
     // Discard the old queue immediately, but keep the current audio until the
     // requested mode and a fresh playable track have both been confirmed.
@@ -798,6 +816,9 @@ ipcMain.handle('PLAYER:SET_STATION_MODE', (event, { stationId, modeId } = {}) =>
 ipcMain.handle('PLAYER:CMD', async (event, { action, value }) => {
     switch (action) {
         case 'next':
+            // A delayed audio error/end event must not advance a different song.
+            if (value && (value.trackToken !== currentPlaylist[currentTrackIndex]?.trackToken ||
+                value.playbackGeneration !== playbackGeneration)) return getCurrentState();
             return await skipTrack();
         case 'prev':
             return await replayTrack();
@@ -1017,16 +1038,8 @@ ipcMain.handle('CONTENT:FETCH_LYRICS', async (event, artist, title) => {
 ipcMain.handle('PLAYER:GET_MORE_TRACKS', async () => {
     if (!currentStation || streamReclaimed || stationLoading ||
         stationModeChange?.generation === playbackGeneration) return { tracks: [] };
-    const generation = playbackGeneration;
-    const stationId = currentStation.stationId;
-    const result = await api.getPlaylist(stationId);
-    if (generation !== playbackGeneration) return { tracks: [] };
-    if (result.streamConflict) {
-        await showStreamConflict(stationId, generation);
-        return { tracks: [] };
-    }
+    const result = await refillPlaylist();
     const moreTracks = result.tracks || [];
-    currentPlaylist.push(...moreTracks);
     if (result.error) sendToUI('UI:ERROR', { message: result.error });
     return {
         tracks: moreTracks.map(t => ({

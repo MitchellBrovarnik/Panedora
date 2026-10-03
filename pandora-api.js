@@ -615,18 +615,16 @@ class PandoraAPI {
      * Get highest resolution artwork from art array
      */
     static getHighResArt(artArray) {
-        if (!artArray || !Array.isArray(artArray) || artArray.length === 0) {
-            return null;
-        }
+        return PandoraAPI.getArtUrls(artArray)[0] || null;
+    }
 
-        // Single-pass max search (O(N)) for optimal performance
-        let maxArt = artArray[0];
-        for (let i = 1; i < artArray.length; i++) {
-            if ((artArray[i].size || 0) > (maxArt.size || 0)) {
-                maxArt = artArray[i];
-            }
-        }
-        return maxArt?.url || null;
+    static getArtUrls(artArray) {
+        if (!Array.isArray(artArray)) return [];
+        // Some entries have a size but no URL. Keep other supplied resolutions
+        // available if the largest image fails to load.
+        const artwork = artArray.filter(art => typeof art?.url === 'string' && art.url.trim());
+        artwork.sort((a, b) => (Number(b.size) || 0) - (Number(a.size) || 0));
+        return [...new Set(artwork.map(art => art.url.trim()))];
     }
 
     /**
