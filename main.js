@@ -41,6 +41,7 @@ let nextStreamPromptId = 0;
 let pauseRevision = 0;
 let resumeOperation = null;
 let skipOperation = null;
+let audioRecovery = null;
 let stationLoading = false;
 let stationModes = emptyStationModes();
 let stationModesRead = null;
@@ -200,6 +201,7 @@ function getCurrentState() {
         playbackGeneration,
         isShuffle: isShuffleStation(currentStation),
         stationLoading,
+        audioRecovery: audioRecovery?.generation === playbackGeneration,
         stationModes: { ...stationModes, changing: stationModeChange?.generation === playbackGeneration },
         coverArt: PandoraAPI.getHighResArt(track?.albumArt),
         coverArtSources: PandoraAPI.getArtUrls(track?.albumArt),
@@ -513,6 +515,62 @@ function refillPlaylist(generation = playbackGeneration) {
             return { tracks: [], error: 'Failed to load playlist. Please try again.' };
         } finally {
             if (playlistRefill === operation) playlistRefill = null;
+        }
+    })();
+    return operation.promise;
+}
+
+function recoverAudio(expected) {
+    if (!expected || expected.playbackGeneration !== playbackGeneration ||
+        expected.trackToken !== currentPlaylist[currentTrackIndex]?.trackToken ||
+        !currentStation || isPaused || streamReclaimed) return Promise.resolve({ success: false });
+    if (audioRecovery?.generation === playbackGeneration && stationLoading) return audioRecovery.promise;
+    if (stationLoading || stationModeChange?.generation === playbackGeneration) return Promise.resolve({ success: false });
+
+    const operation = { generation: ++playbackGeneration, pauseRevision };
+    const stationId = currentStation.stationId;
+    audioRecovery = operation;
+    // An older background refill may contain the same expired URLs. Its result
+    // must not rejoin this queue or publish an error after recovery succeeds.
+    playlistRefill = null;
+    stationModesRead = null;
+    if (stationModes.status === 'loading') stationModes = emptyStationModes();
+    currentPlaylist = currentPlaylist.slice(0, currentTrackIndex + 1);
+    stationLoading = true;
+    sendPlayerState(getCurrentState());
+    const isCurrent = () => operation.generation === playbackGeneration && !streamReclaimed;
+    operation.promise = (async () => {
+        try {
+            // Continue the selected mode; starting the station again can reset it.
+            const result = await api.getPlaylist(stationId, false);
+            if (!isCurrent()) return { success: false };
+            stationLoading = false;
+            if (result.streamConflict) {
+                await showStreamConflict(stationId, operation.generation);
+                return { success: false };
+            }
+            if (result.error || !result.tracks?.[0]?.audioURL || !result.tracks[0].trackToken) {
+                throw new Error('No fresh audio available');
+            }
+            currentTrackIndex = currentPlaylist.length;
+            currentPlaylist.push(...result.tracks);
+            // Pausing while the request was pending must still win.
+            isPaused = isPaused || operation.pauseRevision !== pauseRevision;
+            const track = currentPlaylist[currentTrackIndex];
+            rememberTrack(track);
+            if (!isPaused) api.trackStarted(stationId, track.trackToken);
+            // Pandora may return the same entry. Reload even then: an audio
+            // element with a terminal error cannot recover by play() alone.
+            sendPlayerState({ ...getCurrentState(), reloadAudio: true });
+            return { success: true };
+        } catch {
+            if (isCurrent()) {
+                stationLoading = false;
+                isPaused = true;
+                sendPlayerState({ ...getCurrentState(), pausePlayback: true });
+                sendToUI('UI:ERROR', { message: 'Could not refresh the songs. Check your connection and press Play to try again.' });
+            }
+            return { success: false };
         }
     })();
     return operation.promise;
@@ -840,6 +898,8 @@ ipcMain.handle('AUTH:LOGOUT', async () => {
 // Player commands
 ipcMain.handle('PLAYER:GET_STATION_MODES', (event, { stationId } = {}) => loadStationModes(stationId));
 ipcMain.handle('PLAYER:SET_STATION_MODE', (event, { stationId, modeId } = {}) => changeStationMode(stationId, modeId));
+ipcMain.handle('PLAYER:RECOVER_AUDIO', (event, expected) =>
+    isAppRenderer(event) ? recoverAudio(expected) : { success: false });
 
 ipcMain.handle('PLAYER:CMD', async (event, { action, value }) => {
     switch (action) {

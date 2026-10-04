@@ -684,6 +684,135 @@ test('queued songs play immediately while skips share a slow refill, then wait o
     assert.equal(s.getCurrentState().playlistLength, 5);
 });
 
+function recoverAudio(s, expected = s.getCurrentState()) {
+    return s.handlers.get('PLAYER:RECOVER_AUDIO')({ sender: s.window.webContents }, expected);
+}
+
+test('audio recovery replaces the failed queue, preserves tuning and ignores an older refill', async () => {
+    const s = setup();
+    s.seed([track()]);
+    await s.loadStationModes('station-1');
+    await s.changeStationMode('station-1', 1091989);
+    s.seed([track(0, 'failed-1'), track(0, 'failed-2'), track(0, 'stale-upcoming')]);
+    let finishOld;
+    s.api.getPlaylist = () => new Promise(resolve => { finishOld = resolve; });
+    await s.skipTrack();
+    let finishFresh;
+    const requests = [];
+    s.api.getPlaylist = (...args) => { requests.push(args); return new Promise(resolve => { finishFresh = resolve; }); };
+    const oldGeneration = s.getCurrentState().playbackGeneration;
+    const pending = recoverAudio(s);
+    assert.equal(s.getCurrentState().stationLoading, true);
+    assert.equal(s.getCurrentState().audioRecovery, true);
+    assert.equal(s.getCurrentState().playbackGeneration, oldGeneration + 1);
+    assert.equal(s.getCurrentState().playlistLength, 2, 'Discard unplayed cached songs');
+    assert.equal(pending, recoverAudio(s), 'Duplicate recovery shares the request');
+    finishOld({ tracks: [track(0, 'stale-refill')] });
+    await tick();
+    finishFresh({ tracks: [track(1, 'fresh-1'), track(0, 'fresh-2'), track(0, 'fresh-3')] });
+    assert.equal((await pending).success, true);
+    assert.equal(s.getCurrentState().trackToken, 'fresh-1');
+    assert.equal(s.getCurrentState().feedback, 'thumbUp');
+    assert.equal(s.getCurrentState().isPlaying, true);
+    assert.equal(s.getCurrentState().stationLoading, false);
+    assert.equal(s.getCurrentState().stationModes.currentModeId, 1091989);
+    assert.deepEqual(JSON.parse(JSON.stringify(requests)), [['station-1', false]]);
+    await s.skipTrack();
+    assert.equal(s.getCurrentState().trackToken, 'fresh-2');
+    assert.equal(s.getCurrentState().history.some(t => t.trackToken === 'stale-refill'), false);
+});
+
+test('audio recovery requires the current app source and active playback intent', async () => {
+    const s = setup();
+    s.seed([track()]);
+    let requests = 0;
+    s.api.getPlaylist = async () => { requests++; return { tracks: [track()] }; };
+    const current = s.getCurrentState();
+    const handler = s.handlers.get('PLAYER:RECOVER_AUDIO');
+    for (const [event, expected] of [
+        [{ sender: {} }, current],
+        [{ sender: s.window.webContents, senderFrame: {} }, current],
+        [{ sender: s.window.webContents }, { ...current, playbackGeneration: -1 }],
+        [{ sender: s.window.webContents }, { ...current, trackToken: 'old-song' }],
+        [{ sender: s.window.webContents }, null]
+    ]) assert.equal((await handler(event, expected)).success, false);
+    await s.pausePlayer();
+    assert.equal((await recoverAudio(s)).success, false);
+    assert.equal(requests, 0);
+});
+
+test('fresh audio stays paused when the user pauses during recovery', async () => {
+    const s = setup();
+    s.seed([track()]);
+    let finish;
+    s.api.getPlaylist = () => new Promise(resolve => { finish = resolve; });
+    const pending = recoverAudio(s);
+    await s.pausePlayer();
+    finish({ tracks: [track(0, 'fresh')] });
+    await pending;
+    assert.equal(s.getCurrentState().trackToken, 'fresh');
+    assert.equal(s.getCurrentState().isPlaying, false);
+    assert.deepEqual(s.started, [], 'Do not announce fresh playback while paused');
+    await s.resumePlayer();
+    assert.equal(s.getCurrentState().isPlaying, true);
+    assert.equal(s.calls.some(c => c[0] === 'resume' && c[1] === false), true);
+});
+
+test('station changes and logout cancel a pending audio recovery, including a late failure', async () => {
+    for (const action of ['station', 'logout']) {
+        for (const fails of [false, true]) {
+            const s = setup();
+            s.seed([track()]);
+            let finish;
+            s.api.getPlaylist = () => new Promise(resolve => { finish = resolve; });
+            const pending = recoverAudio(s);
+            if (action === 'station') {
+                s.api.getPlaylist = async () => ({ tracks: [track(0, 'different-station')] });
+                await s.playStation('station-2');
+            } else await s.handlers.get('AUTH:LOGOUT')();
+            finish(fails ? { tracks: [], error: 'Old failure' } : { tracks: [track(0, 'late-recovery')] });
+            assert.equal((await pending).success, false);
+            assert.equal(s.getCurrentState().trackToken, action === 'station' ? 'different-station' : null);
+            assert.equal(s.getCurrentState().audioRecovery, false);
+            assert.equal(s.getCurrentState().stationLoading, false);
+            assert.equal(s.messages.some(m => m.name === 'UI:ERROR'), false);
+        }
+    }
+});
+
+test('a failed fresh playlist stops cleanly without retrying the network forever', async () => {
+    for (const failure of ['empty', 'error', 'throw']) {
+        const s = setup();
+        s.seed([track()]);
+        let requests = 0;
+        s.api.getPlaylist = async () => {
+            requests++;
+            if (failure === 'throw') throw new Error('offline');
+            return { tracks: [], error: failure === 'error' ? 'offline' : null };
+        };
+        assert.equal((await recoverAudio(s)).success, false);
+        assert.equal(s.getCurrentState().isPlaying, false);
+        assert.equal(s.getCurrentState().stationLoading, false);
+        assert.equal(requests, 1);
+        assert.equal(s.messages.filter(m => m.name === 'UI:ERROR').length, 1);
+    }
+});
+
+test('audio recovery keeps device takeover subject to the user’s consent', async () => {
+    const s = setup();
+    s.seed([track()]);
+    s.playlists.push({ tracks: [], streamConflict: true });
+    const pending = recoverAudio(s);
+    await tick();
+    assert.equal(s.getCurrentState().streamBlocked, true);
+    assert.equal(s.getCurrentState().stationLoading, false);
+    assert.equal(s.calls.some(c => c[0] === 'resume'), false);
+    s.prompts[0].choose(false);
+    await pending;
+    assert.equal(s.getCurrentState().isPlaying, false);
+    assert.equal(s.calls.some(c => c[0] === 'resume'), false);
+});
+
 test('a background refill from the old mode cannot restore its queue after tuning', async () => {
     const s = setup();
     s.seed([track(1, 'current'), track(0, 'queued')]);

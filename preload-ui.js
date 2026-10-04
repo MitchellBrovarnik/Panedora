@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld('api', {
         play: () => ipcRenderer.invoke('PLAYER:CMD', { action: 'play' }),
         pause: () => ipcRenderer.invoke('PLAYER:CMD', { action: 'pause' }),
         next: (expectedTrack) => ipcRenderer.invoke('PLAYER:CMD', { action: 'next', value: expectedTrack }),
+        recoverAudio: (expectedTrack) => ipcRenderer.invoke('PLAYER:RECOVER_AUDIO', expectedTrack),
         prev: () => ipcRenderer.invoke('PLAYER:CMD', { action: 'prev' }),
         seek: (seconds) => ipcRenderer.invoke('PLAYER:CMD', { action: 'seek', value: seconds }),
         setVolume: (value) => ipcRenderer.invoke('PLAYER:CMD', { action: 'volume', value }),
