@@ -2,7 +2,9 @@
 
 [![License: CC BY-NC-ND 4.0](https://img.shields.io/badge/License-CC%20BY--NC--ND%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-nd/4.0/)
 
-## New: Tune Your Station
+## New: Discord Rich Presence and Tune Your Station
+
+**Discord Rich Presence is now available.** Show your song, artist, album artwork, and playback progress on your Discord profile. Enable **Settings → Discord → Share what I'm listening to** in Panedora; sharing is off by default. The Discord desktop app must be running with activity sharing enabled.
 
 **Station modes now work directly in Panedora.** Click the artwork in the play bar to open Now Playing, then choose a mode from **Tune your station** above Recently Played.
 
