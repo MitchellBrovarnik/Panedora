@@ -2320,6 +2320,49 @@ body.mini-mode .stream-dialog-actions button { padding: 8px 10px; border-radius:
    Settings / Theme Picker
    ============================================================================ */
 
+.discord-setting {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    max-width: 640px;
+    padding: 16px 18px;
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    background: var(--glass);
+}
+
+.discord-setting-label { font-size: 14px; font-weight: 600; cursor: pointer; }
+.discord-setting-description { margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: var(--text-2); }
+.discord-setting-status { margin: 8px 0 0; font-size: 12px; line-height: 1.4; color: var(--text-3); }
+.discord-sharing-toggle {
+    appearance: none;
+    flex: 0 0 36px;
+    width: 36px;
+    height: 20px;
+    margin: 0;
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    background: var(--glass-hover);
+    cursor: pointer;
+    position: relative;
+}
+.discord-sharing-toggle::after {
+    content: '';
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    top: 3px;
+    left: 3px;
+    border-radius: 50%;
+    background: var(--text-2);
+    transition: transform 120ms ease;
+}
+.discord-sharing-toggle:checked { background: var(--accent); border-color: var(--accent); }
+.discord-sharing-toggle:checked::after { transform: translateX(16px); background: white; }
+.discord-sharing-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.discord-sharing-toggle:disabled { opacity: 0.5; cursor: default; }
+
 .settings-section {
     padding: 8px 0;
 }

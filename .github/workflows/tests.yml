@@ -7,6 +7,7 @@ on:
       - '*.html'
       - '*.css'
       - 'package*.json'
+      - 'discord-config.json'
       - 'tests/**'
       - '.github/workflows/tests.yml'
   workflow_dispatch:
@@ -27,7 +28,7 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run prepare-dist
-      - name: Native Electron player and station modes
+      - name: Native Electron player, station modes and Discord
         run: xvfb-run --auto-servernum npm run test:electron:player -- --no-sandbox
       - name: Save player screenshots
         if: always()

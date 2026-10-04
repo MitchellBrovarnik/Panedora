@@ -1028,6 +1028,28 @@ function applyBgEffect(effectId) {
     }
 }
 
+let discordStatus = null;
+let discordSettingsPending = false;
+
+function renderDiscordSettings() {
+    const toggle = document.getElementById('discord-sharing-toggle');
+    const status = document.getElementById('discord-sharing-status');
+    if (!toggle || !status) return;
+    toggle.checked = discordStatus?.enabled === true;
+    toggle.disabled = discordSettingsPending || !discordStatus?.configured;
+    const messages = {
+        unconfigured: 'Discord sharing is not configured in this build.',
+        disabled: 'Off',
+        idle: 'Ready when music starts playing.',
+        connecting: 'Connecting to Discord…',
+        connected: 'Connected to Discord.',
+        unavailable: 'Open the Discord desktop app. Panedora will reconnect automatically.',
+        error: 'Discord could not update your activity. Check the application setup.'
+    };
+    status.textContent = discordSettingsPending ? 'Saving…' :
+        messages[discordStatus?.status] || 'Loading…';
+}
+
 function renderSettingsPage() {
     const currentTheme = AppState.currentTheme || localStorage.getItem('panedora-theme') || 'midnight';
     const currentEffect = AppState.currentEffect || localStorage.getItem('panedora-effect') || 'aurora';
@@ -1080,6 +1102,17 @@ function renderSettingsPage() {
     DOM.pageContent.innerHTML = `
     <div class="fade-in" style="display: flex; flex-direction: column; gap: 32px;">
       <section class="settings-section">
+        <h2 class="section-title">Discord</h2>
+        <div class="discord-setting">
+          <div>
+            <label class="discord-setting-label" for="discord-sharing-toggle">Share what I'm listening to</label>
+            <p class="discord-setting-description" id="discord-sharing-description">Show the song, artist, album artwork, and progress on your Discord profile. Paused songs stay visible.</p>
+            <p class="discord-setting-status" id="discord-sharing-status" role="status"></p>
+          </div>
+          <input class="discord-sharing-toggle" id="discord-sharing-toggle" type="checkbox" role="switch" aria-describedby="discord-sharing-description discord-sharing-status">
+        </div>
+      </section>
+      <section class="settings-section">
         <h2 class="section-title">Color Theme</h2>
         <p class="settings-description">Choose a color palette to personalize your experience.</p>
         <div class="theme-grid">${themeSwatches}</div>
@@ -1111,6 +1144,24 @@ function renderSettingsPage() {
         <div class="theme-grid" style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));">${lyricsStyleButtons}</div>
       </section>
     </div>`;
+
+    renderDiscordSettings();
+    document.getElementById('discord-sharing-toggle').addEventListener('change', async event => {
+        if (discordSettingsPending) return;
+        const enabled = event.target.checked;
+        discordSettingsPending = true;
+        renderDiscordSettings();
+        try {
+            const status = await window.api.discord.setEnabled(enabled);
+            if (status) discordStatus = status;
+            else showErrorToast('Could not save Discord sharing. Please try again.');
+        } catch {
+            showErrorToast('Could not save Discord sharing. Please try again.');
+        } finally {
+            discordSettingsPending = false;
+            renderDiscordSettings();
+        }
+    });
 
     // Attach click handlers for themes
     document.querySelectorAll('.theme-swatch[data-theme]').forEach(btn => {
@@ -2253,6 +2304,18 @@ function initEventListeners() {
 // ============================================================================
 
 function initAPIListeners() {
+    let discordStatusRevision = 0;
+    window.api.discord?.onStatus(status => {
+        discordStatusRevision++;
+        discordStatus = status;
+        renderDiscordSettings();
+    });
+    const statusRevision = discordStatusRevision;
+    window.api.discord?.getStatus().then(status => {
+        if (discordStatusRevision !== statusRevision) return;
+        discordStatus = status;
+        renderDiscordSettings();
+    }).catch(() => {});
     window.api.onUpdateNotice?.(notice => {
         updateNoticeEventRevision++;
         receiveUpdateNotice(notice);
@@ -2260,6 +2323,26 @@ function initAPIListeners() {
     // Manage a single Audio instance to prevent overlapping event listeners and track skipping
     let currentAudio = null;
     let currentAudioToken = null;
+    let currentAudioGeneration = null;
+    let discordAudioPlaying = false;
+    let discordHasPlayed = false;
+    let lastDiscordPosition = 0;
+    let lastDiscordReport = 0;
+    const reportDiscordPlayback = () => {
+        if (!currentAudio || !window.api.discord || currentAudioToken !== AppState.playerState.trackToken ||
+            currentAudioGeneration !== AppState.playerState.playbackGeneration) return;
+        lastDiscordReport = Date.now();
+        window.api.discord.reportPlayback({
+            trackToken: currentAudioToken,
+            playbackGeneration: currentAudioGeneration,
+            playing: discordAudioPlaying && !currentAudio.paused && !currentAudio.ended && !currentAudio.error &&
+                !!currentAudio.getAttribute('src') && !AppState.playerState.streamBlocked,
+            paused: discordHasPlayed && currentAudio.paused && !currentAudio.ended && !currentAudio.error &&
+                !!currentAudio.getAttribute('src') && !AppState.playerState.streamBlocked,
+            position: Number.isFinite(currentAudio.currentTime) ? currentAudio.currentTime : 0,
+            duration: Number.isFinite(currentAudio.duration) ? currentAudio.duration : 0
+        });
+    };
     let consecutiveErrors = 0; // Prevent chain-skipping on stale/expired URLs
     let audioRevision = 0;
     let recoveryTimer = null;
@@ -2282,8 +2365,38 @@ function initAPIListeners() {
                 currentAudio = document.createElement('audio');
                 document.body.appendChild(currentAudio);
 
+                // Presence observes audio events; it never controls playback or waits on Discord.
+                for (const event of ['pause', 'ended', 'error', 'emptied', 'waiting', 'seeking']) {
+                    currentAudio.addEventListener(event, () => {
+                        if (event === 'pause' && !currentAudio.paused || event === 'ended' && !currentAudio.ended ||
+                            event === 'error' && !currentAudio.error || event === 'seeking' && !currentAudio.seeking) return;
+                        if (event === 'waiting' && currentAudio.readyState >= 3) return;
+                        if (event === 'emptied' && currentAudio.readyState !== 0) return;
+                        discordAudioPlaying = false;
+                        reportDiscordPlayback();
+                    });
+                }
+                for (const event of ['playing', 'seeked']) {
+                    currentAudio.addEventListener(event, () => {
+                        if (event === 'seeked' && currentAudio.paused) { reportDiscordPlayback(); return; }
+                        if (currentAudio.paused || currentAudio.ended || currentAudio.error || currentAudio.readyState < 3) return;
+                        discordHasPlayed = discordAudioPlaying = true;
+                        reportDiscordPlayback();
+                    });
+                }
+
                 // Sync time with UI
                 currentAudio.addEventListener('timeupdate', () => {
+                    // A queued media event can be handled after the source/readiness
+                    // changed. Actual progress also proves playback, so one missed
+                    // 'playing' event cannot silence Discord reports indefinitely.
+                    const wasPlaying = discordAudioPlaying;
+                    if (currentAudio.currentTime > lastDiscordPosition && !currentAudio.paused && !currentAudio.ended &&
+                        !currentAudio.error && !currentAudio.seeking && currentAudio.readyState >= 2) {
+                        discordHasPlayed = discordAudioPlaying = true;
+                    }
+                    lastDiscordPosition = currentAudio.currentTime;
+                    if (discordAudioPlaying && (!wasPlaying || Date.now() - lastDiscordReport >= 15000)) reportDiscordPlayback();
                     if (!AppState.playerState.isPlaying) return;
                     const duration = Number.isFinite(currentAudio.duration) && currentAudio.duration > 0
                         ? currentAudio.duration : AppState.playerState.duration || 0;
@@ -2394,6 +2507,9 @@ function initAPIListeners() {
                 const revision = ++audioRevision;
                 cancelRecovery();
                 currentAudioToken = state.trackToken;
+                currentAudioGeneration = state.playbackGeneration;
+                discordHasPlayed = discordAudioPlaying = false;
+                lastDiscordPosition = 0;
                 DOM.progressFill.style.width = '0%';
                 DOM.currentTime.textContent = '0:00';
                 DOM.totalTime.textContent = formatTime(state.duration || 0);
@@ -2428,13 +2544,20 @@ function initAPIListeners() {
 
                 // updatePlayerUI already applied Pandora's saved feedback.
                 // Loading the audio must not clear the track's thumb state.
-            } else if (state.resumePlayback && currentAudio.paused) {
-                currentAudio.play().catch(e => console.error('[UI] Resume error:', e));
+            } else {
+                currentAudioGeneration = state.playbackGeneration;
+                if (state.resumePlayback && currentAudio.paused) {
+                    currentAudio.play().catch(e => console.error('[UI] Resume error:', e));
+                }
+                if (discordHasPlayed) reportDiscordPlayback();
             }
         } else if (state.audioURL === null && currentAudio) {
             // Clear audio if specifically set to null
             audioRevision++;
             currentAudioToken = null;
+            currentAudioGeneration = null;
+            discordHasPlayed = discordAudioPlaying = false;
+            lastDiscordPosition = 0;
             cancelRecovery();
             currentAudio.pause();
             currentAudio.src = '';
