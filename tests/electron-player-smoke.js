@@ -74,6 +74,8 @@ app.whenReady().then(async () => {
     let freshTracks = null;
     let refillGate = null;
     let slowAudioGate = null;
+    let coverGate = null;
+    let heldCoverRequests = 0;
     const audioRequests = [];
     const audio = silentWav();
     const tracks = [1, 2, 3, 4].map(n => ({
@@ -91,9 +93,14 @@ app.whenReady().then(async () => {
         if (url.pathname === '/missing-large.svg' || url.pathname === '/audio-error.wav') {
             return new Response('Unavailable fixture', { status: 503 });
         }
+        if (url.pathname === '/held-cover.svg') {
+            heldCoverRequests++;
+            if (coverGate) await coverGate;
+        }
         if (url.pathname.endsWith('.svg')) return new Response(
             '<svg xmlns="http://www.w3.org/2000/svg" width="500" height="500"><rect width="500" height="500" fill="#487ad9"/><circle cx="250" cy="250" r="135" fill="#202947"/><circle cx="250" cy="250" r="26" fill="#a5b9f0"/></svg>',
-            { headers: { 'Content-Type': 'image/svg+xml', 'Access-Control-Allow-Origin': '*' } });
+            { headers: { 'Content-Type': 'image/svg+xml', 'Access-Control-Allow-Origin': '*',
+                ...(url.pathname === '/held-cover.svg' ? { 'Cache-Control': 'no-store' } : {}) } });
         if (url.pathname.endsWith('.wav')) {
             audioRequests.push(url.pathname);
             if (url.pathname === '/slow-audio.wav' && slowAudioGate) await slowAudioGate;
@@ -185,6 +192,22 @@ app.whenReady().then(async () => {
         fs.writeFileSync(path.join(testData, name + '.png'), (await win.webContents.capturePage()).toPNG());
     };
     async function exerciseQueuedPlayback() {
+        // The cover must load directly in the visible player, without waiting
+        // for a hidden probe and then starting a second image load.
+        await run("renderPage('home')");
+        let finishCover;
+        coverGate = new Promise(resolve => { finishCover = resolve; });
+        assert.equal(await run(`
+            updatePlayerUI({ coverArt: 'https://fixture.invalid/held-cover.svg', coverArtSources: [] });
+            document.getElementById('now-playing-art').getAttribute('src');
+        `), 'https://fixture.invalid/held-cover.svg', 'A valid cover URL reaches the visible image immediately');
+        await waitFor(() => heldCoverRequests > 0, 'direct cover request');
+        assert.equal(heldCoverRequests, 1);
+        finishCover();
+        await waitFor(() => run("document.getElementById('now-playing-art').naturalWidth > 0 && document.getElementById('now-playing-art').complete"), 'direct cover displays');
+        assert.equal(heldCoverRequests, 1, 'Displaying a non-cacheable cover must not request it again after a probe');
+        coverGate = null;
+
         activeMode = 0;
         stressTracks = tracks.map((track, index) => ({ ...track, trackToken: 'stress-' + (index + 1),
             audioURL: index === 1 ? 'https://fixture.invalid/slow-audio.wav' : track.audioURL,
@@ -227,7 +250,7 @@ app.whenReady().then(async () => {
         assert.equal(await run('AppState.playerState.trackToken'), 'fresh-3', 'The old audio error cannot skip the recovered song later');
         assert.equal(await run("document.querySelectorAll('audio').length"), 1);
         await capture('rapid-skip-recovered');
-        console.log('Rapid skips, slow audio and playlist responses, real natural song endings, stale error recovery, first-song artwork fallback and clearing missing covers passed.');
+        console.log('Direct artwork loading, rapid skips, slow audio and playlist responses, real natural song endings, stale error recovery, first-song artwork recovery and clearing missing covers passed.');
     }
 
     await waitFor(() => run("!!document.getElementById('login-form')"), 'login UI');

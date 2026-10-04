@@ -75,27 +75,50 @@ function setup(t) {
     return { window, ui, player, calls, node, open, select, events, images };
 }
 
-test('first-song artwork falls back to another supplied size and old loads cannot replace a newer cover', t => {
+test('player artwork loads directly without a probe or placeholder between valid covers', t => {
     const s = setup(t);
     s.ui.update({ coverArt: 'https://fixture.invalid/large.jpg', coverArtSources: ['https://fixture.invalid/small.jpg'] });
     s.open();
-    const old = [...s.images];
-    old.forEach(image => image.onerror());
-    const fallback = s.images.filter(image => image.src.endsWith('/small.jpg'));
-    assert.equal(fallback.length, 2);
-    fallback.forEach(image => image.onload());
-    for (const id of ['now-playing-art', 'np-large-art']) assert.equal(s.node(id).src, 'https://fixture.invalid/small.jpg');
+    for (const id of ['now-playing-art', 'np-large-art']) assert.equal(s.node(id).src, 'https://fixture.invalid/large.jpg');
+    assert.equal(s.images.length, 0, 'The visible images load the cover without waiting for invisible probes');
+    const changes = [];
+    const observer = new s.window.MutationObserver(() => {});
+    for (const id of ['now-playing-art', 'np-large-art']) {
+        observer.observe(s.node(id), { attributes: true, attributeFilter: ['src'], attributeOldValue: true });
+    }
     s.ui.update({ trackToken: 'next', coverArt: 'https://fixture.invalid/next.jpg', coverArtSources: [] });
-    for (const id of ['now-playing-art', 'np-large-art']) assert.match(s.node(id).src, /^data:image\/svg/);
-    old.forEach(image => image.onload());
-    fallback.forEach(image => image.onerror());
-    s.images.filter(image => image.src.endsWith('/next.jpg')).forEach(image => image.onload());
+    changes.push(...observer.takeRecords());
+    assert.equal(changes.length, 2, 'Only one source assignment per visible player');
+    assert.ok(changes.every(change => change.oldValue === 'https://fixture.invalid/large.jpg'));
     for (const id of ['now-playing-art', 'np-large-art']) assert.equal(s.node(id).src, 'https://fixture.invalid/next.jpg');
-    const count = s.images.length;
     s.ui.update({ isPlaying: false, feedback: 'thumbUp' });
-    assert.equal(s.images.length, count, 'Partial updates do not reload images');
+    s.ui.update({ trackToken: 'same-album', playbackGeneration: 2, coverArt: 'https://fixture.invalid/next.jpg', coverArtSources: [] });
+    assert.equal(observer.takeRecords().length, 0, 'Partial updates and another song with the same cover preserve the image');
     s.ui.update({ trackToken: 'no-art', coverArt: null, coverArtSources: [] });
     for (const id of ['now-playing-art', 'np-large-art']) assert.match(s.node(id).src, /^data:image\/svg/);
+    observer.disconnect();
+});
+
+test('failed covers try supplied sizes and late failures cannot replace a newer cover', t => {
+    const s = setup(t);
+    s.ui.update({ coverArt: 'https://fixture.invalid/large.jpg', coverArtSources: ['https://fixture.invalid/small.jpg'] });
+    const image = s.node('now-playing-art');
+    Object.defineProperty(image, 'complete', { configurable: true, value: true });
+    Object.defineProperty(image, 'naturalWidth', { configurable: true, value: 0 });
+    const failedLarge = image.onerror;
+    failedLarge();
+    assert.equal(image.src, 'https://fixture.invalid/small.jpg');
+    const failedSmall = image.onerror;
+    failedLarge();
+    assert.equal(image.src, 'https://fixture.invalid/small.jpg', 'An old attempt cannot fail the next size');
+    Object.defineProperty(image, 'naturalWidth', { configurable: true, value: 500 });
+    s.open();
+    assert.equal(s.node('np-large-art').src, image.src, 'Expanding the player reuses the working cover');
+    s.ui.update({ trackToken: 'next', coverArt: 'https://fixture.invalid/next.jpg', coverArtSources: [] });
+    failedSmall();
+    for (const id of ['now-playing-art', 'np-large-art']) assert.equal(s.node(id).src, 'https://fixture.invalid/next.jpg');
+    image.onerror();
+    assert.equal(image.src, 'https://fixture.invalid/next.jpg', 'A delayed error cannot replace a successfully loaded image');
 });
 
 test('a transient artwork failure retries once and repeated failures do not loop', t => {
@@ -107,17 +130,21 @@ test('a transient artwork failure retries once and repeated failures do not loop
         return setTimer(callback, delay);
     };
     s.ui.update({ coverArt: 'https://fixture.invalid/transient.jpg' });
-    s.images[0].onerror();
+    const image = s.node('now-playing-art');
+    Object.defineProperty(image, 'complete', { configurable: true, value: true });
+    Object.defineProperty(image, 'naturalWidth', { configurable: true, value: 0 });
+    image.onerror();
     assert.equal(retries.length, 1);
+    assert.match(image.src, /^data:image\/svg/);
     retries[0]();
-    assert.equal(s.images.length, 2);
-    s.images[1].onerror();
+    assert.equal(image.src, 'https://fixture.invalid/transient.jpg');
+    image.onerror();
     s.ui.update({ isPlaying: false });
     assert.equal(retries.length, 1);
-    assert.equal(s.images.length, 2);
+    assert.match(image.src, /^data:image\/svg/);
     s.ui.update({ trackToken: 'new-song', coverArt: 'https://fixture.invalid/new.jpg', coverArtSources: [] });
-    s.images.at(-1).onload();
-    assert.equal(s.node('now-playing-art').src, 'https://fixture.invalid/new.jpg');
+    retries[0]();
+    assert.equal(image.src, 'https://fixture.invalid/new.jpg', 'An old retry cannot restore a skipped cover');
 });
 
 test('update banner escapes versions and leaves focus, navigation and playback alone', async t => {
