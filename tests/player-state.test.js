@@ -56,6 +56,7 @@ function setup(config = { getRememberedShuffle: () => null, rememberShuffle() {}
         currentStations = [{stationId:'station-1'}, {stationId:'station-2'}];
         module.exports = { loadStations, playStation, showStreamConflict, getCurrentState, thumbUp, thumbDown, pausePlayer, resumePlayer, loadStationModes, changeStationMode, skipTrack,
             seedUpdateChecker: checker => { updateChecker = checker; },
+            seedDiscord: presence => { discordPresence = presence; discordPresence.setPlayerState(getCurrentState()); },
             seed: (tracks, station = {}) => { currentStations[0] = { ...currentStations[0], ...station }; currentStation = currentStations[0]; currentPlaylist = tracks; currentTrackIndex = 0; isPaused = false; tracks.forEach(rememberTrack); }
         };`;
     vm.runInNewContext(source, {
@@ -64,6 +65,8 @@ function setup(config = { getRememberedShuffle: () => null, rememberShuffle() {}
             if (name === 'electron') return electron;
             if (name === './pandora-api') return { getHighResArt: () => null, getArtUrls: () => [] };
             if (name === './update-checker') return require('../update-checker');
+            if (name === './discord-presence') return require('../discord-presence');
+            if (name === './discord-config.json') return require('../discord-config.json');
             if (name === './config') return config;
             if (name === './pandora-verification') return { PandoraVerification: class { cancel() {} } };
             return require(name);
@@ -100,6 +103,41 @@ test('update checks and choices require the app renderer and a verified notice',
     assert.equal((await answer(trusted, { version: '1.2.0', action: 'download', url: 'https://untrusted.invalid' })).success, true);
     assert.deepEqual(s.calls, [['openExternal', 'https://github.com/MitchellBrovarnik/Panedora/releases/latest']]);
     assert.equal((await answer(trusted, { version: '1.2.0', action: 'download' })).success, false);
+});
+
+test('Discord IPC is limited to the app main frame and logout clears before network work', async () => {
+    const saved = [];
+    const s = setup({ setDiscordEnabled: value => saved.push(value) });
+    s.seed([track()]);
+    const updates = [];
+    const reports = [];
+    const presence = {
+        configured: true,
+        getStatus: () => ({ enabled: false, configured: true, status: 'disabled' }),
+        setPlayerState: state => updates.push(state),
+        setEnabled: enabled => ({ enabled }),
+        reportPlayback: value => { reports.push(value); return true; }
+    };
+    s.seedDiscord(presence);
+    const event = { sender: s.window.webContents };
+    const set = s.handlers.get('DISCORD:SET_ENABLED');
+    const report = s.handlers.get('DISCORD:PLAYBACK');
+    assert.equal(set({ sender: {} }, true), null);
+    assert.equal(set({ ...event, senderFrame: {} }, true), null);
+    assert.equal(set(event, 'true'), null);
+    assert.equal(report({ sender: {} }, {}), false);
+    assert.equal(report({ ...event, senderFrame: {} }, {}), false);
+    assert.deepEqual(saved, []); assert.deepEqual(reports, []);
+    presence.configured = false;
+    set(event, true); assert.deepEqual(saved, []);
+    presence.configured = true;
+    assert.equal(set(event, true).enabled, true);
+    assert.deepEqual(saved, [true]);
+    let finish;
+    s.api.playbackPaused = () => new Promise(resolve => { finish = resolve; });
+    const logout = s.handlers.get('AUTH:LOGOUT')();
+    assert.equal(updates.at(-1), null, 'Clear even if Pandora pause stalls');
+    finish(); await logout;
 });
 
 test('update download failures allow retry and duplicate clicks cannot open multiple browser tabs', async () => {

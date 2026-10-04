@@ -21,6 +21,16 @@ contextBridge.exposeInMainWorld('api', {
     onUpdateNotice: callback => {
         ipcRenderer.on('UI:UPDATE_NOTICE', (_event, notice) => callback(notice));
     },
+    discord: {
+        getStatus: () => ipcRenderer.invoke('DISCORD:GET_STATUS'),
+        setEnabled: enabled => ipcRenderer.invoke('DISCORD:SET_ENABLED', enabled),
+        reportPlayback: report => { void ipcRenderer.invoke('DISCORD:PLAYBACK', report).catch(() => {}); },
+        onStatus: callback => {
+            const handler = (_event, status) => callback(status);
+            ipcRenderer.on('UI:DISCORD_STATUS', handler);
+            return () => ipcRenderer.removeListener('UI:DISCORD_STATUS', handler);
+        }
+    },
 
     // ========================================
     // Authentication

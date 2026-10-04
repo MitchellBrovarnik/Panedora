@@ -96,6 +96,11 @@ Release builds containing the update checker look for a newer stable GitHub rele
 
 Older versions without this checker need one manual update before they can display notices for later releases. Development checkouts do not check automatically.
 
+### Discord Rich Presence
+Builds configured for Discord include an optional **Settings → Discord** switch to share the current song, artist, album artwork, and playback progress as a Listening activity. Sharing is off by default. Pausing keeps the song and artwork visible with a **Paused** label. The song progress bar disappears, though Discord may still show its own elapsed-activity clock. Discord's desktop app must be running with activity sharing enabled. Panedora reconnects quietly if Discord is opened later.
+
+Maintainers only need to configure one public Discord Application ID for all installations; users do not need their own developer application. See the [Discord setup and testing guide](docs/discord.md).
+
 ## Technical Architecture
 
 Panedora is built using a modern Electron stack, emphasizing security and separation of concerns:
@@ -157,6 +162,7 @@ You do **not** need to compile the application locally. Simply navigate to the R
 Panedora is designed with user privacy as a priority:
 *   **Direct Authentication:** Your credentials are used to sign in to Pandora. Saved passwords are encrypted locally using the operating system's secure storage when available, with an app encryption fallback.
 *   **Local Storage Only:** Authentication tokens and encrypted credentials are stored locally on your machine in your user data directory. All auth data is cleared on sign-out.
+*   **Optional Discord Sharing:** When enabled, Panedora sends the current song title, artist, album, artwork URL, and playback timestamps to your local Discord client for display on your profile, subject to Discord's activity privacy settings. Discord fetches the artwork from its public URL. Pandora credentials, session tokens, and audio URLs are never included.
 *   **No Analytics or Ad Trackers:** Panedora includes no analytics or advertising trackers. Pandora handles authentication and playback; lyrics requests send the artist and song title to LRCLIB when you use Lyrics. Release builds with the update checker request GitHub's latest public release. These services receive normal network information such as your IP address, but lyrics and update requests do not include your Pandora credentials. Fonts are bundled with the app instead of fetched from Google Fonts.
 
 ## License
