@@ -69,7 +69,8 @@ test('publish only actual playback, with public metadata and millisecond timesta
 test('ignore old songs/sessions and invalid IPC reports; renderer metadata cannot override main', async t => {
     const s = setup(t, { enabled: true });
     for (const bad of [report(12, { trackToken: 'old' }), report(12, { playbackGeneration: 0 }),
-        report(NaN), report(-1), report(Infinity), report(1, { duration: -1 }), report(1, { playing: 'true' }), null]) {
+        report(NaN), report(-1), report(Infinity), report(1, { duration: -1 }), report(1, { playing: 'true' }),
+        report(1, { paused: 'yes' }), report(1, { paused: true }), null]) {
         assert.equal(s.presence.reportPlayback(bad), false);
     }
     await tick(); assert.equal(s.rpc.connects, 0);
@@ -86,20 +87,31 @@ test('normal progress is deduplicated; rapid seeks and skips publish only the la
     s.presence.reportPlayback(report(80));
     s.presence.setPlayerState(player('track-2', { track: 'Believer' }));
     s.presence.reportPlayback(report(0, { trackToken: 'track-2' })); await tick();
-    assert.equal(s.rpc.active, null, 'Old song clears while new updates are coalesced');
+    assert.equal(s.rpc.active.details, 'Thunder', 'Keep the connection while coalescing the newest song');
     await s.advance(5000);
     assert.equal(s.rpc.updates.length, 3);
     assert.equal(s.rpc.active.details, 'Believer');
     assert.equal(s.rpc.active.timestamps.start, s.now - 5000);
 });
 
-test('pause, takeover, station loading, logout and stale heartbeat clear presence immediately', async t => {
-    for (const clear of [s => s.presence.reportPlayback(report(12, { playing: false })),
-        s => s.presence.setPlayerState(player('track-1', { isPlaying: false })),
-        s => s.presence.setPlayerState(player('track-1', { streamBlocked: true })),
-        s => s.presence.setPlayerState(player('track-1', { stationLoading: true })),
-        s => s.presence.setPlayerState(null), s => s.presence.invalidatePlayback(),
-        s => s.advance(45000)]) {
+test('consecutive skips keep one Discord connection and eventually publish the newest song', async t => {
+    const s = setup(t, { enabled: true });
+    s.presence.reportPlayback(report()); await tick();
+    await s.advance(1000);
+    s.presence.setPlayerState(player('track-2', { track: 'Second' }));
+    s.presence.reportPlayback(report(0, { trackToken: 'track-2' })); await tick();
+    await s.advance(1000);
+    s.presence.setPlayerState(player('track-3', { track: 'Third' }));
+    s.presence.reportPlayback(report(0, { trackToken: 'track-3' })); await tick();
+    assert.equal(s.rpc.connects, 1, 'Skipping must not close/reopen IPC');
+    await s.advance(3000);
+    assert.equal(s.rpc.active.details, 'Third');
+    assert.equal(s.rpc.updates.length, 2, 'The intermediate song is coalesced');
+});
+
+test('takeover, logout, renderer loss and disabling clear presence immediately', async t => {
+    for (const clear of [s => s.presence.setPlayerState(player('track-1', { streamBlocked: true })),
+        s => s.presence.setPlayerState(null), s => s.presence.invalidatePlayback(), s => s.presence.setEnabled(false)]) {
         const s = setup(t, { enabled: true });
         s.presence.reportPlayback(report()); await tick();
         assert.ok(s.rpc.active);
@@ -108,17 +120,72 @@ test('pause, takeover, station loading, logout and stale heartbeat clear presenc
     }
 });
 
-test('pause/resume uses the resumed position and enabling during playback shares current song', async t => {
+test('pause retains metadata without a running timer; resume uses the actual position', async t => {
     const s = setup(t);
     s.presence.reportPlayback(report());
     s.presence.setEnabled(true); await tick(); assert.ok(s.rpc.active);
-    s.presence.reportPlayback(report(12, { playing: false }));
-    await s.advance(10000);
-    s.presence.reportPlayback(report(12)); await tick();
-    assert.equal(s.rpc.active.timestamps.start, s.now - 12000);
+    s.presence.reportPlayback(report(14, { playing: false, paused: true }));
+    s.presence.setPlayerState(player('track-1', { isPlaying: false }));
+    await s.advance(5000);
+    assert.equal(s.rpc.active.details, 'Thunder');
+    assert.equal(s.rpc.active.state, 'Paused · Imagine Dragons');
+    assert.equal(s.rpc.active.assets.large_text, 'Evolve');
+    assert.equal(s.rpc.active.timestamps, undefined);
+    await s.advance(300000);
+    assert.equal(s.rpc.active.state, 'Paused · Imagine Dragons', 'Pausing does not expire after 45 seconds');
+    assert.equal(s.rpc.updates.length, 2, 'Paused presence makes no periodic Discord writes');
+    assert.equal(s.rpc.connects, 1);
+    s.presence.setPlayerState(player());
+    s.presence.reportPlayback(report(14)); await tick();
+    assert.equal(s.rpc.active.timestamps.start, s.now - 14000);
+    assert.equal(s.rpc.active.state, 'Imagine Dragons');
     s.presence.setEnabled(false);
     assert.equal(s.rpc.active, null);
     assert.equal(s.presence.getStatus().status, 'disabled');
+});
+
+test('long buffering, loading and a missing heartbeat clear through the existing connection', async t => {
+    for (const stall of [s => s.presence.reportPlayback(report(12, { playing: false })),
+        s => s.presence.setPlayerState(player('track-1', { stationLoading: true })), s => s.advance(45000)]) {
+        const s = setup(t, { enabled: true });
+        s.presence.reportPlayback(report()); await tick();
+        await stall(s); await s.advance(5000);
+        assert.equal(s.rpc.active, null);
+        assert.equal(s.rpc.ready, true);
+        s.presence.setPlayerState(player());
+        s.presence.reportPlayback(report(20)); await s.advance(5000);
+        assert.equal(s.rpc.active.details, 'Thunder');
+        assert.equal(s.rpc.connects, 1);
+    }
+});
+
+test('brief buffering does not spend an update slot clearing the song', async t => {
+    const s = setup(t, { enabled: true });
+    s.presence.reportPlayback(report()); await tick();
+    await s.advance(15000);
+    s.presence.reportPlayback(report(27, { playing: false }));
+    await s.advance(500);
+    s.presence.reportPlayback(report(27)); await tick();
+    assert.ok(s.rpc.updates.every(Boolean), 'No intermediate clear consumes an update slot');
+    assert.equal(s.rpc.connects, 1);
+});
+
+test('a delayed acknowledgement cannot lose the latest skip or a pending clear', async t => {
+    const s = setup(t, { enabled: true });
+    let finish;
+    s.rpc.hold = new Promise(resolve => { finish = resolve; });
+    s.presence.reportPlayback(report()); await tick();
+    s.presence.setPlayerState(player('track-2', { track: 'Second' }));
+    s.presence.reportPlayback(report(0, { trackToken: 'track-2' }));
+    s.presence.setPlayerState(player('track-3', { track: 'Third' }));
+    s.presence.reportPlayback(report(0, { trackToken: 'track-3' }));
+    s.rpc.hold = null; finish(); await tick();
+    await s.advance(5000);
+    assert.equal(s.rpc.active.details, 'Third');
+    assert.equal(s.rpc.connects, 1);
+    s.presence.reportPlayback(report(5, { trackToken: 'track-3', playing: false }));
+    await s.advance(5000);
+    assert.equal(s.rpc.active, null);
 });
 
 test('Discord absence/restart retries quietly and disabling cancels connection retries', async t => {
@@ -190,6 +257,9 @@ test('real IPC socket handles fragmented READY, coalesced ping, activity acknowl
     const command = connection.messages[1];
     assert.equal(command.cmd, 'SET_ACTIVITY'); assert.equal(command.args.pid, process.pid);
     assert.equal(server.active.details, 'Thunder');
+    await rpc.setActivity(null);
+    assert.equal(server.active, null);
+    assert.equal(rpc.ready, true, 'Clearing activity does not close the connection');
     const disconnected = new Promise(resolve => rpc.once('disconnect', resolve));
     connection.socket.destroy(); await disconnected;
     assert.equal(rpc.ready, false);

@@ -134,7 +134,8 @@ class DiscordRpc extends EventEmitter {
         this.ready = false;
         this.rejectPending();
         // Discord removes this process's presence when its IPC connection closes.
-        // Closing also clears immediately when paused/disabled, without rate-limited writes.
+        // Reserve closing for shutdown, disabling, logout, or a failed connection.
+        // Normal song/pause changes use SET_ACTIVITY on the existing connection.
         socket?.destroy();
     }
 }

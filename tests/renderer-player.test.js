@@ -111,21 +111,36 @@ test('Discord observes playing, seeking and pause without starting audio or publ
     assert.equal(s.discordReports.at(-1).position, 12);
     s.audio.seeking = true; s.audio.dispatch('seeking');
     assert.equal(s.discordReports.at(-1).playing, false);
+    assert.equal(s.discordReports.at(-1).paused, false);
     s.audio.currentTime = 32; s.audio.seeking = false; s.audio.dispatch('seeked');
     assert.equal(s.discordReports.at(-1).position, 32);
     assert.equal(s.discordReports.at(-1).playing, true);
     const callsBefore = s.resumeRequests;
     s.audio.pause();
     assert.equal(s.discordReports.at(-1).playing, false);
+    assert.equal(s.discordReports.at(-1).paused, true);
+    s.audio.currentTime = 40; s.audio.dispatch('seeked');
+    assert.equal(s.discordReports.at(-1).position, 40);
+    assert.equal(s.discordReports.at(-1).paused, true);
     assert.equal(s.resumeRequests, callsBefore);
     assert.equal(s.audio.plays, 1);
+});
+
+test('Discord follows a renewed playback generation even when the current source is reused', () => {
+    const s = setup({ withDiscord: true });
+    s.state({ isPlaying: true }); s.audio.dispatch('playing');
+    s.audio.currentTime = 12;
+    s.state({ isPlaying: true, playbackGeneration: 2 });
+    assert.equal(s.discordReports.at(-1).playbackGeneration, 2);
+    assert.equal(s.discordReports.at(-1).position, 12);
+    assert.equal(s.audio.plays, 1, 'Presence never reloads the audio');
 });
 
 test('Discord ignores stale media events and waits for the replacement song to play', () => {
     const s = setup({ withDiscord: true });
     s.state({ isPlaying: true }); s.audio.dispatch('playing');
     const reports = s.discordReports.length;
-    s.audio.dispatch('pause'); s.audio.dispatch('ended'); s.audio.dispatch('error');
+    s.audio.dispatch('pause'); s.audio.dispatch('ended'); s.audio.dispatch('error'); s.audio.dispatch('emptied');
     assert.equal(s.discordReports.length, reports);
     s.state({ isPlaying: true, trackToken: 'next', playbackGeneration: 2, audioURL: 'https://fixture.invalid/next.wav' });
     s.audio.readyState = 0; s.audio.dispatch('playing'); s.audio.dispatch('timeupdate');
@@ -135,6 +150,20 @@ test('Discord ignores stale media events and waits for the replacement song to p
     assert.equal(s.discordReports.at(-1).playbackGeneration, 2);
     s.audio.readyState = 2; s.audio.dispatch('waiting');
     assert.equal(s.discordReports.at(-1).playing, false);
+});
+
+test('Discord recovers from a missed playing event when the current audio advances', () => {
+    const s = setup({ withDiscord: true });
+    s.state({ isPlaying: true }); s.audio.dispatch('playing');
+    s.state({ isPlaying: true, trackToken: 'next', audioURL: 'https://fixture.invalid/next.wav' });
+    s.audio.readyState = 2; s.audio.dispatch('playing');
+    s.audio.readyState = 4; s.audio.currentTime = 0.25; s.audio.dispatch('timeupdate');
+    assert.equal(s.discordReports.at(-1).trackToken, 'next');
+    assert.equal(s.discordReports.at(-1).playing, true);
+    s.audio.readyState = 2; s.audio.dispatch('waiting');
+    assert.equal(s.discordReports.at(-1).playing, false);
+    s.audio.readyState = 4; s.audio.currentTime = 0.5; s.audio.dispatch('timeupdate');
+    assert.equal(s.discordReports.at(-1).playing, true, 'Progress recovers without a pause/resume or window focus');
 });
 
 test('normal and mini Play and Previous wait for the approved resume state', () => {

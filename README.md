@@ -97,7 +97,7 @@ Release builds containing the update checker look for a newer stable GitHub rele
 Older versions without this checker need one manual update before they can display notices for later releases. Development checkouts do not check automatically.
 
 ### Discord Rich Presence
-Builds configured for Discord include an optional **Settings → Discord** switch to share the current song, artist, album artwork, and playback progress as a Listening activity. Sharing is off by default and clears when playback pauses or stops. Discord's desktop app must be running with activity sharing enabled. Panedora reconnects quietly if Discord is opened later.
+Builds configured for Discord include an optional **Settings → Discord** switch to share the current song, artist, album artwork, and playback progress as a Listening activity. Sharing is off by default. Pausing keeps the song and artwork visible with a **Paused** label and hides the progress timer until playback resumes. Discord's desktop app must be running with activity sharing enabled. Panedora reconnects quietly if Discord is opened later.
 
 Maintainers only need to configure one public Discord Application ID for all installations; users do not need their own developer application. See the [Discord setup and testing guide](docs/discord.md).
 

@@ -1106,7 +1106,7 @@ function renderSettingsPage() {
         <div class="discord-setting">
           <div>
             <label class="discord-setting-label" for="discord-sharing-toggle">Share what I'm listening to</label>
-            <p class="discord-setting-description" id="discord-sharing-description">Show the song, artist, album artwork, and progress on your Discord profile while music plays.</p>
+            <p class="discord-setting-description" id="discord-sharing-description">Show the song, artist, album artwork, and progress on your Discord profile. Paused songs stay visible without a timer.</p>
             <p class="discord-setting-status" id="discord-sharing-status" role="status"></p>
           </div>
           <input class="discord-sharing-toggle" id="discord-sharing-toggle" type="checkbox" role="switch" aria-describedby="discord-sharing-description discord-sharing-status">
@@ -2325,6 +2325,8 @@ function initAPIListeners() {
     let currentAudioToken = null;
     let currentAudioGeneration = null;
     let discordAudioPlaying = false;
+    let discordHasPlayed = false;
+    let lastDiscordPosition = 0;
     let lastDiscordReport = 0;
     const reportDiscordPlayback = () => {
         if (!currentAudio || !window.api.discord || currentAudioToken !== AppState.playerState.trackToken ||
@@ -2334,6 +2336,8 @@ function initAPIListeners() {
             trackToken: currentAudioToken,
             playbackGeneration: currentAudioGeneration,
             playing: discordAudioPlaying && !currentAudio.paused && !currentAudio.ended && !currentAudio.error &&
+                !!currentAudio.getAttribute('src') && !AppState.playerState.streamBlocked,
+            paused: discordHasPlayed && currentAudio.paused && !currentAudio.ended && !currentAudio.error &&
                 !!currentAudio.getAttribute('src') && !AppState.playerState.streamBlocked,
             position: Number.isFinite(currentAudio.currentTime) ? currentAudio.currentTime : 0,
             duration: Number.isFinite(currentAudio.duration) ? currentAudio.duration : 0
@@ -2367,21 +2371,32 @@ function initAPIListeners() {
                         if (event === 'pause' && !currentAudio.paused || event === 'ended' && !currentAudio.ended ||
                             event === 'error' && !currentAudio.error || event === 'seeking' && !currentAudio.seeking) return;
                         if (event === 'waiting' && currentAudio.readyState >= 3) return;
+                        if (event === 'emptied' && currentAudio.readyState !== 0) return;
                         discordAudioPlaying = false;
                         reportDiscordPlayback();
                     });
                 }
                 for (const event of ['playing', 'seeked']) {
                     currentAudio.addEventListener(event, () => {
+                        if (event === 'seeked' && currentAudio.paused) { reportDiscordPlayback(); return; }
                         if (currentAudio.paused || currentAudio.ended || currentAudio.error || currentAudio.readyState < 3) return;
-                        discordAudioPlaying = true;
+                        discordHasPlayed = discordAudioPlaying = true;
                         reportDiscordPlayback();
                     });
                 }
 
                 // Sync time with UI
                 currentAudio.addEventListener('timeupdate', () => {
-                    if (discordAudioPlaying && Date.now() - lastDiscordReport >= 15000) reportDiscordPlayback();
+                    // A queued media event can be handled after the source/readiness
+                    // changed. Actual progress also proves playback, so one missed
+                    // 'playing' event cannot silence Discord reports indefinitely.
+                    const wasPlaying = discordAudioPlaying;
+                    if (currentAudio.currentTime > lastDiscordPosition && !currentAudio.paused && !currentAudio.ended &&
+                        !currentAudio.error && !currentAudio.seeking && currentAudio.readyState >= 2) {
+                        discordHasPlayed = discordAudioPlaying = true;
+                    }
+                    lastDiscordPosition = currentAudio.currentTime;
+                    if (discordAudioPlaying && (!wasPlaying || Date.now() - lastDiscordReport >= 15000)) reportDiscordPlayback();
                     if (!AppState.playerState.isPlaying) return;
                     const duration = Number.isFinite(currentAudio.duration) && currentAudio.duration > 0
                         ? currentAudio.duration : AppState.playerState.duration || 0;
@@ -2493,7 +2508,8 @@ function initAPIListeners() {
                 cancelRecovery();
                 currentAudioToken = state.trackToken;
                 currentAudioGeneration = state.playbackGeneration;
-                discordAudioPlaying = false;
+                discordHasPlayed = discordAudioPlaying = false;
+                lastDiscordPosition = 0;
                 DOM.progressFill.style.width = '0%';
                 DOM.currentTime.textContent = '0:00';
                 DOM.totalTime.textContent = formatTime(state.duration || 0);
@@ -2528,15 +2544,20 @@ function initAPIListeners() {
 
                 // updatePlayerUI already applied Pandora's saved feedback.
                 // Loading the audio must not clear the track's thumb state.
-            } else if (state.resumePlayback && currentAudio.paused) {
-                currentAudio.play().catch(e => console.error('[UI] Resume error:', e));
+            } else {
+                currentAudioGeneration = state.playbackGeneration;
+                if (state.resumePlayback && currentAudio.paused) {
+                    currentAudio.play().catch(e => console.error('[UI] Resume error:', e));
+                }
+                if (discordHasPlayed) reportDiscordPlayback();
             }
         } else if (state.audioURL === null && currentAudio) {
             // Clear audio if specifically set to null
             audioRevision++;
             currentAudioToken = null;
             currentAudioGeneration = null;
-            discordAudioPlaying = false;
+            discordHasPlayed = discordAudioPlaying = false;
+            lastDiscordPosition = 0;
             cancelRecovery();
             currentAudio.pause();
             currentAudio.src = '';

@@ -655,11 +655,24 @@ app.whenReady().then(async () => {
     assert.equal(require('../config').getDiscordEnabled(), true);
     await capture('discord-settings');
     await run("document.querySelector('audio').currentTime = 20");
-    await waitFor(() => discordServer.active && Math.abs(discordServer.active.timestamps.start - (Date.now() - 20000)) < 6500, 'seek updates presence');
+    await waitFor(() => discordServer.active?.timestamps && Math.abs(discordServer.active.timestamps.start - (Date.now() - 20000)) < 6500, 'seek updates presence');
     await run("document.querySelector('audio').pause()");
-    await waitFor(() => !discordServer.active, 'pause clears presence');
+    await waitFor(() => discordServer.active?.state === 'Paused · Fixture Artist', 'pause keeps the current song');
+    assert.equal(discordServer.active.timestamps, undefined, 'Paused progress must not keep advancing');
+    assert.equal(discordServer.active.details, 'Fixture Song 1');
+    assert.ok(discordServer.active.assets.large_image);
     await run('window.api.player.play()');
-    await waitFor(() => !!discordServer.active, 'resume restores presence');
+    await waitFor(() => discordServer.active?.state === 'Fixture Artist' && discordServer.active?.timestamps, 'resume restores progress');
+    assert.equal(discordServer.connections.length, 1, 'Seek/pause/resume reuse the live connection');
+    await run('window.api.player.next()');
+    await waitFor(() => run("AppState.playerState.track === 'Fixture Song 2' && document.querySelector('audio').currentTime > 0"), 'first skip plays');
+    // Simulate a missed playing notification, followed by a queued old emptied
+    // event. The real audio timeupdates must recover without pause or refocus.
+    await run("document.querySelector('audio').addEventListener('playing', e => e.stopImmediatePropagation(), {capture:true, once:true}); window.api.player.next()");
+    await waitFor(() => run("AppState.playerState.track === 'Fixture Song 3' && document.querySelector('audio').currentTime > 0.25"), 'second skip plays');
+    await run("document.querySelector('audio').dispatchEvent(new Event('emptied'))");
+    await waitFor(() => discordServer.active?.details === 'Fixture Song 3', 'consecutive skips publish the latest song');
+    assert.equal(discordServer.connections.length, 1, 'Consecutive skips never reconnect');
     await run('window.api.window.toggleMini()');
     assert.ok(discordServer.active, 'Mini mode continues sharing while playing');
     discordServer.connections.at(-1).socket.destroy();
@@ -669,11 +682,17 @@ app.whenReady().then(async () => {
     await run('window.api.discord.setEnabled(true)');
     await waitFor(() => !!discordServer.active, 'Discord reconnect');
     await run('window.api.player.next()');
-    await waitFor(() => discordServer.active?.details === 'Fixture Song 2', 'new song metadata');
+    await waitFor(() => discordServer.active?.details === 'Fixture Song 4', 'new song metadata');
+    const priorConnectionCount = discordServer.connections.length;
+    const loaded = new Promise(resolve => win.webContents.once('did-finish-load', resolve));
+    win.reload(); await loaded;
+    await waitFor(() => run("typeof AppState !== 'undefined' && AppState.isLoggedIn && discordStatus?.enabled && AppState.stations.length > 0"), 'reload restores settings with sharing already enabled');
+    await run("window.api.content.playItem({type:'station', id:'fixture-station'})");
+    await waitFor(() => discordServer.connections.length > priorConnectionCount && discordServer.active?.details === 'Fixture Song 1', 'first song shares after reload without toggling the setting');
     await run('window.api.auth.logout()');
     await waitFor(() => !discordServer.active, 'logout clears Discord');
     await discordServer.close(); discordServer = null;
-    console.log('Discord opt-in, real IPC handshake/activity, artwork metadata, seek, pause/resume, mini mode, reconnect and logout passed.');
+    console.log('Discord opt-in, real IPC, artwork, seek, paused retention, consecutive skips, missed events, mini mode, reconnect, enabled reload and logout passed.');
     console.log('Native player smoke test passed: device takeover, saved thumbs, immediate mode changes and approved auto-resume, Artist Only eligibility, Shuffle exclusion, mode failures and retry.');
     console.log('Daily update checks, elapsed sleep time, wake/focus coalescing, scheduled notices while paused and in mini mode, persistent Later choice, centered pill and local website assets passed.');
     console.log('Screenshots: ' + testData);
