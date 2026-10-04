@@ -1,5 +1,7 @@
 # Discord Rich Presence
 
+Panedora's shared Discord application is already configured in `discord-config.json`. Listeners can go straight to **Testing** below and enable the switch; they do not need a developer application or an environment variable. The maintainer setup is only needed when creating or replacing the shared application.
+
 ## One-time setup for the Panedora maintainer
 
 1. Sign in at the [Discord Developer Portal](https://discord.com/developers/applications).
