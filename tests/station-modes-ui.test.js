@@ -142,8 +142,12 @@ test('a transient artwork failure retries once and repeated failures do not loop
     s.ui.update({ isPlaying: false });
     assert.equal(retries.length, 1);
     assert.match(image.src, /^data:image\/svg/);
+    s.ui.update({ trackToken: 'same-cover', coverArt: 'https://fixture.invalid/transient.jpg', coverArtSources: [] });
+    assert.equal(image.src, 'https://fixture.invalid/transient.jpg', 'A new song can retry the same cover after a complete failure');
+    image.onerror();
+    assert.equal(retries.length, 2);
     s.ui.update({ trackToken: 'new-song', coverArt: 'https://fixture.invalid/new.jpg', coverArtSources: [] });
-    retries[0]();
+    retries.forEach(callback => callback());
     assert.equal(image.src, 'https://fixture.invalid/new.jpg', 'An old retry cannot restore a skipped cover');
 });
 

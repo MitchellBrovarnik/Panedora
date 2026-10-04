@@ -19,12 +19,19 @@ function renderPlayerArtwork() {
     // The same album cover can belong to another song or playback generation.
     // Preserve the loaded image whenever its supplied URLs haven't changed.
     const key = JSON.stringify(sources);
+    const trackKey = JSON.stringify([state.playbackGeneration, state.trackToken]);
     const images = [DOM.nowPlayingArt, document.getElementById('np-large-art')].filter(Boolean);
     for (const image of images) {
-        if (!image || playerArtworkLoads.get(image)?.key === key) continue;
         const previous = playerArtworkLoads.get(image);
+        if (previous?.key === key) {
+            const newTrack = previous.trackKey !== trackKey;
+            previous.trackKey = trackKey;
+            // Keep successful/in-flight covers; allow a later song to retry
+            // an exhausted request without looping on ordinary state updates.
+            if (!previous.failed || !newTrack) continue;
+        }
         if (previous?.timer) clearTimeout(previous.timer);
-        const request = { key, retried: false, timer: null, attempt: 0 };
+        const request = { key, trackKey, retried: false, failed: false, timer: null, attempt: 0 };
         playerArtworkLoads.set(image, request);
         const isCurrent = () => playerArtworkLoads.get(image) === request;
         const showPlaceholder = () => {
@@ -39,7 +46,7 @@ function renderPlayerArtwork() {
                 if (!request.retried) {
                     request.retried = true;
                     request.timer = setTimeout(() => { request.timer = null; load(0); }, 1000);
-                }
+                } else request.failed = true;
                 return;
             }
             const attempt = ++request.attempt;
