@@ -31,6 +31,7 @@ function setup({ deferPlay = false, withDiscord = false } = {}) {
     let resumeRequests = 0;
     let pauseRequests = 0;
     const nextRequests = [];
+    const recoveryRequests = [];
     const playRequests = [];
     const toasts = [];
     const discordReports = [];
@@ -68,6 +69,7 @@ function setup({ deferPlay = false, withDiscord = false } = {}) {
     const api = {
         player: { play: async () => { resumeRequests++; return { success: true }; },
             pause: async () => { pauseRequests++; return { success: true }; },
+            recoverAudio: async expected => { recoveryRequests.push(expected); return { success: true }; },
             next: async expected => { nextRequests.push(expected); } },
         onState: listener => { onState = listener; },
         onMiniMode: listener => { onMiniMode = listener; },
@@ -96,7 +98,7 @@ function setup({ deferPlay = false, withDiscord = false } = {}) {
         get audio() { return audio; },
         get resumeRequests() { return resumeRequests; },
         get pauseRequests() { return pauseRequests; }, get visualizerInits() { return visualizerInits; },
-        nextRequests, playRequests, timers, toasts, discordReports,
+        nextRequests, recoveryRequests, playRequests, timers, toasts, discordReports,
         fireTimers: () => { for (const timer of [...timers]) { timers.delete(timer); timer.callback(); } }
     };
 }
@@ -233,22 +235,89 @@ test('natural ending advances once and stale pause/end events cannot interrupt a
     assert.equal(s.node('progress-fill').style.width, '0%');
 });
 
-test('three failed audio sources stop automatic skipping and show the existing error toast', () => {
+test('failed cached songs get one fresh playlist, then stop if fresh audio also fails', () => {
     const s = setup({ deferPlay: true });
-    for (let i = 1; i <= 3; i++) {
-        s.state({ isPlaying: true, trackToken: 'failed-' + i, audioURL: 'https://fixture.invalid/failed-' + i + '.wav' });
+    for (let i = 1; i <= 6; i++) {
+        s.state({ isPlaying: true, trackToken: 'failed-' + i, audioURL: 'https://fixture.invalid/failed-' + i + '.wav',
+            playbackGeneration: i > 3 ? 2 : 1, audioRecovery: i > 3 });
         s.audio.error = { code: 2 };
         s.audio.paused = true;
         s.audio.dispatch('error');
-        if (i < 3) s.fireTimers();
+        s.audio.dispatch('error');
+        s.audio.dispatch('playing'); // A queued event cannot reset the error budget.
+        if (i % 3 !== 0) s.fireTimers();
+        if (i === 3) {
+            assert.equal(s.recoveryRequests.length, 1);
+            assert.equal(s.recoveryRequests[0].trackToken, 'failed-3');
+            assert.equal(s.recoveryRequests[0].playbackGeneration, 1);
+            assert.equal(s.pauseRequests, 0);
+            assert.equal(s.toasts.length, 0, 'Give fresh URLs a chance before reporting failure');
+        }
     }
-    assert.equal(s.nextRequests.length, 2);
+    assert.equal(s.nextRequests.length, 4);
+    assert.equal(s.recoveryRequests.length, 1, 'Do not refresh endlessly while offline');
     assert.equal(s.pauseRequests, 1);
     assert.equal(s.node('play-pause-btn').getAttribute('aria-label'), 'Play');
     assert.equal(s.toasts.length, 1);
     assert.match(s.toasts[0].textContent, /Audio could not be loaded/);
     s.fireTimers();
-    assert.equal(s.nextRequests.length, 2, 'The error notice does not schedule another skip');
+    assert.equal(s.nextRequests.length, 4, 'The error notice does not schedule another skip');
+    s.state({ isPlaying: true, resumePlayback: true, trackToken: 'failed-6',
+        audioURL: 'https://fixture.invalid/failed-6.wav', playbackGeneration: 2, audioRecovery: true });
+    assert.equal(s.recoveryRequests.length, 2, 'Approved manual Play can retry after the automatic limit');
+});
+
+test('a failed paused source waits for approved Play, which refreshes without needing another error event', () => {
+    const s = setup({ deferPlay: true });
+    s.state();
+    s.audio.error = { code: 2 };
+    s.audio.dispatch('error');
+    s.fireTimers();
+    assert.equal(s.nextRequests.length, 0);
+    assert.equal(s.recoveryRequests.length, 0);
+    s.node('play-pause-btn').dispatch('click');
+    assert.equal(s.resumeRequests, 1);
+    assert.equal(s.recoveryRequests.length, 0, 'Wait for Pandora to approve resuming');
+    s.state({ isPlaying: true, resumePlayback: true });
+    assert.equal(s.recoveryRequests.length, 1);
+    assert.equal(s.audio.plays, 0, 'Do not retry play() on a terminally failed element');
+    s.state({ isPlaying: true, audioRecovery: true, playbackGeneration: 2, reloadAudio: true });
+    assert.equal(s.audio.error, null, 'Even a repeated entry must reload the failed media element');
+    assert.equal(s.audio.plays, 1);
+});
+
+test('Pause cancels recovery intent even when failed audio is already paused', () => {
+    for (const control of ['button', 'OS']) {
+        const s = setup({ deferPlay: true });
+        s.state({ isPlaying: true });
+        s.audio.error = { code: 2 };
+        s.audio.paused = true;
+        s.audio.dispatch('error');
+        if (control === 'button') s.node('play-pause-btn').dispatch('click');
+        else s.action('pause');
+        assert.equal(s.pauseRequests, 1);
+        assert.equal(s.node('play-pause-btn').getAttribute('aria-label'), 'Play');
+        s.fireTimers();
+        assert.equal(s.nextRequests.length, 0);
+        assert.equal(s.recoveryRequests.length, 0);
+    }
+});
+
+test('successful playback and explicit station changes each reset the recovery budget', () => {
+    for (const reset of ['playing', 'station']) {
+        const s = setup({ deferPlay: true });
+        for (let i = 1; i <= 6; i++) {
+            s.state({ isPlaying: true, trackToken: 'failed-' + i, audioURL: 'https://fixture.invalid/' + i,
+                playbackGeneration: i > 3 ? 2 : 1, audioRecovery: i > 3 && reset === 'playing' });
+            if (i === 4 && reset === 'playing') s.audio.dispatch('playing');
+            s.audio.error = { code: 2 };
+            s.audio.paused = true;
+            s.audio.dispatch('error');
+            if (i % 3 !== 0) s.fireTimers();
+        }
+        assert.equal(s.recoveryRequests.length, 2);
+        assert.equal(s.toasts.length, 0);
+    }
 });
 
 test('OS Play and Previous wait for Pandora approval before playing buffered audio', () => {

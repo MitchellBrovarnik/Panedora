@@ -17,8 +17,8 @@ Object.defineProperty(app, 'isPackaged', { value: true });
 const deadline = setTimeout(() => { console.error('Native player test timed out'); app.exit(1); }, 90000);
 let discordServer;
 
-async function waitFor(check, description) {
-    const end = Date.now() + 6000;
+async function waitFor(check, description, timeout = 6000) {
+    const end = Date.now() + timeout;
     while (!await check()) {
         if (Date.now() > end) throw new Error('Timed out: ' + description);
         await new Promise(resolve => setTimeout(resolve, 25));
@@ -72,6 +72,7 @@ app.whenReady().then(async () => {
     ];
     let removalFailed = false;
     let stressTracks = null;
+    let recoveryFragments = null;
     let freshTracks = null;
     let refillGate = null;
     let slowAudioGate = null;
@@ -139,6 +140,12 @@ app.whenReady().then(async () => {
             case '/api/v1/search/fullSearch':
                 return json({ items: [{ type: 'TR', pandoraId: 'TR:fixture', songTitle: 'Fixture Song', artistName: 'Fixture Artist', albumArt: art }] });
             case '/api/v1/playlist/getFragment': {
+                if (recoveryFragments) {
+                    const fragment = recoveryFragments.shift();
+                    assert.ok(fragment, 'Unexpected recovery playlist request');
+                    if (fragment.wait) await fragment.wait;
+                    return json({ tracks: fragment.tracks });
+                }
                 if (stressTracks) {
                     if (!body.isStationStart && refillGate) await refillGate;
                     return json({ tracks: body.isStationStart ? stressTracks : freshTracks });
@@ -264,6 +271,46 @@ app.whenReady().then(async () => {
         assert.equal(await run("document.querySelectorAll('audio').length"), 1);
         await capture('rapid-skip-recovered');
         console.log('Direct artwork loading, rapid skips, slow audio and playlist responses, real natural song endings, stale error recovery, first-song artwork recovery and clearing missing covers passed.');
+    }
+
+    async function exerciseAudioRecovery() {
+        stressTracks = null;
+        activeMode = 2;
+        await run("document.querySelectorAll('.error-toast').forEach(toast => toast.remove())");
+        const expired = tracks.slice(0, 3).map((track, index) => ({ ...track,
+            trackToken: 'expired-' + index, audioURL: 'https://fixture.invalid/audio-error.wav?expired=' + index }));
+        const recovered = tracks.map((track, index) => ({ ...track,
+            trackToken: 'recovered-' + index, audioURL: 'https://fixture.invalid/recovered-' + index + '.wav' }));
+        let finishOldRefill;
+        recoveryFragments = [
+            { tracks: expired },
+            { tracks: expired, wait: new Promise(resolve => { finishOldRefill = resolve; }) },
+            { tracks: recovered }
+        ];
+        const before = calls.filter(c => c.path.endsWith('/getFragment')).length;
+        await run("window.api.content.playItem({type:'station', id:'fixture-station'})");
+        await run("window.api.player.getStationModes('fixture-station')");
+        await waitFor(() => run("AppState.playerState.trackToken === 'recovered-0' && document.querySelector('audio').currentTime > 0"), 'failed cached songs automatically request and play fresh audio', 10000);
+        assert.equal(await run('AppState.playerState.stationModes.currentModeId'), 2);
+        assert.equal(await run("document.querySelectorAll('.error-toast').length"), 0, 'No final error while fresh audio can recover');
+        const fragments = calls.filter(c => c.path.endsWith('/getFragment')).slice(before);
+        assert.deepEqual(fragments.map(c => c.body.isStationStart), [true, false, false], 'Recovery continues the selected mode');
+        finishOldRefill();
+        await run('nextPlayerTrack()');
+        await waitFor(() => run("AppState.playerState.trackToken === 'recovered-1' && document.querySelector('audio').currentTime > 0"), 'old delayed refill cannot reintroduce expired audio');
+
+        recoveryFragments = [{ tracks: expired }, { tracks: recovered }];
+        await run("window.api.content.playItem({type:'station', id:'fixture-station'})");
+        await waitFor(() => run("!!document.querySelector('audio').error"), 'terminal media error before pausing');
+        await run('pausePlayerPlayback(); window.api.player.pause()');
+        assert.equal(await run('AppState.playerState.isPlaying'), false);
+        const resumesBefore = calls.filter(c => c.path.endsWith('/playbackResumed')).length;
+        await run("document.getElementById('play-pause-btn').click()");
+        await waitFor(() => run("AppState.playerState.trackToken === 'recovered-0' && document.querySelector('audio').currentTime > 0"), 'approved Play recovers a terminal source without a second media error');
+        assert.equal(calls.filter(c => c.path.endsWith('/playbackResumed')).length, resumesBefore + 1);
+        assert.equal(calls.filter(c => c.path.endsWith('/playbackResumed')).at(-1).body.forceActive, false);
+        recoveryFragments = null;
+        console.log('Native audio recovery passed: real failed URLs, automatic skips, fresh playlist, selected mode, delayed old refill and approved retry of terminal media errors.');
     }
 
     await waitFor(() => run("!!document.getElementById('login-form')"), 'login UI');
@@ -639,6 +686,7 @@ app.whenReady().then(async () => {
     assert.equal(calls.some(c => ['fonts.googleapis.com', 'fonts.gstatic.com', 'unpkg.com'].includes(c.host)), false, 'App and website make no external font or icon requests');
     site.close();
     await exerciseQueuedPlayback();
+    await exerciseAudioRecovery();
     // Real audio -> renderer -> isolated preload -> main -> actual local IPC frames.
     assert.equal(discordServer.connections.length, 0, 'Discord is opt-in throughout normal playback');
     stressTracks = null; freshTracks = null; activeMode = 0; canStream = true;

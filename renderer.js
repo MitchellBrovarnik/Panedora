@@ -79,6 +79,17 @@ function nextPlayerTrack() {
         playbackGeneration: AppState.playerState.playbackGeneration });
 }
 
+function pausePlayerPlayback() {
+    const audio = document.querySelector('audio');
+    // A failed source can already be paused without emitting a user-pause event.
+    // Keep the user's intent even while a fresh playlist is being requested.
+    if (audio?.error || AppState.playerState.stationLoading) {
+        updatePlayerUI({ isPlaying: false });
+        window.api.player.pause();
+    }
+    audio?.pause();
+}
+
 /**
  * Returns true if the action is allowed (not on cooldown).
  * Starts the cooldown timer on first allowed call.
@@ -2164,6 +2175,8 @@ function initEventListeners() {
         const audioEl = document.querySelector('audio');
         if (AppState.playerState.streamBlocked || !AppState.playerState.audioURL) {
             window.api.player.play();
+        } else if (AppState.playerState.isPlaying && (audioEl?.error || AppState.playerState.stationLoading)) {
+            pausePlayerPlayback();
         } else if (audioEl) {
             if (audioEl.paused) {
                 // Wait for Pandora's resume approval before playing buffered audio.
@@ -2346,14 +2359,51 @@ function initAPIListeners() {
     let consecutiveErrors = 0; // Prevent chain-skipping on stale/expired URLs
     let audioRevision = 0;
     let recoveryTimer = null;
+    let failedAudioRevision = null;
+    let freshPlaylistTried = false;
     let endedRevision = null;
     const cancelRecovery = () => {
         if (recoveryTimer !== null) clearTimeout(recoveryTimer);
         recoveryTimer = null;
     };
+    const playbackSucceeded = () => {
+        if (!currentAudio || currentAudio.paused || currentAudio.error || currentAudio.ended) return;
+        cancelRecovery();
+        consecutiveErrors = 0;
+        freshPlaylistTried = false;
+        failedAudioRevision = null;
+    };
+    const stopRecovery = () => {
+        cancelRecovery();
+        updatePlayerUI({ isPlaying: false });
+        window.api.player.pause();
+        showErrorToast('Audio could not be loaded after refreshing the songs. Check your connection and press Play to try again.');
+    };
+    const requestFreshPlaylist = () => {
+        if (!AppState.isLoggedIn || !AppState.playerState.isPlaying || AppState.playerState.streamBlocked ||
+            AppState.playerState.stationLoading) return;
+        cancelRecovery();
+        freshPlaylistTried = true;
+        consecutiveErrors = 0;
+        failedAudioRevision = audioRevision;
+        const revision = audioRevision;
+        const expected = { trackToken: currentAudioToken, playbackGeneration: AppState.playerState.playbackGeneration };
+        window.api.player.recoverAudio(expected).catch(() => {
+            if (revision === audioRevision && expected.playbackGeneration === AppState.playerState.playbackGeneration &&
+                AppState.isLoggedIn && AppState.playerState.isPlaying && !AppState.playerState.streamBlocked) stopRecovery();
+        });
+    };
 
     // Player state updates
     window.api.onState((state) => {
+        // Station/mode changes start a new attempt. An automatic refresh carries
+        // the same error budget so a bad connection cannot cause an endless loop.
+        if (state.playbackGeneration !== undefined && state.playbackGeneration !== AppState.playerState.playbackGeneration &&
+            !state.audioRecovery) {
+            consecutiveErrors = 0;
+            freshPlaylistTried = false;
+            failedAudioRevision = null;
+        }
         updatePlayerUI(state);
         if (state.isPlaying === false || state.streamBlocked || state.pausePlayback) cancelRecovery();
         if ((state.streamBlocked || state.pausePlayback) && currentAudio) currentAudio.pause();
@@ -2394,6 +2444,7 @@ function initAPIListeners() {
                     if (currentAudio.currentTime > lastDiscordPosition && !currentAudio.paused && !currentAudio.ended &&
                         !currentAudio.error && !currentAudio.seeking && currentAudio.readyState >= 2) {
                         discordHasPlayed = discordAudioPlaying = true;
+                        playbackSucceeded();
                     }
                     lastDiscordPosition = currentAudio.currentTime;
                     if (discordAudioPlaying && (!wasPlaying || Date.now() - lastDiscordReport >= 15000)) reportDiscordPlayback();
@@ -2422,19 +2473,20 @@ function initAPIListeners() {
 
                     // Don't auto-skip if the source was intentionally cleared
                     if (!currentAudio.getAttribute('src') || !currentAudio.error || currentAudio.error.code === 1 ||
-                        recoveryTimer !== null || AppState.playerState.streamBlocked) {
+                        failedAudioRevision === audioRevision || AppState.playerState.streamBlocked ||
+                        !AppState.isLoggedIn || !AppState.playerState.isPlaying || AppState.playerState.stationLoading) {
                         console.log('[UI] Ignoring audio error: source is intentionally empty.');
                         return;
                     }
 
+                    failedAudioRevision = audioRevision;
                     consecutiveErrors++;
 
-                    // Stop chain-skipping after 3 consecutive errors (likely expired URLs)
+                    // Try two queued alternatives, then replace the stale queue.
+                    // Only one fresh playlist is automatic until audio succeeds.
                     if (consecutiveErrors >= 3) {
-                        console.warn('[UI] Too many consecutive audio errors — stopping auto-skip. URLs may be expired.');
-                        updatePlayerUI({ isPlaying: false });
-                        window.api.player.pause();
-                        showErrorToast('Audio could not be loaded. Try playing the station again.');
+                        if (!freshPlaylistTried) requestFreshPlaylist();
+                        else stopRecovery();
                         return;
                     }
 
@@ -2467,7 +2519,7 @@ function initAPIListeners() {
                     updatePlayerUI({ isPlaying: false });
                     window.api.player.pause();
                 });
-                currentAudio.addEventListener('playing', () => { cancelRecovery(); consecutiveErrors = 0; });
+                currentAudio.addEventListener('playing', playbackSucceeded);
 
                 // Register OS media key handlers (skip, replay, play, pause)
                 if ('mediaSession' in navigator) {
@@ -2493,16 +2545,14 @@ function initAPIListeners() {
                         }
                     });
                     navigator.mediaSession.setActionHandler('pause', () => {
-                        if (currentAudio && !currentAudio.paused) {
-                            currentAudio.pause();
-                        }
+                        pausePlayerPlayback();
                     });
                 }
             }
 
             // A new playlist entry may reuse the same audio URL. Start that entry
             // at the beginning, while ordinary state updates preserve position.
-            if (currentAudio.src !== state.audioURL || currentAudioToken !== state.trackToken) {
+            if (currentAudio.src !== state.audioURL || currentAudioToken !== state.trackToken || state.reloadAudio) {
                 console.log('[UI] Loading new audio source');
                 const revision = ++audioRevision;
                 cancelRecovery();
@@ -2516,7 +2566,7 @@ function initAPIListeners() {
                 currentAudio.src = state.audioURL;
                 if (state.isPlaying !== false) currentAudio.play().then(() => {
                     if (revision !== audioRevision || currentAudio.paused) return;
-                    consecutiveErrors = 0; // Reset on successful play
+                    playbackSucceeded();
 
                     // Web Audio API requires a user gesture. This is a safe place to init.
                     if (window.visualizer) {
@@ -2547,7 +2597,10 @@ function initAPIListeners() {
             } else {
                 currentAudioGeneration = state.playbackGeneration;
                 if (state.resumePlayback && currentAudio.paused) {
-                    currentAudio.play().catch(e => console.error('[UI] Resume error:', e));
+                    // A terminal media error need not fire again when play() is
+                    // retried. An approved user resume explicitly retries fresh URLs.
+                    if (currentAudio.error) requestFreshPlaylist();
+                    else currentAudio.play().catch(e => console.error('[UI] Resume error:', e));
                 }
                 if (discordHasPlayed) reportDiscordPlayback();
             }
