@@ -2321,7 +2321,7 @@ function initAPIListeners() {
                         console.warn('[UI] Too many consecutive audio errors — stopping auto-skip. URLs may be expired.');
                         updatePlayerUI({ isPlaying: false });
                         window.api.player.pause();
-                        showError('Audio could not be loaded. Try playing the station again.');
+                        showErrorToast('Audio could not be loaded. Try playing the station again.');
                         return;
                     }
 
