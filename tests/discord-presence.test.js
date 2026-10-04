@@ -120,7 +120,7 @@ test('takeover, logout, renderer loss and disabling clear presence immediately',
     }
 });
 
-test('pause retains metadata without a running timer; resume uses the actual position', async t => {
+test('pause retains metadata and omits song timestamps; resume uses the actual position', async t => {
     const s = setup(t);
     s.presence.reportPlayback(report());
     s.presence.setEnabled(true); await tick(); assert.ok(s.rpc.active);

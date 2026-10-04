@@ -1106,7 +1106,7 @@ function renderSettingsPage() {
         <div class="discord-setting">
           <div>
             <label class="discord-setting-label" for="discord-sharing-toggle">Share what I'm listening to</label>
-            <p class="discord-setting-description" id="discord-sharing-description">Show the song, artist, album artwork, and progress on your Discord profile. Paused songs stay visible without a timer.</p>
+            <p class="discord-setting-description" id="discord-sharing-description">Show the song, artist, album artwork, and progress on your Discord profile. Paused songs stay visible.</p>
             <p class="discord-setting-status" id="discord-sharing-status" role="status"></p>
           </div>
           <input class="discord-sharing-toggle" id="discord-sharing-toggle" type="checkbox" role="switch" aria-describedby="discord-sharing-description discord-sharing-status">

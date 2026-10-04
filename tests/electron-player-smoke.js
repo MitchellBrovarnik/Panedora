@@ -658,7 +658,7 @@ app.whenReady().then(async () => {
     await waitFor(() => discordServer.active?.timestamps && Math.abs(discordServer.active.timestamps.start - (Date.now() - 20000)) < 6500, 'seek updates presence');
     await run("document.querySelector('audio').pause()");
     await waitFor(() => discordServer.active?.state === 'Paused · Fixture Artist', 'pause keeps the current song');
-    assert.equal(discordServer.active.timestamps, undefined, 'Paused progress must not keep advancing');
+    assert.equal(discordServer.active.timestamps, undefined, 'Paused activity omits song progress timestamps');
     assert.equal(discordServer.active.details, 'Fixture Song 1');
     assert.ok(discordServer.active.assets.large_image);
     await run('window.api.player.play()');
