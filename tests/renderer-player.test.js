@@ -32,6 +32,7 @@ function setup({ deferPlay = false } = {}) {
     let pauseRequests = 0;
     const nextRequests = [];
     const playRequests = [];
+    const toasts = [];
     const timers = new Set();
     const testWindow = { addEventListener() {} };
     let visualizerInits = 0;
@@ -45,8 +46,9 @@ function setup({ deferPlay = false } = {}) {
         querySelector: selector => selector === 'audio' ? audio : null,
         querySelectorAll: () => [],
         addEventListener() {},
-        body: { ...element(), appendChild() {} },
+        body: { ...element(), appendChild(node) { if (node.className === 'error-toast') toasts.push(node); } },
         createElement: type => {
+            if (type === 'div') return { ...element(), remove() {} };
             assert.equal(type, 'audio');
             audio = {
                 ...element(), paused: true, currentTime: 0, plays: 0, error: null, ended: false,
@@ -89,7 +91,7 @@ function setup({ deferPlay = false } = {}) {
         get audio() { return audio; },
         get resumeRequests() { return resumeRequests; },
         get pauseRequests() { return pauseRequests; }, get visualizerInits() { return visualizerInits; },
-        nextRequests, playRequests, timers,
+        nextRequests, playRequests, timers, toasts,
         fireTimers: () => { for (const timer of [...timers]) { timers.delete(timer); timer.callback(); } }
     };
 }
@@ -159,6 +161,24 @@ test('natural ending advances once and stale pause/end events cannot interrupt a
     assert.equal(s.nextRequests.length, 1);
     assert.equal(s.node('current-time').textContent, '0:00');
     assert.equal(s.node('progress-fill').style.width, '0%');
+});
+
+test('three failed audio sources stop automatic skipping and show the existing error toast', () => {
+    const s = setup({ deferPlay: true });
+    for (let i = 1; i <= 3; i++) {
+        s.state({ isPlaying: true, trackToken: 'failed-' + i, audioURL: 'https://fixture.invalid/failed-' + i + '.wav' });
+        s.audio.error = { code: 2 };
+        s.audio.paused = true;
+        s.audio.dispatch('error');
+        if (i < 3) s.fireTimers();
+    }
+    assert.equal(s.nextRequests.length, 2);
+    assert.equal(s.pauseRequests, 1);
+    assert.equal(s.node('play-pause-btn').getAttribute('aria-label'), 'Play');
+    assert.equal(s.toasts.length, 1);
+    assert.match(s.toasts[0].textContent, /Audio could not be loaded/);
+    s.fireTimers();
+    assert.equal(s.nextRequests.length, 2, 'The error notice does not schedule another skip');
 });
 
 test('OS Play and Previous wait for Pandora approval before playing buffered audio', () => {

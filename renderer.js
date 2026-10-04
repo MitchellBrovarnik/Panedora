@@ -16,29 +16,61 @@ function renderPlayerArtwork() {
     const state = AppState.playerState;
     const sources = [...new Set([state.coverArt, ...(state.coverArtSources || [])]
         .filter(url => typeof url === 'string' && url))];
-    const key = JSON.stringify([state.playbackGeneration, state.trackToken, sources]);
-    for (const image of [DOM.nowPlayingArt, document.getElementById('np-large-art')]) {
-        if (!image || playerArtworkLoads.get(image)?.key === key) continue;
+    // The same album cover can belong to another song or playback generation.
+    // Preserve the loaded image whenever its supplied URLs haven't changed.
+    const key = JSON.stringify(sources);
+    const trackKey = JSON.stringify([state.playbackGeneration, state.trackToken]);
+    const images = [DOM.nowPlayingArt, document.getElementById('np-large-art')].filter(Boolean);
+    for (const image of images) {
         const previous = playerArtworkLoads.get(image);
+        if (previous?.key === key) {
+            const newTrack = previous.trackKey !== trackKey;
+            previous.trackKey = trackKey;
+            // Keep successful/in-flight covers; allow a later song to retry
+            // an exhausted request without looping on ordinary state updates.
+            if (!previous.failed || !newTrack) continue;
+        }
         if (previous?.timer) clearTimeout(previous.timer);
-        const request = { key, retried: false, timer: null };
+        const request = { key, trackKey, retried: false, failed: false, timer: null, attempt: 0 };
         playerArtworkLoads.set(image, request);
-        image.src = PLAYER_ART_PLACEHOLDER;
         const isCurrent = () => playerArtworkLoads.get(image) === request;
+        const showPlaceholder = () => {
+            image.onerror = null;
+            image.src = PLAYER_ART_PLACEHOLDER;
+        };
         const load = index => {
             if (!isCurrent() || !sources.length) return;
             if (index >= sources.length) {
+                showPlaceholder();
                 // One bounded retry also covers a transient failure on first play.
-                request.retried = true;
-                request.timer = setTimeout(() => { request.timer = null; load(0); }, 1000);
+                if (!request.retried) {
+                    request.retried = true;
+                    request.timer = setTimeout(() => { request.timer = null; load(0); }, 1000);
+                } else request.failed = true;
                 return;
             }
-            const candidate = new Image();
-            candidate.onload = () => { if (isCurrent()) image.src = sources[index]; };
-            candidate.onerror = () => { if (isCurrent() && !request.retried) load(index + 1); };
-            candidate.src = sources[index];
+            const attempt = ++request.attempt;
+            const url = sources[index];
+            image.onerror = () => {
+                // A queued error from an abandoned request must not fail a
+                // replacement that is still loading or already displayed.
+                if (!isCurrent() || request.attempt !== attempt || image.getAttribute('src') !== url ||
+                    !image.complete || image.naturalWidth > 0) return;
+                load(request.retried ? sources.length : index + 1);
+            };
+            // Load in the visible element, as before. A separate Image probe
+            // delays rendering and can download non-cacheable covers twice.
+            image.src = url;
         };
-        load(0);
+        if (!sources.length) {
+            showPlaceholder();
+            continue;
+        }
+        // Opening the expanded player can reuse a size that already succeeded
+        // in the footer instead of retrying a known-broken larger size first.
+        const loaded = images.find(other => other !== image && playerArtworkLoads.get(other)?.key === key &&
+            other.complete && other.naturalWidth > 0 && sources.includes(other.getAttribute('src')));
+        load(loaded ? sources.indexOf(loaded.getAttribute('src')) : 0);
     }
 }
 
@@ -2289,7 +2321,7 @@ function initAPIListeners() {
                         console.warn('[UI] Too many consecutive audio errors — stopping auto-skip. URLs may be expired.');
                         updatePlayerUI({ isPlaying: false });
                         window.api.player.pause();
-                        showError('Audio could not be loaded. Try playing the station again.');
+                        showErrorToast('Audio could not be loaded. Try playing the station again.');
                         return;
                     }
 
