@@ -15,11 +15,14 @@ const config = require('./config');
 const { PandoraVerification } = require('./pandora-verification');
 const verification = new PandoraVerification();
 const { UpdateChecker, DOWNLOAD_URL } = require('./update-checker');
+const { DiscordPresence } = require('./discord-presence');
+const discordConfig = require('./discord-config.json');
 
 let uiWindow = null;
 let api = null;
 let updateChecker = null;
 let updateResponsePending = false;
+let discordPresence = null;
 
 // Current state
 let currentStations = [];
@@ -84,12 +87,17 @@ function createUIWindow() {
 
     uiWindow.on('closed', () => {
         playbackGeneration++;
+        discordPresence?.setPlayerState(null);
         cancelStreamPrompt();
         verification.cancel();
         uiWindow = null;
     });
-    uiWindow.webContents.on('did-start-loading', () => cancelStreamPrompt());
-    uiWindow.webContents.on('render-process-gone', () => cancelStreamPrompt());
+    for (const event of ['did-start-loading', 'render-process-gone']) {
+        uiWindow.webContents.on(event, () => {
+            cancelStreamPrompt();
+            discordPresence?.invalidatePlayback();
+        });
+    }
 }
 
 // ============================================================================
@@ -150,10 +158,12 @@ function sendToUI(channel, data) {
 }
 
 function sendLoginStatus(isLoggedIn) {
+    if (!isLoggedIn) discordPresence?.setPlayerState(null);
     sendToUI('UI:LOGIN_STATUS', { isLoggedIn });
 }
 
 function sendPlayerState(state) {
+    discordPresence?.setPlayerState(state);
     sendToUI('UI:PLAYER_STATE', state);
 }
 
@@ -722,6 +732,23 @@ async function thumbDown() { return setTrackFeedback(false); }
 // ============================================================================
 
 // Initialize app
+function isAppRenderer(event) {
+    return event.sender === uiWindow?.webContents &&
+        (!event.senderFrame || event.senderFrame === uiWindow.webContents.mainFrame);
+}
+
+ipcMain.handle('DISCORD:GET_STATUS', event => isAppRenderer(event) ? discordPresence?.getStatus() : null);
+ipcMain.handle('DISCORD:SET_ENABLED', (event, enabled) => {
+    if (!isAppRenderer(event) || typeof enabled !== 'boolean' || !discordPresence) return null;
+    if (enabled && !discordPresence.configured) return discordPresence.getStatus();
+    config.setDiscordEnabled(enabled);
+    return discordPresence.setEnabled(enabled);
+});
+ipcMain.handle('DISCORD:PLAYBACK', (event, report) => {
+    if (!isAppRenderer(event)) return false;
+    return discordPresence?.reportPlayback(report) || false;
+});
+
 ipcMain.handle('APP:CHECK_UPDATES', async event => {
     if (event.sender !== uiWindow?.webContents || !app.isPackaged || !updateChecker) return null;
     return updateChecker.check();
@@ -781,6 +808,7 @@ ipcMain.handle('AUTH:LOGIN', async (event, { username, password }) => {
 // Logout
 ipcMain.handle('AUTH:LOGOUT', async () => {
     playbackGeneration++;
+    discordPresence?.setPlayerState(null);
     cancelStreamPrompt();
     stationLoading = false;
     resetStationModes();
@@ -1059,6 +1087,13 @@ ipcMain.handle('PLAYER:GET_MORE_TRACKS', async () => {
 // ============================================================================
 
 app.whenReady().then(() => {
+    discordPresence = new DiscordPresence({
+        clientId: process.env.PANEDORA_DISCORD_CLIENT_ID || discordConfig.applicationId,
+        enabled: config.getDiscordEnabled(),
+        onStatus: status => sendToUI('UI:DISCORD_STATUS', status)
+    });
+    powerMonitor.on('suspend', () => discordPresence?.invalidatePlayback());
+    powerMonitor.on('resume', () => discordPresence?.invalidatePlayback());
     updateChecker = new UpdateChecker({
         version: app.getVersion(), fetch: (...args) => net.fetch(...args),
         getSnooze: config.getUpdateSnooze, setSnooze: config.setUpdateSnooze,
@@ -1153,6 +1188,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+    discordPresence?.dispose();
     updateChecker?.stop();
     verification.cancel();
 });

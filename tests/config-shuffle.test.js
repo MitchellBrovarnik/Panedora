@@ -26,6 +26,20 @@ test('update snooze survives app restart and account changes without storing acc
     assert.deepEqual({ ...reopen().getUpdateSnooze() }, snooze);
 });
 
+test('Discord sharing is opt-in and its local preference persists across restarts and sign-out', t => {
+    const reopen = setup(t);
+    assert.equal(reopen().getDiscordEnabled(), false);
+    const config = reopen();
+    config.setDiscordEnabled(true);
+    assert.equal(reopen().getDiscordEnabled(), true);
+    config.clearAll();
+    assert.equal(reopen().getDiscordEnabled(), true);
+    config.setDiscordEnabled(false);
+    assert.equal(reopen().getDiscordEnabled(), false);
+    config.setDiscordEnabled('true');
+    assert.equal(reopen().getDiscordEnabled(), false);
+});
+
 test('remembered Shuffle is restored from disk after the config module restarts', t => {
     const reopen = setup(t);
     const first = reopen();

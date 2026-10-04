@@ -44,6 +44,12 @@ function setup(t) {
     };
     const events = {};
     window.api = { player, window: {}, content: {} };
+    window.api.discord = {
+        onStatus: listener => { events.DiscordStatus = listener; },
+        getStatus: async () => ({ enabled: false, configured: true, status: 'disabled' }),
+        setEnabled: async enabled => ({ enabled, configured: true, status: enabled ? 'idle' : 'disabled' }),
+        reportPlayback() {}
+    };
     for (const name of ['State', 'Collection', 'SearchResults', 'LoginStatus', 'MiniMode', 'Error', 'UpdateNotice']) {
         window.api['on' + name] = listener => { events[name] = listener; };
     }
@@ -74,6 +80,33 @@ function setup(t) {
     };
     return { window, ui, player, calls, node, open, select, events, images };
 }
+
+test('Discord setting is opt-in, accessible, reflects live status, and handles unavailable builds', async t => {
+    const s = setup(t);
+    await tick(); s.ui.render('settings');
+    const toggle = s.node('discord-sharing-toggle');
+    assert.equal(toggle.checked, false);
+    assert.equal(toggle.disabled, false);
+    assert.equal(toggle.getAttribute('role'), 'switch');
+    toggle.click(); await tick();
+    assert.equal(toggle.checked, true);
+    assert.match(s.node('discord-sharing-status').textContent, /Ready/);
+    s.events.DiscordStatus({ enabled: true, configured: true, status: 'connected' });
+    assert.match(s.node('discord-sharing-status').textContent, /Connected/);
+    assert.equal(s.node('discord-sharing-toggle'), toggle, 'Status updates preserve the focused control');
+    s.events.DiscordStatus({ enabled: false, configured: false, status: 'unconfigured' });
+    assert.equal(toggle.disabled, true);
+    assert.match(s.node('discord-sharing-status').textContent, /not configured/);
+});
+
+test('Discord setting recovers from a failed save without changing the saved choice', async t => {
+    const s = setup(t); await tick(); s.ui.render('settings');
+    s.window.api.discord.setEnabled = async () => { throw new Error('IPC failed'); };
+    s.node('discord-sharing-toggle').click(); await tick();
+    assert.equal(s.node('discord-sharing-toggle').checked, false);
+    assert.equal(s.node('discord-sharing-toggle').disabled, false);
+    assert.match(s.window.document.querySelector('.error-toast').textContent, /Could not save Discord/);
+});
 
 test('player artwork loads directly without a probe or placeholder between valid covers', t => {
     const s = setup(t);

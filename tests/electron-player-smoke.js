@@ -14,7 +14,8 @@ app.setPath('userData', testData);
 app.disableHardwareAcceleration();
 // Exercise the release-only update checker with intercepted network fixtures.
 Object.defineProperty(app, 'isPackaged', { value: true });
-const deadline = setTimeout(() => { console.error('Native player test timed out'); app.exit(1); }, 45000);
+const deadline = setTimeout(() => { console.error('Native player test timed out'); app.exit(1); }, 90000);
+let discordServer;
 
 async function waitFor(check, description) {
     const end = Date.now() + 6000;
@@ -178,8 +179,20 @@ app.whenReady().then(async () => {
     updates.UpdateChecker = class extends RealUpdateChecker {
         constructor(options) { super({ ...options, now: () => updateClock }); }
     };
+    const { createDiscordFixture } = require('./discord-fixture');
+    const { DiscordRpc } = require('../discord-rpc');
+    const discord = require('../discord-presence');
+    const RealPresence = discord.DiscordPresence;
+    discordServer = await createDiscordFixture();
+    discord.DiscordPresence = class extends RealPresence {
+        constructor(options) {
+            const clientId = '123456789012345678';
+            super({ ...options, clientId, rpc: new DiscordRpc({ clientId, paths: [discordServer.socketPath] }) });
+        }
+    };
     require('../main');
     updates.UpdateChecker = RealUpdateChecker;
+    discord.DiscordPresence = RealPresence;
     await waitFor(() => BrowserWindow.getAllWindows().length, 'main window');
     const win = BrowserWindow.getAllWindows()[0];
     const run = async script => {
@@ -626,13 +639,49 @@ app.whenReady().then(async () => {
     assert.equal(calls.some(c => ['fonts.googleapis.com', 'fonts.gstatic.com', 'unpkg.com'].includes(c.host)), false, 'App and website make no external font or icon requests');
     site.close();
     await exerciseQueuedPlayback();
+    // Real audio -> renderer -> isolated preload -> main -> actual local IPC frames.
+    assert.equal(discordServer.connections.length, 0, 'Discord is opt-in throughout normal playback');
+    stressTracks = null; freshTracks = null; activeMode = 0; canStream = true;
+    await run("window.api.content.playItem({type:'station', id:'fixture-station'})");
+    await waitFor(() => run("document.querySelector('audio').readyState >= 3 && !document.querySelector('audio').paused"), 'Discord fixture audio');
+    await run("renderPage('settings'); document.getElementById('discord-sharing-toggle').click()");
+    await waitFor(() => discordServer.active?.details === 'Fixture Song 1', 'listening activity');
+    assert.equal(discordServer.active.type, 2);
+    assert.equal(discordServer.active.state, 'Fixture Artist');
+    assert.equal(discordServer.active.assets.large_text, 'Fixture Album');
+    assert.equal(discordServer.active.assets.large_image, await run('AppState.playerState.coverArt'));
+    assert.equal(discordServer.active.timestamps.end - discordServer.active.timestamps.start, 60000);
+    assert.doesNotMatch(JSON.stringify(discordServer.active), /trackToken|audioURL|fixture-password|fixture@example/);
+    assert.equal(require('../config').getDiscordEnabled(), true);
+    await capture('discord-settings');
+    await run("document.querySelector('audio').currentTime = 20");
+    await waitFor(() => discordServer.active && Math.abs(discordServer.active.timestamps.start - (Date.now() - 20000)) < 6500, 'seek updates presence');
+    await run("document.querySelector('audio').pause()");
+    await waitFor(() => !discordServer.active, 'pause clears presence');
+    await run('window.api.player.play()');
+    await waitFor(() => !!discordServer.active, 'resume restores presence');
+    await run('window.api.window.toggleMini()');
+    assert.ok(discordServer.active, 'Mini mode continues sharing while playing');
+    discordServer.connections.at(-1).socket.destroy();
+    await waitFor(() => run("discordStatus.status === 'unavailable'"), 'Discord closed');
+    assert.equal(await run("document.querySelector('audio').paused"), false, 'Losing Discord never pauses music');
+    await run('window.api.window.toggleMini(); window.api.discord.setEnabled(false)');
+    await run('window.api.discord.setEnabled(true)');
+    await waitFor(() => !!discordServer.active, 'Discord reconnect');
+    await run('window.api.player.next()');
+    await waitFor(() => discordServer.active?.details === 'Fixture Song 2', 'new song metadata');
+    await run('window.api.auth.logout()');
+    await waitFor(() => !discordServer.active, 'logout clears Discord');
+    await discordServer.close(); discordServer = null;
+    console.log('Discord opt-in, real IPC handshake/activity, artwork metadata, seek, pause/resume, mini mode, reconnect and logout passed.');
     console.log('Native player smoke test passed: device takeover, saved thumbs, immediate mode changes and approved auto-resume, Artist Only eligibility, Shuffle exclusion, mode failures and retry.');
     console.log('Daily update checks, elapsed sleep time, wake/focus coalescing, scheduled notices while paused and in mini mode, persistent Later choice, centered pill and local website assets passed.');
     console.log('Screenshots: ' + testData);
     clearTimeout(deadline);
     app.quit();
-}).catch(error => {
+}).catch(async error => {
     clearTimeout(deadline);
     console.error(error);
+    if (discordServer) await discordServer.close();
     app.exit(1);
 });

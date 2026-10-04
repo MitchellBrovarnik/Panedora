@@ -6,7 +6,7 @@ const vm = require('node:vm');
 
 // Run the actual renderer listeners with a small DOM/audio stand-in. These
 // checks verify playback ordering; native Electron fixtures cover real media.
-function setup({ deferPlay = false } = {}) {
+function setup({ deferPlay = false, withDiscord = false } = {}) {
     function element() {
         const listeners = new Map();
         const classes = new Set();
@@ -18,8 +18,8 @@ function setup({ deferPlay = false } = {}) {
                 remove: name => classes.delete(name),
                 toggle: (name, on) => on ? classes.add(name) : classes.delete(name)
             },
-            addEventListener: (event, listener) => listeners.set(event, listener),
-            dispatch: event => listeners.get(event)?.(),
+            addEventListener: (event, listener) => listeners.set(event, [...(listeners.get(event) || []), listener]),
+            dispatch: event => { for (const listener of listeners.get(event) || []) listener(); },
             setAttribute(name, value) { this[name] = value; },
             getAttribute(name) { return this[name]; }
         };
@@ -33,6 +33,7 @@ function setup({ deferPlay = false } = {}) {
     const nextRequests = [];
     const playRequests = [];
     const toasts = [];
+    const discordReports = [];
     const timers = new Set();
     const testWindow = { addEventListener() {} };
     let visualizerInits = 0;
@@ -51,7 +52,7 @@ function setup({ deferPlay = false } = {}) {
             if (type === 'div') return { ...element(), remove() {} };
             assert.equal(type, 'audio');
             audio = {
-                ...element(), paused: true, currentTime: 0, plays: 0, error: null, ended: false,
+                ...element(), paused: true, currentTime: 0, plays: 0, error: null, ended: false, readyState: 4,
                 get src() { return this._src || ''; },
                 set src(value) { this._src = value; this.currentTime = 0; this.error = null; this.ended = false; this.paused = true; },
                 play() {
@@ -72,6 +73,10 @@ function setup({ deferPlay = false } = {}) {
         onMiniMode: listener => { onMiniMode = listener; },
         onCollection() {}, onSearchResults() {}, onLoginStatus() {}, onError() {}
     };
+    if (withDiscord) api.discord = {
+        onStatus() {}, getStatus: async () => ({ enabled: true, configured: true, status: 'idle' }),
+        reportPlayback: value => discordReports.push(value)
+    };
     const source = fs.readFileSync(path.join(__dirname, '..', 'components.js'), 'utf8') + '\n' +
         fs.readFileSync(path.join(__dirname, '..', 'renderer.js'), 'utf8') + '\ninitEventListeners(); initAPIListeners(); window.testState = AppState;';
     testWindow.api = api;
@@ -91,10 +96,46 @@ function setup({ deferPlay = false } = {}) {
         get audio() { return audio; },
         get resumeRequests() { return resumeRequests; },
         get pauseRequests() { return pauseRequests; }, get visualizerInits() { return visualizerInits; },
-        nextRequests, playRequests, timers, toasts,
+        nextRequests, playRequests, timers, toasts, discordReports,
         fireTimers: () => { for (const timer of [...timers]) { timers.delete(timer); timer.callback(); } }
     };
 }
+
+test('Discord observes playing, seeking and pause without starting audio or publishing loading tracks', () => {
+    const s = setup({ withDiscord: true });
+    s.state({ isPlaying: true });
+    assert.equal(s.discordReports.length, 0, 'play is not the same as actual playing');
+    s.audio.currentTime = 12;
+    s.audio.dispatch('playing');
+    assert.equal(s.discordReports.at(-1).playing, true);
+    assert.equal(s.discordReports.at(-1).position, 12);
+    s.audio.seeking = true; s.audio.dispatch('seeking');
+    assert.equal(s.discordReports.at(-1).playing, false);
+    s.audio.currentTime = 32; s.audio.seeking = false; s.audio.dispatch('seeked');
+    assert.equal(s.discordReports.at(-1).position, 32);
+    assert.equal(s.discordReports.at(-1).playing, true);
+    const callsBefore = s.resumeRequests;
+    s.audio.pause();
+    assert.equal(s.discordReports.at(-1).playing, false);
+    assert.equal(s.resumeRequests, callsBefore);
+    assert.equal(s.audio.plays, 1);
+});
+
+test('Discord ignores stale media events and waits for the replacement song to play', () => {
+    const s = setup({ withDiscord: true });
+    s.state({ isPlaying: true }); s.audio.dispatch('playing');
+    const reports = s.discordReports.length;
+    s.audio.dispatch('pause'); s.audio.dispatch('ended'); s.audio.dispatch('error');
+    assert.equal(s.discordReports.length, reports);
+    s.state({ isPlaying: true, trackToken: 'next', playbackGeneration: 2, audioURL: 'https://fixture.invalid/next.wav' });
+    s.audio.readyState = 0; s.audio.dispatch('playing'); s.audio.dispatch('timeupdate');
+    assert.equal(s.discordReports.length, reports);
+    s.audio.readyState = 4; s.audio.dispatch('playing');
+    assert.equal(s.discordReports.at(-1).trackToken, 'next');
+    assert.equal(s.discordReports.at(-1).playbackGeneration, 2);
+    s.audio.readyState = 2; s.audio.dispatch('waiting');
+    assert.equal(s.discordReports.at(-1).playing, false);
+});
 
 test('normal and mini Play and Previous wait for the approved resume state', () => {
     for (const mini of [false, true]) {

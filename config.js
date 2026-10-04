@@ -204,6 +204,10 @@ module.exports = {
     getUpdateSnooze: () => getConfig().updateSnooze || null,
     setUpdateSnooze: value => setConfig('updateSnooze', value),
 
+    // Optional sharing preference belongs to this installation; default is off.
+    getDiscordEnabled: () => getConfig().discordEnabled === true,
+    setDiscordEnabled: enabled => setConfig('discordEnabled', enabled === true),
+
     // Auth Token (from login response)
     getAuthToken: () => getConfig().authToken,
     setAuthToken: (token) => setConfig('authToken', token),
