@@ -309,14 +309,18 @@ function renderHomePage() {
     updateHomeGrids();
 }
 
+function stationsByRecency() {
+    const time = station => new Date(station.lastUpdated || 0).getTime() || 0;
+    return [...AppState.stations].sort((a, b) => time(b) - time(a));
+}
+
 function updateHomeGrids() {
     const recentContainer = document.getElementById('home-recent');
     const moreContainer = document.getElementById('home-more');
     const moreSection = document.getElementById('home-more-section');
     if (!recentContainer) return;
 
-    const sortedStations = [...AppState.stations]
-        .sort((a, b) => new Date(b.lastUpdated || 0) - new Date(a.lastUpdated || 0));
+    const sortedStations = stationsByRecency();
     const recentStations = sortedStations.slice(0, 6);
     const moreStations = sortedStations.slice(6, 12);
     const cardMap = new Map(Array.from(
@@ -520,12 +524,14 @@ function renderLibraryPage() {
 
     filtered.forEach(station => {
         // Skip rendering the quickmix/shuffle station if it's natively in the list
-        if (station.isShuffle || station.stationType === 'QUICKMIX' || station.name === 'Shuffle') return;
+        if (station.isShuffle || station.stationType === 'QUICKMIX' || station.name === 'Shuffle' || station.name === 'QuickMix') return;
 
         cardsHtml += createCard(
             station.image,
             station.name,
-            station.type === 'playlist' ? 'Playlist' : 'Station'
+            station.type === 'playlist' ? 'Playlist' : 'Station',
+            station.id,
+            { removable: true }
         );
     });
 
@@ -544,7 +550,7 @@ function renderLibraryPage() {
           <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
         </svg>
         <input type="text" class="library-filter-input" id="library-filter"
-          placeholder="Filter your stations..." value="${escapeHtml(filterQuery)}">
+          placeholder="Filter your stations..." value="${escapeAttribute(filterQuery)}">
       </div>
       <div class="card-grid" id="library-cards">
         ${cardsHtml || createEmptyState('No matches', `No stations matching "${filterQuery}"`)}
@@ -577,19 +583,17 @@ function renderLibraryPage() {
         });
     }
 
-    document.querySelectorAll('#library-cards .card:not(#library-shuffle-card)').forEach((card, index) => {
+    document.querySelectorAll('#library-cards .card:not(#library-shuffle-card)').forEach(card => {
+        // Names can be duplicated; both actions must resolve the card's station ID.
+        const getStation = () => AppState.stations.find(station => String(station.id) === card.dataset.id);
         card.addEventListener('click', () => {
-            // Because we skipped native shuffle stations in rendering, the index maps directly to the filtered array
-            // only if we filter out the native shuffle stations from the filtered array first.
-            // Let's find the correct station by checking the card's title.
-            const titleElement = card.querySelector('.card-title');
-            if (titleElement) {
-                const stationName = titleElement.textContent;
-                const station = filtered.find(s => s.name === stationName);
-                if (station) {
-                    playStation(station);
-                }
-            }
+            const station = getStation();
+            if (station) playStation(station);
+        });
+        card.querySelector('.card-remove-button').addEventListener('click', event => {
+            event.stopPropagation();
+            const station = getStation();
+            if (station) openStationRemoval(station);
         });
     });
 }
@@ -1674,7 +1678,7 @@ function renderStationsList() {
         <span class="station-name" style="font-weight: 500;">Shuffle Stations</span>
       </div>
     `;
-    AppState.stations.forEach(station => {
+    stationsByRecency().forEach(station => {
         // Skip rendering the quickmix/shuffle station if it's in the standard list, since we have a dedicated button
         if (station.isShuffle || station.stationType === 'QUICKMIX' || station.name === 'Shuffle') return;
         
@@ -1846,7 +1850,10 @@ async function removeSelectedStation() {
         if (stationRemoval !== removal) return;
         if (success) {
             closeStationRemoval(true);
-            DOM.stationsList.querySelector('.station-item.active, .station-item')?.focus();
+            const nextFocus = AppState.currentPage === 'library'
+                ? document.getElementById('library-filter')
+                : DOM.stationsList.querySelector('.station-item.active, .station-item');
+            nextFocus?.focus({ preventScroll: true });
             return;
         }
         removal.error = 'Could not remove this station. Please try again.';
@@ -2110,6 +2117,7 @@ function playStation(station) {
     const match = AppState.stations.find(s => (s.id || s.stationId) === id);
     if (match) {
         match.lastUpdated = new Date().toISOString();
+        renderStationsList();
         if (AppState.currentPage === 'home') updateHomeGrids();
     }
 

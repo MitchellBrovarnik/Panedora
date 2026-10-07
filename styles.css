@@ -986,6 +986,37 @@ body::before {
     border-radius: var(--r-sm);
 }
 
+.card-remove-button {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 6px;
+    background: rgba(16, 16, 20, 0.8);
+    color: rgba(255, 255, 255, 0.8);
+    transition: background 150ms ease, color 150ms ease;
+}
+
+.card-remove-button:hover {
+    background: var(--bg-base);
+    color: white;
+}
+
+.card-remove-button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.card-remove-button svg {
+    width: 14px;
+    height: 14px;
+    pointer-events: none;
+}
+
 .card-play-button {
     position: absolute;
     right: 8px;
