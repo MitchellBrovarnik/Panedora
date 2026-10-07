@@ -273,6 +273,14 @@ test('a delayed Shuffle response cannot restore its card or start playback after
     assert.equal(s.started.length, 0);
 });
 
+test('Shuffle cannot be removed through the station removal command', async () => {
+    const s = setup();
+    s.seed([track()], { isShuffle: true });
+    s.api.removeStation = async id => { s.calls.push(['remove', id]); return true; };
+    assert.equal(await s.handlers.get('CONTENT:REMOVE_STATION')({}, 'station-1'), false);
+    assert.deepEqual(s.calls, []);
+});
+
 test('modes load on request, preserve zero, and reject unavailable or arbitrary selections', async () => {
     const s = setup();
     s.seed([track()]);

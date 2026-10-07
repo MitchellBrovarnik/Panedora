@@ -314,6 +314,11 @@ function stationsByRecency() {
     return [...AppState.stations].sort((a, b) => time(b) - time(a));
 }
 
+function isShuffleCollectionStation(station) {
+    return station?.isShuffle === true || station?.isQuickMix === true || station?.stationType === 'QUICKMIX' ||
+        ['Shuffle', 'QuickMix', 'Shuffle Stations'].includes(station?.name);
+}
+
 function updateHomeGrids() {
     const recentContainer = document.getElementById('home-recent');
     const moreContainer = document.getElementById('home-more');
@@ -343,17 +348,23 @@ function updateHomeGrids() {
                 let title = station.name;
                 
                 // If this is a shuffle station, format it nicely
-                if (station.isShuffle || station.stationType === 'QUICKMIX' || station.name === 'Shuffle' || station.name === 'QuickMix') {
+                if (isShuffleCollectionStation(station)) {
                     img = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='2 2 20 20'%3E%3Cpath fill='%23ffffff' opacity='0.9' d='M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z'/%3E%3C/svg%3E";
                     title = "Shuffle Stations";
                 }
 
                 const temp = document.createElement('div');
-                temp.innerHTML = createCard(img, title, station.type === 'playlist' ? 'Playlist' : 'Station', dataId);
+                temp.innerHTML = createCard(img, title, station.type === 'playlist' ? 'Playlist' : 'Station', dataId,
+                    { removable: !isShuffleCollectionStation(station) });
                 card = temp.firstElementChild;
                 card.addEventListener('click', () => {
                     const current = AppState.stations.find(s => String(s.id || s.stationId) === dataId);
                     if (current) playStation(current);
+                });
+                card.querySelector('.card-remove-button')?.addEventListener('click', event => {
+                    event.stopPropagation();
+                    const current = AppState.stations.find(s => String(s.id || s.stationId) === dataId);
+                    if (current) openStationRemoval(current);
                 });
             }
             return card;
@@ -524,7 +535,7 @@ function renderLibraryPage() {
 
     filtered.forEach(station => {
         // Skip rendering the quickmix/shuffle station if it's natively in the list
-        if (station.isShuffle || station.stationType === 'QUICKMIX' || station.name === 'Shuffle' || station.name === 'QuickMix') return;
+        if (isShuffleCollectionStation(station)) return;
 
         cardsHtml += createCard(
             station.image,
@@ -1680,7 +1691,7 @@ function renderStationsList() {
     `;
     stationsByRecency().forEach(station => {
         // Skip rendering the quickmix/shuffle station if it's in the standard list, since we have a dedicated button
-        if (station.isShuffle || station.stationType === 'QUICKMIX' || station.name === 'Shuffle') return;
+        if (isShuffleCollectionStation(station)) return;
         
         html += createStationListItem(station.name, station.id, station.type);
     });
@@ -1826,7 +1837,7 @@ function renderStationRemoval() {
 }
 
 function openStationRemoval(station) {
-    if (stationRemoval?.pending) return;
+    if (stationRemoval?.pending || isShuffleCollectionStation(station)) return;
     stationRemoval = { id: station.id, name: station.name, pending: false, error: null };
     renderUpdateNotice();
     renderStationRemoval();

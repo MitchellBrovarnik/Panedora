@@ -765,7 +765,37 @@ test('filtered Library removes the confirmed station ID when names repeat and up
     assert.ok(s.node('library-cards').querySelector('[data-id="station-b"]'), 'Keep the other identically named station');
     s.ui.render('home');
     assert.equal(s.node('home-recent').querySelector('[data-id="station-a"]'), null);
-    assert.equal(s.node('home-recent').querySelector('.card-remove-button'), null, 'The new control is limited to Library');
+    assert.ok(s.node('home-recent').querySelector('[data-id="station-b"] .card-remove-button'));
+    assert.equal(s.node('home-recent').querySelector('[data-id="mix"] .card-remove-button'), null);
+});
+
+test('Home removes from either grid without playing, while Shuffle has no removal on either page', async t => {
+    const s = setup(t);
+    const stations = Array.from({ length: 8 }, (_, i) => ({ id: 'station-' + i, name: 'Station ' + i,
+        type: 'station', lastUpdated: new Date(2025, 0, 10 - i).toISOString() }));
+    stations.push({ id: 'mix', name: 'Shuffle Stations', isShuffle: true });
+    s.events.Collection(stations);
+    s.window.api.content.playItem = () => s.calls.push(['play']);
+    s.window.api.content.removeStation = async id => {
+        s.calls.push(['remove', id]);
+        s.events.Collection(s.ui.state.stations.filter(station => station.id !== id));
+        return true;
+    };
+    assert.equal(s.node('home-more').querySelector('[data-id="mix"] .card-remove-button'), null);
+    for (const [grid, id] of [['home-recent', 'station-0'], ['home-more', 'station-7']]) {
+        s.node(grid).querySelector('[data-id="' + id + '"] .card-remove-button').click();
+        assert.equal(s.node('station-remove-dialog').open, true);
+        s.node('station-remove-confirm').click();
+        await tick();
+        assert.deepEqual(s.calls.at(-1), ['remove', id]);
+        assert.equal(s.window.document.querySelector('.card[data-id="' + id + '"]'), null);
+    }
+    assert.equal(s.calls.some(call => call[0] === 'play'), false);
+    assert.ok(s.window.document.querySelector('.card[data-id="mix"]'));
+    s.ui.render('library');
+    assert.equal(s.node('library-shuffle-card').querySelector('.card-remove-button'), null);
+    s.ui.openRemoval({ id: 'mix', name: 'Shuffle Stations', isShuffle: true });
+    assert.equal(s.node('station-remove-dialog').open, false);
 });
 
 test('station removal submits the confirmed ID once, survives a sidebar refresh, and handles failure with retry', async t => {

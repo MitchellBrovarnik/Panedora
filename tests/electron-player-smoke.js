@@ -645,6 +645,12 @@ app.whenReady().then(async () => {
     win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
     await waitFor(() => run("!document.getElementById('station-remove-dialog').open"), 'Escape cancels removal');
     assert.equal(calls.filter(c => c.path.endsWith('/removeStation')).length, 0);
+    assert.equal(await run("document.querySelector('#home-recent [data-id=\"fixture-shuffle\"] .card-remove-button') === null"), true, 'Home Shuffle cannot be removed');
+    await capture('home-station-removal');
+    await run("document.querySelector('#home-recent [data-id=\"removable-station\"] .card-remove-button').click()");
+    await waitFor(() => run("document.getElementById('station-remove-dialog').open"), 'Home card remove opens confirmation');
+    assert.equal(await run("document.getElementById('station-remove-name').textContent"), 'Thunder (Live/Acoustic) Radio');
+    await run("document.getElementById('station-remove-cancel').click()");
     await run("renderPage('library')");
     assert.equal(await run("document.querySelector('#library-shuffle-card .card-remove-button') === null"), true, 'Shuffle cannot be removed');
     await capture('library-station-removal');
@@ -652,8 +658,14 @@ app.whenReady().then(async () => {
     await run("document.getElementById('library-filter').value = 'Thunder'; document.getElementById('library-filter').dispatchEvent(new Event('input', {bubbles:true}))");
     await waitFor(() => run("document.querySelectorAll('#library-cards .card').length === 1"), 'filtered Library station');
     assert.equal(await run("(() => { const button = document.querySelector('#library-cards .card-remove-button'); const b = button.getBoundingClientRect(); const art = button.closest('.card-image-container').getBoundingClientRect(); return getComputedStyle(button).width === '26px' && getComputedStyle(button).height === '26px' && b.left >= art.left && b.right <= art.right && b.top >= art.top && b.bottom <= art.bottom; })()"), true, 'Small X fits within the top corner of the artwork');
+    win.focus();
+    win.webContents.focus();
     await run("document.querySelector('#library-cards .card-remove-button').focus()");
+    assert.equal(await run("document.activeElement.classList.contains('card-remove-button')"), true);
+    // sendInputEvent does not synthesize the character event from keyDown.
+    // A real Enter press includes the carriage return that activates a button.
     win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });
+    win.webContents.sendInputEvent({ type: 'char', keyCode: '\r' });
     win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return' });
     await waitFor(() => run("document.getElementById('station-remove-dialog').open"), 'keyboard activation of the Library remove button');
     await run("document.getElementById('station-remove-cancel').click()");

@@ -1075,6 +1075,7 @@ ipcMain.handle('CONTENT:SEARCH', async (event, query) => {
 });
 
 ipcMain.handle('CONTENT:REMOVE_STATION', async (event, id) => {
+    if (isShuffleStation(currentStations.find(station => station.stationId === id))) return false;
     const success = await api.removeStation(id);
     if (success) {
         config.forgetStationRecency(id);
