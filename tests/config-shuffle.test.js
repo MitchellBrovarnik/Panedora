@@ -69,3 +69,25 @@ test('remembered Shuffle belongs to its account and is cleared on logout', t => 
     afterLogout.setCredentials('second@example.invalid', 'fixture-password');
     assert.equal(afterLogout.getRememberedShuffle(), null);
 });
+
+test('station recency survives restart, stays account-specific and forgets removed stations', t => {
+    const reopen = setup(t);
+    const first = reopen();
+    first.setCredentials('Listener@Example.invalid', 'fixture-password');
+    first.rememberStationPlayed('station-1', '2026-10-07T20:00:00.000Z');
+    first.rememberStationPlayed('station-2', '2026-10-07T21:00:00.000Z');
+    const restarted = reopen();
+    assert.equal(restarted.getStationRecency()['station-2'], '2026-10-07T21:00:00.000Z');
+    restarted.setCredentials('listener@example.invalid', 'changed-password');
+    assert.equal(Object.keys(restarted.getStationRecency()).length, 2);
+    restarted.forgetStationRecency('station-2');
+    assert.equal(reopen().getStationRecency()['station-2'], undefined);
+    assert.ok(reopen().getStationRecency()['station-1']);
+    restarted.setCredentials('other@example.invalid', 'fixture-password');
+    assert.equal(Object.keys(restarted.getStationRecency()).length, 0);
+    restarted.rememberStationPlayed('other-station', '2026-10-07T22:00:00.000Z');
+    assert.deepEqual(Object.keys(reopen().getStationRecency()), ['other-station']);
+    restarted.clearAll();
+    restarted.setCredentials('other@example.invalid', 'fixture-password');
+    assert.equal(Object.keys(reopen().getStationRecency()).length, 0);
+});

@@ -3,15 +3,18 @@
  * Helper functions for generating Spotify-style UI elements
  */
 
-function createCard(image, title, subtitle, dataId) {
+function createCard(image, title, subtitle, dataId, { removable = false } = {}) {
   const placeholder = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Crect fill='%23282828' width='180' height='180'/%3E%3C/svg%3E`;
   const id = `card_${Math.random().toString(36).slice(2, 11)}`;
 
   return `
-    <div class="card" id="${id}" data-id="${dataId || ''}" tabindex="0">
+    <div class="card" id="${id}" data-id="${escapeAttribute(dataId)}" tabindex="0">
       <div class="card-image-container">
-        <img class="card-image" src="${image || placeholder}" alt="${title}" loading="lazy">
-        <button class="card-play-button" aria-label="Play ${title}">
+        <img class="card-image" src="${escapeAttribute(image || placeholder)}" alt="${escapeAttribute(title)}" loading="lazy">
+        ${removable ? `<button class="card-remove-button" type="button" title="Remove station" aria-label="${escapeAttribute('Remove ' + title)}">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg>
+        </button>` : ''}
+        <button class="card-play-button" aria-label="${escapeAttribute('Play ' + title)}">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
         </button>
       </div>
@@ -61,6 +64,10 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+function escapeAttribute(text) {
+  return escapeHtml(String(text ?? '')).replace(/"/g, '&quot;');
 }
 
 function formatTime(seconds) {

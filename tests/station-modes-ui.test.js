@@ -432,18 +432,21 @@ test('playing a Home or sidebar station immediately reorders recent cards and su
     selected.click();
     assert.deepEqual(s.calls, [['play', 'home-7']]);
     assert.equal(recent.firstElementChild, selected);
+    assert.equal(s.node('stations-list').querySelector('.station-item[data-id]').dataset.id, 'home-7');
     assert.equal(more.firstElementChild, displaced);
     assert.equal(s.window.document.activeElement, selected);
     assert.equal(s.node('main-scroll').scrollTop, 120);
     assert.equal(recent.children.length + more.children.length, 8);
     s.events.Collection(structuredClone(stations));
     assert.equal(recent.firstElementChild, selected, 'Delayed server dates must not undo the selection');
+    assert.equal(s.node('stations-list').querySelector('.station-item[data-id]').dataset.id, 'home-7');
     selected.click();
     assert.equal(recent.children.length, 6, 'Replaying the newest card must leave the grid intact');
 
     now += 1000;
     s.node('stations-list').querySelector('[data-id="home-2"]').click();
     assert.equal(recent.firstElementChild.dataset.id, 'home-2');
+    assert.equal(s.node('stations-list').querySelector('.station-item[data-id]').dataset.id, 'home-2');
     assert.deepEqual(s.calls.at(-1), ['play', 'home-2']);
     assert.equal(s.node('home-recent'), recent, 'Keep the Home view mounted');
 });
@@ -702,24 +705,97 @@ test('the in-app listening dialog defaults to keeping playback paused and only s
     assert.equal(s.node('stream-conflict-dialog').open, false);
 });
 
-test('station removal uses a themed, escaped confirmation; Cancel, close and Escape never remove or play a station', async t => {
+test('sidebar and Library removal use confirmation; Cancel, close and Escape never remove or play a station', async t => {
     const s = setup(t);
     s.ui.state.stations = [{ id: 'station-1', name: 'Thunder <Live> "Radio"', type: 'station' }];
     s.ui.renderStations();
     s.window.api.content.playItem = () => s.calls.push(['play']);
     s.window.api.content.removeStation = async id => { s.calls.push(['remove', id]); return true; };
-    for (const action of ['station-remove-cancel', 'station-remove-close', 'Escape']) {
-        s.window.document.querySelector('.delete-btn').click();
-        assert.equal(s.node('station-remove-dialog').open, true);
-        assert.equal(s.window.document.activeElement.id, 'station-remove-cancel');
-        assert.equal(s.node('station-remove-name').textContent, 'Thunder <Live> "Radio"');
-        assert.equal(s.node('station-remove-name').childElementCount, 0);
-        if (action === 'Escape') s.node('station-remove-dialog').dispatchEvent(new s.window.Event('cancel', { cancelable: true }));
-        else s.node(action).click();
-        await tick();
-        assert.equal(s.node('station-remove-dialog').open, false);
+    s.ui.render('library');
+    for (const selector of ['.delete-btn', '#library-cards .card-remove-button']) {
+        for (const action of ['station-remove-cancel', 'station-remove-close', 'Escape']) {
+            s.window.document.querySelector(selector).click();
+            assert.equal(s.node('station-remove-dialog').open, true);
+            assert.equal(s.window.document.activeElement.id, 'station-remove-cancel');
+            assert.equal(s.node('station-remove-name').textContent, 'Thunder <Live> "Radio"');
+            assert.equal(s.node('station-remove-name').childElementCount, 0);
+            if (action === 'Escape') s.node('station-remove-dialog').dispatchEvent(new s.window.Event('cancel', { cancelable: true }));
+            else s.node(action).click();
+            await tick();
+            assert.equal(s.node('station-remove-dialog').open, false);
+        }
     }
     assert.deepEqual(s.calls, []);
+});
+
+test('filtered Library removes the confirmed station ID when names repeat and updates both views', async t => {
+    const s = setup(t);
+    const name = 'Thunder <Live> "Radio"';
+    const stations = [
+        { id: 'station-b', name, type: 'station' },
+        { id: 'station-a', name, type: 'station' },
+        { id: 'mix', name: 'Shuffle', isShuffle: true },
+        { id: 'other', name: 'Other Radio', type: 'station' }
+    ];
+    s.events.Collection(stations);
+    s.ui.render('library');
+    assert.equal(s.node('library-shuffle-card').querySelector('.card-remove-button'), null);
+    s.ui.state.libraryFilter = '"Radio"';
+    s.ui.render('library');
+    assert.equal(s.node('library-filter').value, '"Radio"');
+    assert.equal(s.node('library-cards').querySelectorAll('.card').length, 2);
+    const remove = s.node('library-cards').querySelector('[data-id="station-a"] .card-remove-button');
+    assert.equal(remove.getAttribute('aria-label'), 'Remove ' + name);
+    s.window.api.content.playItem = () => s.calls.push(['play']);
+    s.window.api.content.removeStation = async id => {
+        s.calls.push(['remove', id]);
+        s.events.Collection(stations.filter(station => station.id !== id));
+        return true;
+    };
+    remove.click();
+    assert.deepEqual(s.calls, [], 'The X must neither start playback nor delete without confirmation');
+    s.node('station-remove-confirm').click();
+    await tick();
+    assert.deepEqual(s.calls, [['remove', 'station-a']]);
+    assert.equal(s.node('station-remove-dialog').open, false);
+    assert.equal(s.node('library-filter').value, '"Radio"', 'Keep the search after removing a result');
+    assert.equal(s.window.document.activeElement, s.node('library-filter'));
+    assert.equal(s.node('library-cards').querySelector('[data-id="station-a"]'), null);
+    assert.equal(s.node('stations-list').querySelector('[data-id="station-a"]'), null);
+    assert.ok(s.node('library-cards').querySelector('[data-id="station-b"]'), 'Keep the other identically named station');
+    s.ui.render('home');
+    assert.equal(s.node('home-recent').querySelector('[data-id="station-a"]'), null);
+    assert.ok(s.node('home-recent').querySelector('[data-id="station-b"] .card-remove-button'));
+    assert.equal(s.node('home-recent').querySelector('[data-id="mix"] .card-remove-button'), null);
+});
+
+test('Home removes from either grid without playing, while Shuffle has no removal on either page', async t => {
+    const s = setup(t);
+    const stations = Array.from({ length: 8 }, (_, i) => ({ id: 'station-' + i, name: 'Station ' + i,
+        type: 'station', lastUpdated: new Date(2025, 0, 10 - i).toISOString() }));
+    stations.push({ id: 'mix', name: 'Shuffle Stations', isShuffle: true });
+    s.events.Collection(stations);
+    s.window.api.content.playItem = () => s.calls.push(['play']);
+    s.window.api.content.removeStation = async id => {
+        s.calls.push(['remove', id]);
+        s.events.Collection(s.ui.state.stations.filter(station => station.id !== id));
+        return true;
+    };
+    assert.equal(s.node('home-more').querySelector('[data-id="mix"] .card-remove-button'), null);
+    for (const [grid, id] of [['home-recent', 'station-0'], ['home-more', 'station-7']]) {
+        s.node(grid).querySelector('[data-id="' + id + '"] .card-remove-button').click();
+        assert.equal(s.node('station-remove-dialog').open, true);
+        s.node('station-remove-confirm').click();
+        await tick();
+        assert.deepEqual(s.calls.at(-1), ['remove', id]);
+        assert.equal(s.window.document.querySelector('.card[data-id="' + id + '"]'), null);
+    }
+    assert.equal(s.calls.some(call => call[0] === 'play'), false);
+    assert.ok(s.window.document.querySelector('.card[data-id="mix"]'));
+    s.ui.render('library');
+    assert.equal(s.node('library-shuffle-card').querySelector('.card-remove-button'), null);
+    s.ui.openRemoval({ id: 'mix', name: 'Shuffle Stations', isShuffle: true });
+    assert.equal(s.node('station-remove-dialog').open, false);
 });
 
 test('station removal submits the confirmed ID once, survives a sidebar refresh, and handles failure with retry', async t => {

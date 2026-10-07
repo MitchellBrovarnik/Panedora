@@ -18,6 +18,7 @@ function modes(currentModeId = 0) {
 }
 
 function setup(config = { getRememberedShuffle: () => null, rememberShuffle() {} }) {
+    config = { getStationRecency: () => ({}), rememberStationPlayed() {}, forgetStationRecency() {}, ...config };
     const handlers = new Map();
     const prompts = [];
     const messages = [];
@@ -195,6 +196,44 @@ test('Shuffle survives a new app session and collection refreshes when Pandora o
     assert.equal(restarted.started.length, 0);
 });
 
+test('selecting a station persists recency before network work and restores it over stale server dates', async () => {
+    const recent = {};
+    const config = { getRememberedShuffle: () => null, rememberShuffle() {},
+        getStationRecency: () => ({ ...recent }),
+        rememberStationPlayed: (id, date) => { recent[id] = date; } };
+    const stations = () => [
+        { stationId: 'station-1', name: 'First', lastPlayed: '2025-01-02T00:00:00Z' },
+        { stationId: 'station-2', name: 'Second', lastPlayed: '2025-01-01T00:00:00Z' }
+    ];
+    const first = setup(config);
+    first.api.getStations = async () => stations();
+    await first.loadStations();
+    let finish;
+    first.api.getPlaylist = () => new Promise(resolve => { finish = resolve; });
+    const playing = first.playStation('station-2');
+    assert.ok(recent['station-2'], 'Save as soon as the selection reaches main');
+    const currentCollection = first.messages.filter(m => m.name === 'UI:COLLECTION_DATA').at(-1).data;
+    assert.equal(currentCollection.find(s => s.id === 'station-2').lastUpdated, recent['station-2']);
+    finish({ tracks: [track()] });
+    await playing;
+
+    const restarted = setup(config);
+    restarted.api.getStations = async () => stations();
+    for (let i = 0; i < 3; i++) {
+        await restarted.loadStations();
+        const collection = restarted.messages.filter(m => m.name === 'UI:COLLECTION_DATA').at(-1).data;
+        assert.equal(collection.find(s => s.id === 'station-2').lastUpdated, recent['station-2']);
+    }
+    const newer = new Date(Date.parse(recent['station-2']) + 60000).toISOString();
+    restarted.api.getStations = async () => [{ ...stations()[1], lastPlayed: newer }];
+    await restarted.loadStations();
+    const collection = restarted.messages.filter(m => m.name === 'UI:COLLECTION_DATA').at(-1).data;
+    assert.equal(collection[0].lastUpdated, newer, 'Newer dates from another device still win');
+    restarted.api.getStations = async () => [stations()[0]];
+    await restarted.loadStations();
+    assert.equal(restarted.messages.filter(m => m.name === 'UI:COLLECTION_DATA').at(-1).data.length, 1, 'Dates do not resurrect absent/deleted stations');
+});
+
 test('restored Shuffle cards resolve a fresh station and do not duplicate a server QuickMix entry', async () => {
     let remembered = { stationId: 'old-shuffle', isShuffle: true, lastPlayed: '2025-01-01T00:00:00.000Z' };
     const config = { getRememberedShuffle: () => ({ ...remembered }), rememberShuffle: station => { remembered = { ...station }; } };
@@ -232,6 +271,14 @@ test('a delayed Shuffle response cannot restore its card or start playback after
     assert.equal(remembered, null);
     assert.equal(s.getCurrentState().stationId, null);
     assert.equal(s.started.length, 0);
+});
+
+test('Shuffle cannot be removed through the station removal command', async () => {
+    const s = setup();
+    s.seed([track()], { isShuffle: true });
+    s.api.removeStation = async id => { s.calls.push(['remove', id]); return true; };
+    assert.equal(await s.handlers.get('CONTENT:REMOVE_STATION')({}, 'station-1'), false);
+    assert.deepEqual(s.calls, []);
 });
 
 test('modes load on request, preserve zero, and reject unavailable or arbitrary selections', async () => {

@@ -433,6 +433,12 @@ async function loadStations() {
     } else if (rememberedShuffle) {
         stations.push(rememberedShuffle);
     }
+    const localRecency = config.getStationRecency();
+    for (const station of stations) {
+        const localDate = localRecency[station.stationId];
+        const serverTime = new Date(station.lastPlayed || station.lastUpdated || station.dateCreated || 0).getTime() || 0;
+        if (new Date(localDate).getTime() > serverTime) station.lastPlayed = localDate;
+    }
     currentStations = stations;
     sendStations(currentStations);
     return currentStations;
@@ -440,6 +446,14 @@ async function loadStations() {
 
 async function playStation(stationId, startingAtTrackId = null) {
     const generation = ++playbackGeneration;
+    const selected = currentStations.find(station => station.stationId === stationId);
+    if (selected && !isShuffleStation(selected)) {
+        // Save at selection time, before a slow pause/playlist request can yield
+        // or Ctrl+R can replace the renderer that initiated it.
+        selected.lastPlayed = new Date().toISOString();
+        config.rememberStationPlayed(stationId, selected.lastPlayed);
+        sendStations(currentStations);
+    }
     cancelStreamPrompt();
     stationLoading = true;
     resetStationModes();
@@ -1061,8 +1075,10 @@ ipcMain.handle('CONTENT:SEARCH', async (event, query) => {
 });
 
 ipcMain.handle('CONTENT:REMOVE_STATION', async (event, id) => {
+    if (isShuffleStation(currentStations.find(station => station.stationId === id))) return false;
     const success = await api.removeStation(id);
     if (success) {
+        config.forgetStationRecency(id);
         // Refresh stations using the centralized loader
         await loadStations();
     }

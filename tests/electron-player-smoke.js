@@ -623,6 +623,16 @@ app.whenReady().then(async () => {
     await run("renderPage('home'); document.querySelector('#home-recent [data-id=\"removable-station\"]').click()");
     await waitFor(() => run("AppState.playerState.stationId === 'removable-station' && !AppState.playerState.stationLoading"), 'Home station playback');
     assert.equal(await run("document.querySelector('#home-recent .card').dataset.id"), 'removable-station');
+    assert.equal(await run("document.querySelector('#stations-list .station-item[data-id]').dataset.id"), 'removable-station');
+    const rememberedPlay = require('../config').getStationRecency()['removable-station'];
+    assert.ok(rememberedPlay, 'Recent station is saved outside the renderer');
+    for (let i = 0; i < 2; i++) {
+        const loaded = new Promise(resolve => win.webContents.once('did-finish-load', resolve));
+        win.reload(); await loaded;
+        await waitFor(() => run("AppState.isLoggedIn && document.querySelector('#home-recent .card')?.dataset.id === 'removable-station'"), 'Ctrl+R preserves the recent Home station despite stale collection dates');
+        assert.equal(await run("document.querySelector('#stations-list .station-item[data-id]').dataset.id"), 'removable-station');
+        assert.equal(require('../config').getStationRecency()['removable-station'], rememberedPlay, 'Reloading does not promote a station again');
+    }
     await run("document.querySelector('#home-recent [data-id=\"fixture-station\"]').click()");
     await waitFor(() => run("AppState.playerState.stationId === 'fixture-station' && !AppState.playerState.stationLoading"), 'Home station switch');
     assert.equal(await run("document.querySelector('#home-recent .card').dataset.id"), 'fixture-station');
@@ -635,19 +645,49 @@ app.whenReady().then(async () => {
     win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
     await waitFor(() => run("!document.getElementById('station-remove-dialog').open"), 'Escape cancels removal');
     assert.equal(calls.filter(c => c.path.endsWith('/removeStation')).length, 0);
+    assert.equal(await run("document.querySelector('#home-recent [data-id=\"fixture-shuffle\"] .card-remove-button') === null"), true, 'Home Shuffle cannot be removed');
+    await capture('home-station-removal');
+    await run("document.querySelector('#home-recent [data-id=\"removable-station\"] .card-remove-button').click()");
+    await waitFor(() => run("document.getElementById('station-remove-dialog').open"), 'Home card remove opens confirmation');
+    assert.equal(await run("document.getElementById('station-remove-name').textContent"), 'Thunder (Live/Acoustic) Radio');
+    await run("document.getElementById('station-remove-cancel').click()");
+    await run("renderPage('library')");
+    assert.equal(await run("document.querySelector('#library-shuffle-card .card-remove-button') === null"), true, 'Shuffle cannot be removed');
+    await capture('library-station-removal');
+    const fragmentsBeforeRemoval = calls.filter(c => c.path.endsWith('/getFragment')).length;
+    await run("document.getElementById('library-filter').value = 'Thunder'; document.getElementById('library-filter').dispatchEvent(new Event('input', {bubbles:true}))");
+    await waitFor(() => run("document.querySelectorAll('#library-cards .card').length === 1"), 'filtered Library station');
+    assert.equal(await run("(() => { const button = document.querySelector('#library-cards .card-remove-button'); const b = button.getBoundingClientRect(); const art = button.closest('.card-image-container').getBoundingClientRect(); return getComputedStyle(button).width === '26px' && getComputedStyle(button).height === '26px' && b.left >= art.left && b.right <= art.right && b.top >= art.top && b.bottom <= art.bottom; })()"), true, 'Small X fits within the top corner of the artwork');
+    win.focus();
+    win.webContents.focus();
+    await run("document.querySelector('#library-cards .card-remove-button').focus()");
+    assert.equal(await run("document.activeElement.classList.contains('card-remove-button')"), true);
+    // sendInputEvent does not synthesize the character event from keyDown.
+    // A real Enter press includes the carriage return that activates a button.
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });
+    win.webContents.sendInputEvent({ type: 'char', keyCode: '\r' });
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return' });
+    await waitFor(() => run("document.getElementById('station-remove-dialog').open"), 'keyboard activation of the Library remove button');
+    await run("document.getElementById('station-remove-cancel').click()");
+    assert.equal(calls.filter(c => c.path.endsWith('/removeStation')).length, 0);
     removalFailed = true;
-    await run("document.querySelector('[data-id=\"removable-station\"] .delete-btn').click(); document.getElementById('station-remove-confirm').click()");
+    await run("document.querySelector('#library-cards [data-id=\"removable-station\"] .card-remove-button').click(); document.getElementById('station-remove-confirm').click()");
     await waitFor(() => run("!document.getElementById('station-remove-error').hidden"), 'inline removal error');
     assert.equal(await run("document.getElementById('station-remove-dialog').open && !document.getElementById('station-remove-confirm').disabled"), true);
-    assert.equal(await run("!!document.querySelector('#home-recent [data-id=\"removable-station\"]')"), true, 'Failed removal keeps the Home card');
+    assert.equal(await run("!!document.querySelector('#library-cards [data-id=\"removable-station\"]')"), true, 'Failed removal keeps the Library card');
     removalFailed = false;
     await run("document.getElementById('station-remove-confirm').click()");
     await waitFor(() => run("!document.getElementById('station-remove-dialog').open && !AppState.stations.some(station => station.id === 'removable-station')"), 'confirmed removal');
-    assert.equal(await run("document.querySelector('#home-recent [data-id=\"removable-station\"]') === null"), true, 'Sidebar removal updates Home without navigation');
+    assert.equal(await run("document.querySelector('#library-cards [data-id=\"removable-station\"]') === null && document.querySelector('#stations-list [data-id=\"removable-station\"]') === null"), true, 'Library and sidebar update immediately');
+    assert.equal(await run("document.getElementById('library-filter').value === 'Thunder' && document.activeElement.id === 'library-filter'"), true, 'Keep the filter and return focus to it after removal');
+    assert.equal(calls.filter(c => c.path.endsWith('/getFragment')).length, fragmentsBeforeRemoval, 'Removing stations must not start playback');
+    await run("renderPage('home')");
+    assert.equal(await run("document.querySelector('#home-recent [data-id=\"removable-station\"]') === null"), true, 'The removed station stays out of Home');
     assert.equal(await run("document.querySelector('#home-recent .card').dataset.id"), 'fixture-station');
     assert.equal(await run("!!document.querySelector('[data-id=\"fixture-station\"]')"), true);
     assert.equal(calls.filter(c => c.path.endsWith('/removeStation')).length, 2);
     assert.equal(calls.filter(c => c.path.endsWith('/removeStation')).every(c => c.body.stationId === 'removable-station'), true);
+    assert.equal(require('../config').getStationRecency()['removable-station'], undefined, 'Deleting a station also clears its saved recency');
     assert.equal(await run("!!document.querySelector('#home-recent [data-id=\"fixture-shuffle\"]')"), true, 'Collection refresh after removal preserves Shuffle');
     const shuffleRequests = calls.filter(c => c.path.endsWith('/station/shuffle')).length;
     await new Promise(resolve => {

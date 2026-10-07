@@ -239,6 +239,30 @@ module.exports = {
         });
     },
 
+    // Pandora can return old play dates immediately after a station selection.
+    // Keep local dates across renderer reloads/restarts, isolated by account.
+    getStationRecency: () => {
+        const stored = getConfig();
+        const account = stored.credentials?.email?.trim().toLowerCase();
+        return account && stored.stationRecency?.account === account
+            ? { ...stored.stationRecency.playedAt } : {};
+    },
+    rememberStationPlayed: (stationId, playedAt) => {
+        const stored = getConfig();
+        const account = stored.credentials?.email?.trim().toLowerCase();
+        if (!account || !stationId || !Number.isFinite(Date.parse(playedAt))) return;
+        const previous = stored.stationRecency?.account === account ? stored.stationRecency.playedAt : {};
+        setConfig('stationRecency', { account, playedAt: { ...previous, [stationId]: playedAt } });
+    },
+    forgetStationRecency: stationId => {
+        const stored = getConfig();
+        const account = stored.credentials?.email?.trim().toLowerCase();
+        if (!account || stored.stationRecency?.account !== account) return;
+        const playedAt = { ...stored.stationRecency.playedAt };
+        delete playedAt[stationId];
+        setConfig('stationRecency', { account, playedAt });
+    },
+
     // Check if logged in
     isLoggedIn: () => {
         const token = getConfig().authToken;
@@ -258,5 +282,6 @@ module.exports = {
         setConfig('csrfToken', null);
         setConfig('listenerId', null);
         setConfig('shuffleStation', null);
+        setConfig('stationRecency', null);
     }
 };
