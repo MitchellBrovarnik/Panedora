@@ -657,11 +657,21 @@ app.whenReady().then(async () => {
     const fragmentsBeforeRemoval = calls.filter(c => c.path.endsWith('/getFragment')).length;
     await run("document.getElementById('library-filter').value = 'Thunder'; document.getElementById('library-filter').dispatchEvent(new Event('input', {bubbles:true}))");
     await waitFor(() => run("document.querySelectorAll('#library-cards .card').length === 1"), 'filtered Library station');
-    assert.equal(await run("(() => { const button = document.querySelector('#library-cards .card-remove-button'); const b = button.getBoundingClientRect(); const art = button.closest('.card-image-container').getBoundingClientRect(); return getComputedStyle(button).width === '26px' && getComputedStyle(button).height === '26px' && b.left >= art.left && b.right <= art.right && b.top >= art.top && b.bottom <= art.bottom; })()"), true, 'Small X fits within the top corner of the artwork');
     win.focus();
     win.webContents.focus();
+    await run("document.getElementById('library-filter').focus()");
+    win.webContents.sendInputEvent({ type: 'mouseMove', x: 1, y: 1 });
+    await waitFor(() => run("getComputedStyle(document.querySelector('#library-cards .card-remove-button')).opacity === '0'"), 'Unfocused station card hides the remove button');
+    const cardHoverPoint = await run("(() => { const card = document.querySelector('#library-cards .card'); const r = card.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + 12) }; })()");
+    win.webContents.sendInputEvent({ type: 'mouseMove', ...cardHoverPoint });
+    await waitFor(() => run("getComputedStyle(document.querySelector('#library-cards .card-remove-button')).opacity === '1'"), 'Hover reveals the remove button');
+    assert.equal(await run("(() => { const button = document.querySelector('#library-cards .card-remove-button'); const card = button.closest('.card'); const b = button.getBoundingClientRect(); const c = card.getBoundingClientRect(); const art = card.querySelector('.card-image').getBoundingClientRect(); return getComputedStyle(button).width === '20px' && getComputedStyle(button).height === '20px' && b.top >= c.top && b.bottom <= art.top && b.right <= c.right && c.right - b.right <= 8; })()"), true, 'Smaller X sits inside the card top-right corner without covering the artwork');
+    await capture('library-station-removal-hover');
+    win.webContents.sendInputEvent({ type: 'mouseMove', x: 1, y: 1 });
+    await waitFor(() => run("getComputedStyle(document.querySelector('#library-cards .card-remove-button')).opacity === '0'"), 'Leaving the card hides the remove button');
     await run("document.querySelector('#library-cards .card-remove-button').focus()");
     assert.equal(await run("document.activeElement.classList.contains('card-remove-button')"), true);
+    await waitFor(() => run("getComputedStyle(document.querySelector('#library-cards .card-remove-button')).opacity === '1'"), 'Keyboard focus reveals the remove button');
     // sendInputEvent does not synthesize the character event from keyDown.
     // A real Enter press includes the carriage return that activates a button.
     win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });

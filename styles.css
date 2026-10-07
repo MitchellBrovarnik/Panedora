@@ -965,6 +965,14 @@ body::before {
     -webkit-backdrop-filter: blur(16px);
 }
 
+/* Leave room for the collection action above the artwork, including Shuffle
+   so the covers stay aligned. Keep this space fixed when hovering/focusing. */
+#home-recent .card,
+#home-more .card,
+#library-cards .card {
+    padding-top: 24px;
+}
+
 .card:hover {
     transform: translateY(-6px) scale(1.02);
     border-color: var(--glass-border-hover);
@@ -988,22 +996,36 @@ body::before {
 
 .card-remove-button {
     position: absolute;
-    top: 8px;
-    right: 8px;
+    top: 2px;
+    right: 4px;
     display: grid;
     place-items: center;
-    width: 26px;
-    height: 26px;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    border-radius: 6px;
-    background: rgba(16, 16, 20, 0.8);
-    color: rgba(255, 255, 255, 0.8);
-    transition: background 150ms ease, color 150ms ease;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border-radius: 4px;
+    color: var(--text-3);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 150ms ease, background 150ms ease, color 150ms ease;
+}
+
+.card:hover .card-remove-button,
+.card:focus-within .card-remove-button {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+@media (hover: none) {
+    .card-remove-button {
+        opacity: 1;
+        pointer-events: auto;
+    }
 }
 
 .card-remove-button:hover {
-    background: var(--bg-base);
-    color: white;
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
 }
 
 .card-remove-button:focus-visible {
@@ -1012,8 +1034,8 @@ body::before {
 }
 
 .card-remove-button svg {
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
     pointer-events: none;
 }
 
