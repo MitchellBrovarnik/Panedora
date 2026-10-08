@@ -1034,8 +1034,8 @@ body::before {
 }
 
 .card-remove-button svg {
-    width: 12px;
-    height: 12px;
+    width: 14px;
+    height: 14px;
     pointer-events: none;
 }
 
