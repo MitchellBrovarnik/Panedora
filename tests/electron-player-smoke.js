@@ -78,6 +78,9 @@ app.whenReady().then(async () => {
     let slowAudioGate = null;
     let coverGate = null;
     let heldCoverRequests = 0;
+    let stalledCoverGate = null;
+    let stalledCoverRequests = 0;
+    const artworkRequests = [];
     const audioRequests = [];
     const audio = silentWav();
     const tracks = [1, 2, 3, 4].map(n => ({
@@ -99,10 +102,16 @@ app.whenReady().then(async () => {
             heldCoverRequests++;
             if (coverGate) await coverGate;
         }
+        if (url.pathname === '/stalled-cover.svg') {
+            stalledCoverRequests++;
+            if (stalledCoverGate) await stalledCoverGate;
+        }
+        if (url.pathname.endsWith('.svg')) artworkRequests.push(url.pathname);
         if (url.pathname.endsWith('.svg')) return new Response(
             '<svg xmlns="http://www.w3.org/2000/svg" width="500" height="500"><rect width="500" height="500" fill="#487ad9"/><circle cx="250" cy="250" r="135" fill="#202947"/><circle cx="250" cy="250" r="26" fill="#a5b9f0"/></svg>',
             { headers: { 'Content-Type': 'image/svg+xml', 'Access-Control-Allow-Origin': '*',
-                ...(url.pathname === '/held-cover.svg' ? { 'Cache-Control': 'no-store' } : {}) } });
+                ...(url.pathname === '/held-cover.svg' ? { 'Cache-Control': 'no-store' } :
+                    url.pathname === '/next-art.svg' ? { 'Cache-Control': 'public, max-age=3600' } : {}) } });
         if (url.pathname.endsWith('.wav')) {
             audioRequests.push(url.pathname);
             if (url.pathname === '/slow-audio.wav' && slowAudioGate) await slowAudioGate;
@@ -239,6 +248,22 @@ app.whenReady().then(async () => {
         await waitFor(() => run("AppState.playerState.trackToken === 'stress-1' && !document.querySelector('audio').paused && document.getElementById('now-playing-art').src === 'https://fixture.invalid/art.svg'"), 'first song plays with fallback artwork');
         await run("document.getElementById('now-playing-art').click()");
         await waitFor(() => run("document.getElementById('np-large-art').naturalWidth > 0 && document.getElementById('np-large-art').src === 'https://fixture.invalid/art.svg'"), 'expanded player uses the working supplied image size');
+        await waitFor(() => run("AppState.playerState.stationModes.status === 'ready'"), 'station metadata settles');
+        await waitFor(() => run("upcomingArtworkPreloads.get('https://fixture.invalid/next-art.svg')?.complete && upcomingArtworkPreloads.get('https://fixture.invalid/next-art.svg').naturalWidth > 0"), 'next song cover downloads while the first song is still playing');
+        const warmedRequests = artworkRequests.filter(url => url === '/next-art.svg').length;
+        assert.equal(warmedRequests, 1);
+
+        let finishStalledCover;
+        stalledCoverGate = new Promise(resolve => { finishStalledCover = resolve; });
+        await run("updatePlayerUI({ coverArt: 'https://fixture.invalid/stalled-cover.svg', coverArtSources: ['https://fixture.invalid/recovered-cover.svg'] })");
+        await waitFor(() => stalledCoverRequests > 0, 'stalled artwork request');
+        assert.equal(await run("document.getElementById('now-playing-art').getAttribute('src') === 'https://fixture.invalid/stalled-cover.svg' && !document.getElementById('now-playing-art').complete"), true, 'The new cover is requested immediately while its response is held');
+        await waitFor(() => run("['now-playing-art', 'np-large-art'].every(id => { const image = document.getElementById(id); return image.currentSrc === 'https://fixture.invalid/recovered-cover.svg' && image.complete && image.naturalWidth > 0; })"), 'both players recover stalled artwork without an error event', 8000);
+        finishStalledCover();
+        stalledCoverGate = null;
+        await run('new Promise(resolve => setTimeout(resolve, 150))');
+        assert.equal(await run("['now-playing-art', 'np-large-art'].every(id => document.getElementById(id).currentSrc === 'https://fixture.invalid/recovered-cover.svg')"), true, 'A late stalled response cannot replace the recovered image');
+
         let finishAudio;
         let finishRefill;
         slowAudioGate = new Promise(resolve => { finishAudio = resolve; });
@@ -246,6 +271,8 @@ app.whenReady().then(async () => {
         const fragmentsBefore = calls.filter(c => c.path.endsWith('/getFragment')).length;
         await run('nextPlayerTrack()');
         await waitFor(() => audioRequests.includes('/slow-audio.wav'), 'second song starts loading');
+        await waitFor(() => run("document.getElementById('now-playing-art').currentSrc === 'https://fixture.invalid/next-art.svg' && document.getElementById('now-playing-art').complete"), 'the prefetched cover displays while the next audio is still buffering');
+        assert.equal(artworkRequests.filter(url => url === '/next-art.svg').length, warmedRequests, 'The cached upcoming cover is reused without downloading it again');
         await run('Promise.all([nextPlayerTrack(), nextPlayerTrack(), nextPlayerTrack()])');
         await waitFor(() => run("AppState.playerState.trackToken === 'stress-3' && !document.querySelector('audio').paused"), 'rapid skips reach the ready queued song without waiting for the refill');
         assert.equal(calls.filter(c => c.path.endsWith('/getFragment')).length, fragmentsBefore + 1);
@@ -270,7 +297,7 @@ app.whenReady().then(async () => {
         assert.equal(await run('AppState.playerState.trackToken'), 'fresh-3', 'The old audio error cannot skip the recovered song later');
         assert.equal(await run("document.querySelectorAll('audio').length"), 1);
         await capture('rapid-skip-recovered');
-        console.log('Direct artwork loading, rapid skips, slow audio and playlist responses, real natural song endings, stale error recovery, first-song artwork recovery and clearing missing covers passed.');
+        console.log('Direct artwork loading, queued cover prefetch/cache reuse, stalled artwork fallback, rapid skips, slow audio and playlist responses, real natural song endings, stale error recovery, first-song artwork recovery and clearing missing covers passed.');
     }
 
     async function exerciseAudioRecovery() {

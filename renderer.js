@@ -10,7 +10,31 @@
 const COOLDOWN_MS = 1500;
 const _cooldowns = {};
 const PLAYER_ART_PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect fill='%23282828' width='180' height='180'/%3E%3Ctext x='90' y='100' text-anchor='middle' fill='%23555' font-size='36'%3E%E2%99%AA%3C/text%3E%3C/svg%3E";
+const PLAYER_ART_TIMEOUT_MS = 5000;
 const playerArtworkLoads = new WeakMap();
+const upcomingArtworkPreloads = new Map();
+
+function preloadUpcomingArtwork(urls) {
+    const upcoming = [...new Set((Array.isArray(urls) ? urls : [])
+        .filter(url => typeof url === 'string' && url))].slice(0, 2);
+    for (const [url, image] of upcomingArtworkPreloads) {
+        // The visible player may be sharing this still-pending request after
+        // a skip. Keep it alive while that cover belongs to the current song.
+        if (upcoming.includes(url) || url === AppState.playerState.coverArt) continue;
+        image.src = '';
+        upcomingArtworkPreloads.delete(url);
+    }
+    for (const url of upcoming) {
+        if (url === AppState.playerState.coverArt || upcomingArtworkPreloads.has(url)) continue;
+        const image = new Image();
+        image.fetchPriority = 'low';
+        image.decoding = 'async';
+        upcomingArtworkPreloads.set(url, image);
+        // Warm only queued covers. The current cover always loads directly in
+        // its visible element and never waits for an invisible probe.
+        image.src = url;
+    }
+}
 
 function renderPlayerArtwork() {
     const state = AppState.playerState;
@@ -30,16 +54,22 @@ function renderPlayerArtwork() {
             // an exhausted request without looping on ordinary state updates.
             if (!previous.failed || !newTrack) continue;
         }
-        if (previous?.timer) clearTimeout(previous.timer);
-        const request = { key, trackKey, retried: false, failed: false, timer: null, attempt: 0 };
+        if (previous?.timer != null) clearTimeout(previous.timer);
+        if (previous?.loadTimer != null) clearTimeout(previous.loadTimer);
+        const request = { key, trackKey, retried: false, failed: false, timer: null, loadTimer: null, attempt: 0 };
         playerArtworkLoads.set(image, request);
-        const isCurrent = () => playerArtworkLoads.get(image) === request;
+        const isCurrent = () => playerArtworkLoads.get(image) === request && image.isConnected !== false;
+        const clearLoadTimer = () => {
+            if (request.loadTimer != null) clearTimeout(request.loadTimer);
+            request.loadTimer = null;
+        };
         const showPlaceholder = () => {
-            image.onerror = null;
+            image.onload = image.onerror = null;
             image.src = PLAYER_ART_PLACEHOLDER;
         };
         const load = index => {
             if (!isCurrent() || !sources.length) return;
+            clearLoadTimer();
             if (index >= sources.length) {
                 showPlaceholder();
                 // One bounded retry also covers a transient failure on first play.
@@ -51,16 +81,29 @@ function renderPlayerArtwork() {
             }
             const attempt = ++request.attempt;
             const url = sources[index];
+            const isAttempt = () => isCurrent() && request.attempt === attempt && image.getAttribute('src') === url;
+            image.onload = () => {
+                if (!isAttempt() || !image.complete || image.naturalWidth === 0) return;
+                clearLoadTimer();
+            };
             image.onerror = () => {
                 // A queued error from an abandoned request must not fail a
                 // replacement that is still loading or already displayed.
-                if (!isCurrent() || request.attempt !== attempt || image.getAttribute('src') !== url ||
-                    !image.complete || image.naturalWidth > 0) return;
+                if (!isAttempt() || !image.complete || image.naturalWidth > 0) return;
                 load(request.retried ? sources.length : index + 1);
             };
             // Load in the visible element, as before. A separate Image probe
             // delays rendering and can download non-cacheable covers twice.
             image.src = url;
+            request.loadTimer = setTimeout(() => {
+                if (!isAttempt()) return;
+                request.loadTimer = null;
+                if (image.complete && image.naturalWidth > 0) return;
+                // A pending replacement may still display the old song's
+                // bitmap. Clear it before trying another supplied cover size.
+                showPlaceholder();
+                load(request.retried ? sources.length : index + 1);
+            }, PLAYER_ART_TIMEOUT_MS);
         };
         if (!sources.length) {
             showPlaceholder();
@@ -1982,6 +2025,7 @@ function updatePlayerUI(state) {
         DOM.nowPlayingArtist.textContent = state.artist;
     }
     renderPlayerArtwork();
+    preloadUpcomingArtwork(AppState.playerState.upcomingArtwork);
 
     // Marquee scroll for overflowing text in mini mode
     if (state.track || state.artist) {
