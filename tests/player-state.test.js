@@ -64,7 +64,10 @@ function setup(config = { getRememberedShuffle: () => null, rememberShuffle() {}
         module, testApi: api, testWindow: window,
         require: name => {
             if (name === 'electron') return electron;
-            if (name === './pandora-api') return { getHighResArt: () => null, getArtUrls: () => [] };
+            if (name === './pandora-api') return {
+                getHighResArt: art => art?.[0]?.url || null,
+                getArtUrls: art => (art || []).map(image => image.url).filter(Boolean)
+            };
             if (name === './update-checker') return require('../update-checker');
             if (name === './discord-presence') return require('../discord-presence');
             if (name === './discord-config.json') return require('../discord-config.json');
@@ -78,6 +81,18 @@ function setup(config = { getRememberedShuffle: () => null, rememberShuffle() {}
     });
     return { ...module.exports, api, handlers, prompts, window, messages, calls, started, playlists, electron };
 }
+
+test('player state supplies only the next two queued covers before their songs start', async () => {
+    const s = setup();
+    s.seed(['a', 'b', 'c', 'd'].map(token => ({ ...track(0, token),
+        albumArt: [{ size: 500, url: 'https://fixture.invalid/' + token + '.jpg' }] })));
+    const urls = () => Array.from(s.getCurrentState().upcomingArtwork);
+    assert.deepEqual(urls(), ['https://fixture.invalid/b.jpg', 'https://fixture.invalid/c.jpg']);
+    assert.equal(s.getCurrentState().trackToken, 'a');
+    await s.skipTrack();
+    assert.deepEqual(urls(), ['https://fixture.invalid/c.jpg', 'https://fixture.invalid/d.jpg']);
+    assert.equal(s.getCurrentState().trackToken, 'b');
+});
 
 test('update checks and choices require the app renderer and a verified notice', async () => {
     const s = setup();

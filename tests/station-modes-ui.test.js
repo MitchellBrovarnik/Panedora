@@ -184,6 +184,115 @@ test('a transient artwork failure retries once and repeated failures do not loop
     assert.equal(image.src, 'https://fixture.invalid/new.jpg', 'An old retry cannot restore a skipped cover');
 });
 
+function artworkClock(s) {
+    let now = 0;
+    let id = 100000;
+    const timers = new Map();
+    const setTimer = s.window.setTimeout.bind(s.window);
+    const clearTimer = s.window.clearTimeout.bind(s.window);
+    s.window.setTimeout = (callback, delay) => {
+        if (![1000, 5000].includes(delay)) return setTimer(callback, delay);
+        const next = ++id;
+        timers.set(next, { callback, at: now + delay });
+        return next;
+    };
+    s.window.clearTimeout = timer => timers.delete(timer) || clearTimer(timer);
+    return {
+        timers,
+        advance(ms) {
+            const end = now + ms;
+            for (let guard = 0; guard < 100; guard++) {
+                const due = [...timers].filter(([, timer]) => timer.at <= end)
+                    .sort((a, b) => a[1].at - b[1].at)[0];
+                if (!due) { now = end; return; }
+                timers.delete(due[0]);
+                now = due[1].at;
+                due[1].callback();
+            }
+            assert.fail('Artwork recovery must be bounded');
+        }
+    };
+}
+
+function artworkStatus(s, image, complete, width) {
+    Object.defineProperty(image, 'complete', { configurable: true, value: complete });
+    Object.defineProperty(image, 'naturalWidth', { configurable: true, value: width });
+    if (complete && width) image.dispatchEvent(new s.window.Event('load'));
+}
+
+test('stalled covers fall back in both players without a network error event', t => {
+    const s = setup(t);
+    const clock = artworkClock(s);
+    s.ui.update({ coverArt: 'https://fixture.invalid/old.jpg' });
+    s.open();
+    const images = ['now-playing-art', 'np-large-art'].map(s.node);
+    images.forEach(image => artworkStatus(s, image, true, 500));
+    s.ui.update({ trackToken: 'next', coverArt: 'https://fixture.invalid/stalled.jpg',
+        coverArtSources: ['https://fixture.invalid/working.jpg'] });
+    // A browser can still expose the previous bitmap's width while its new
+    // image request is pending. Width alone must not cancel the deadline.
+    images.forEach(image => artworkStatus(s, image, false, 500));
+    clock.advance(4999);
+    for (const image of images) assert.equal(image.src, 'https://fixture.invalid/stalled.jpg');
+    clock.advance(1);
+    for (const image of images) assert.equal(image.src, 'https://fixture.invalid/working.jpg');
+    images.forEach(image => artworkStatus(s, image, true, 500));
+    clock.advance(60000);
+    for (const image of images) assert.equal(image.src, 'https://fixture.invalid/working.jpg');
+    assert.equal(clock.timers.size, 0, 'Successful images cancel their load deadlines');
+});
+
+test('stalled artwork retries once, clears obsolete art, and cannot loop', t => {
+    const s = setup(t);
+    const clock = artworkClock(s);
+    s.ui.update({ coverArt: 'https://fixture.invalid/stalled.jpg' });
+    const image = s.node('now-playing-art');
+    clock.advance(5000);
+    assert.match(image.src, /^data:image\/svg/, 'An expired request clears the previous song bitmap');
+    clock.advance(1000);
+    assert.equal(image.src, 'https://fixture.invalid/stalled.jpg');
+    clock.advance(5000);
+    assert.match(image.src, /^data:image\/svg/);
+    clock.advance(60000);
+    assert.equal(clock.timers.size, 0);
+    s.ui.update({ isPlaying: false });
+    assert.match(image.src, /^data:image\/svg/);
+    s.ui.update({ trackToken: 'later-song', coverArt: 'https://fixture.invalid/stalled.jpg' });
+    assert.equal(image.src, 'https://fixture.invalid/stalled.jpg', 'A later song may retry an exhausted cover');
+});
+
+test('late artwork deadlines cannot replace a skipped song or clear a loaded cover', t => {
+    const s = setup(t);
+    const clock = artworkClock(s);
+    s.ui.update({ coverArt: 'https://fixture.invalid/stalled.jpg' });
+    const deadlines = [...clock.timers.values()].map(timer => timer.callback);
+    assert.equal(deadlines.length, 1);
+    s.ui.update({ trackToken: 'next', coverArt: 'https://fixture.invalid/new.jpg' });
+    const image = s.node('now-playing-art');
+    artworkStatus(s, image, true, 500);
+    deadlines.forEach(callback => callback());
+    clock.advance(60000);
+    assert.equal(image.src, 'https://fixture.invalid/new.jpg');
+    assert.equal(clock.timers.size, 0);
+});
+
+test('queued artwork warms at most two distinct upcoming covers without blocking the current cover', t => {
+    const s = setup(t);
+    const upcoming = ['https://fixture.invalid/next.jpg', 'https://fixture.invalid/third.jpg', 'https://fixture.invalid/fourth.jpg'];
+    s.ui.update({ coverArt: 'https://fixture.invalid/current.jpg', upcomingArtwork: [upcoming[0], upcoming[0], upcoming[1], upcoming[2]] });
+    assert.equal(s.node('now-playing-art').src, 'https://fixture.invalid/current.jpg');
+    assert.deepEqual(s.images.map(image => image.src), upcoming.slice(0, 2));
+    assert.ok(s.images.every(image => image.fetchPriority === 'low'));
+    s.ui.update({ isPlaying: false });
+    assert.equal(s.images.length, 2, 'Ordinary state updates reuse the existing warm requests');
+    const first = s.images[0];
+    s.ui.update({ trackToken: 'next', coverArt: upcoming[0], upcomingArtwork: upcoming.slice(1) });
+    assert.equal(first.src, upcoming[0], 'Promotion to the current song must not abort its in-flight cover');
+    assert.equal(s.images.length, 3);
+    s.ui.update({ trackToken: null, coverArt: null, upcomingArtwork: [] });
+    assert.ok(s.images.every(image => image.src === ''), 'Clearing playback cancels retained background covers');
+});
+
 test('update banner escapes versions and leaves focus, navigation and playback alone', async t => {
     const s = setup(t);
     const responses = [];
