@@ -86,12 +86,33 @@ test('player state supplies only the next two queued covers before their songs s
     const s = setup();
     s.seed(['a', 'b', 'c', 'd'].map(token => ({ ...track(0, token),
         albumArt: [{ size: 500, url: 'https://fixture.invalid/' + token + '.jpg' }] })));
-    const urls = () => Array.from(s.getCurrentState().upcomingArtwork);
-    assert.deepEqual(urls(), ['https://fixture.invalid/b.jpg', 'https://fixture.invalid/c.jpg']);
+    const urls = () => JSON.parse(JSON.stringify(s.getCurrentState().upcomingArtwork));
+    assert.deepEqual(urls(), [['https://fixture.invalid/b.jpg'], ['https://fixture.invalid/c.jpg']]);
     assert.equal(s.getCurrentState().trackToken, 'a');
     await s.skipTrack();
-    assert.deepEqual(urls(), ['https://fixture.invalid/c.jpg', 'https://fixture.invalid/d.jpg']);
+    assert.deepEqual(urls(), [['https://fixture.invalid/c.jpg'], ['https://fixture.invalid/d.jpg']]);
     assert.equal(s.getCurrentState().trackToken, 'b');
+});
+
+test('a background refill publishes upcoming cover sizes before the current song ends', async () => {
+    const s = setup();
+    s.seed([track(0, 'first'), track(0, 'last-queued')]);
+    let finish;
+    s.api.getPlaylist = () => new Promise(resolve => { finish = resolve; });
+    await s.skipTrack();
+    s.messages.length = 0;
+    finish({ tracks: [{ ...track(0, 'refilled'), albumArt: [
+        { size: 1080, url: 'https://fixture.invalid/large.jpg' },
+        { size: 500, url: 'https://fixture.invalid/small.jpg' }
+    ] }] });
+    await tick();
+    const update = s.messages.find(message => message.name === 'UI:PLAYER_STATE');
+    assert.ok(update, 'Completing a refill must notify the renderer without waiting for a skip/play event');
+    assert.equal(update.data.trackToken, 'last-queued');
+    assert.deepEqual(JSON.parse(JSON.stringify(update.data.upcomingArtwork)), [[
+        'https://fixture.invalid/large.jpg', 'https://fixture.invalid/small.jpg'
+    ]]);
+    assert.equal(s.started.some(([, token]) => token === 'refilled'), false);
 });
 
 test('update checks and choices require the app renderer and a verified notice', async () => {

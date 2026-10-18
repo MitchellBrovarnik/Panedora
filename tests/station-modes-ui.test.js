@@ -21,7 +21,11 @@ function setup(t) {
     });
     const { window } = dom;
     const images = [];
-    window.Image = class { constructor() { images.push(this); } };
+    window.Image = function () {
+        const image = window.document.createElement('img');
+        images.push(image);
+        return image;
+    };
     window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
     window.HTMLDialogElement.prototype.close = function () { this.open = false; };
     const calls = [];
@@ -290,7 +294,74 @@ test('queued artwork warms at most two distinct upcoming covers without blocking
     assert.equal(first.src, upcoming[0], 'Promotion to the current song must not abort its in-flight cover');
     assert.equal(s.images.length, 3);
     s.ui.update({ trackToken: null, coverArt: null, upcomingArtwork: [] });
-    assert.ok(s.images.every(image => image.src === ''), 'Clearing playback cancels retained background covers');
+    assert.ok(s.images.every(image => image.getAttribute('src') === ''), 'Clearing playback cancels retained background covers');
+});
+
+test('a stalled queued cover loads its fallback before promotion in mini mode', t => {
+    const s = setup(t);
+    const clock = artworkClock(s);
+    const sources = ['https://fixture.invalid/queued-large.jpg', 'https://fixture.invalid/queued-small.jpg'];
+    s.events.MiniMode({ isMini: true });
+    s.ui.update({ coverArt: 'https://fixture.invalid/current.jpg', upcomingArtwork: [sources] });
+    artworkStatus(s, s.node('now-playing-art'), true, 500);
+    const queued = s.images[0];
+    assert.ok(queued, 'The next cover starts while the current song is playing');
+    const lateError = queued.onerror;
+    clock.advance(5000);
+    assert.equal(queued.src, sources[1], 'A stalled preload falls back before the song transition');
+    artworkStatus(s, queued, true, 500);
+    s.ui.update({ trackToken: 'next', coverArt: sources[0], coverArtSources: sources, upcomingArtwork: [] });
+    assert.equal(s.node('now-playing-art'), queued, 'Reuse the loaded image itself, including non-cacheable responses');
+    assert.equal(queued.src, sources[1]);
+    assert.equal(queued.className, 'now-playing-art');
+    assert.equal(queued.alt, 'Album art');
+    lateError();
+    clock.advance(60000);
+    assert.equal(queued.src, sources[1], 'A late callback cannot undo the prepared fallback');
+    s.events.MiniMode({ isMini: false });
+    s.open();
+    assert.equal(s.ui.state.currentPage, 'nowplaying', 'Clicking a promoted cover still opens the full player');
+    assert.equal(s.node('np-large-art').src, sources[1]);
+});
+
+test('queued errors recover early and obsolete preload callbacks cannot restore old art', t => {
+    const s = setup(t);
+    const clock = artworkClock(s);
+    const sources = ['https://fixture.invalid/missing.jpg', 'https://fixture.invalid/ready.jpg'];
+    s.ui.update({ upcomingArtwork: [sources] });
+    const queued = s.images[0];
+    assert.ok(queued);
+    artworkStatus(s, queued, true, 0);
+    queued.onerror();
+    assert.equal(queued.src, sources[1]);
+    const lateLoad = queued.onload;
+    s.ui.update({ playbackGeneration: 2, trackToken: 'other', coverArt: 'https://fixture.invalid/other.jpg', upcomingArtwork: [] });
+    artworkStatus(s, s.node('now-playing-art'), true, 500);
+    artworkStatus(s, queued, true, 500);
+    lateLoad();
+    clock.advance(60000);
+    assert.equal(s.node('now-playing-art').src, 'https://fixture.invalid/other.jpg');
+    assert.equal(queued.getAttribute('src'), '');
+    assert.equal(clock.timers.size, 0);
+});
+
+test('a preload finishing after the song changes replaces the pending mini cover immediately', t => {
+    const s = setup(t);
+    const clock = artworkClock(s);
+    const url = 'https://fixture.invalid/late-ready.jpg';
+    s.ui.update({ upcomingArtwork: [url] });
+    const queued = s.images[0];
+    s.events.MiniMode({ isMini: true });
+    s.ui.update({ trackToken: 'next', coverArt: url, upcomingArtwork: [] });
+    const pending = s.node('now-playing-art');
+    const lateDeadline = [...clock.timers.values()].map(timer => timer.callback);
+    artworkStatus(s, queued, true, 500);
+    assert.equal(s.node('now-playing-art'), queued);
+    assert.equal(pending.isConnected, false);
+    lateDeadline.forEach(callback => callback());
+    clock.advance(60000);
+    assert.equal(queued.src, url);
+    assert.equal(clock.timers.size, 0);
 });
 
 test('update banner escapes versions and leaves focus, navigation and playback alone', async t => {
