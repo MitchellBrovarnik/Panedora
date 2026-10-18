@@ -205,9 +205,9 @@ function getCurrentState() {
         stationModes: { ...stationModes, changing: stationModeChange?.generation === playbackGeneration },
         coverArt: PandoraAPI.getHighResArt(track?.albumArt),
         coverArtSources: PandoraAPI.getArtUrls(track?.albumArt),
-        upcomingArtwork: stationLoading || streamReclaimed ? [] : [...new Set(currentPlaylist
+        upcomingArtwork: stationLoading || streamReclaimed ? [] : currentPlaylist
             .slice(currentTrackIndex + 1, currentTrackIndex + 3)
-            .map(next => PandoraAPI.getHighResArt(next.albumArt)).filter(Boolean))],
+            .map(next => PandoraAPI.getArtUrls(next.albumArt)).filter(sources => sources.length),
         time: 0, // UI will track via audio element
         duration: track?.trackLength || 0,
         isPlaying: !!(track?.audioURL) && !isPaused && !streamReclaimed,
@@ -526,7 +526,12 @@ function refillPlaylist(generation = playbackGeneration) {
                 await showStreamConflict(operation.stationId, generation);
                 return { tracks: [], streamConflict: true };
             }
-            if (result.tracks?.length) currentPlaylist.push(...result.tracks);
+            if (result.tracks?.length) {
+                currentPlaylist.push(...result.tracks);
+                // Queue changes need to reach the artwork preloader while the
+                // current song is still playing, including after a slow refill.
+                sendPlayerState(getCurrentState());
+            }
             return result;
         } catch {
             return { tracks: [], error: 'Failed to load playlist. Please try again.' };

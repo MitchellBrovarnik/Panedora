@@ -80,6 +80,7 @@ app.whenReady().then(async () => {
     let heldCoverRequests = 0;
     let stalledCoverGate = null;
     let stalledCoverRequests = 0;
+    let queuedCoverGate = null;
     const artworkRequests = [];
     const audioRequests = [];
     const audio = silentWav();
@@ -106,11 +107,12 @@ app.whenReady().then(async () => {
             stalledCoverRequests++;
             if (stalledCoverGate) await stalledCoverGate;
         }
+        if (url.pathname === '/queued-stalled.svg' && queuedCoverGate) await queuedCoverGate;
         if (url.pathname.endsWith('.svg')) artworkRequests.push(url.pathname);
         if (url.pathname.endsWith('.svg')) return new Response(
             '<svg xmlns="http://www.w3.org/2000/svg" width="500" height="500"><rect width="500" height="500" fill="#487ad9"/><circle cx="250" cy="250" r="135" fill="#202947"/><circle cx="250" cy="250" r="26" fill="#a5b9f0"/></svg>',
             { headers: { 'Content-Type': 'image/svg+xml', 'Access-Control-Allow-Origin': '*',
-                ...(url.pathname === '/held-cover.svg' ? { 'Cache-Control': 'no-store' } :
+                ...(['/held-cover.svg', '/queued-ready.svg', '/refill-ready.svg'].includes(url.pathname) ? { 'Cache-Control': 'no-store' } :
                     url.pathname === '/next-art.svg' ? { 'Cache-Control': 'public, max-age=3600' } : {}) } });
         if (url.pathname.endsWith('.wav')) {
             audioRequests.push(url.pathname);
@@ -298,6 +300,73 @@ app.whenReady().then(async () => {
         assert.equal(await run("document.querySelectorAll('audio').length"), 1);
         await capture('rapid-skip-recovered');
         console.log('Direct artwork loading, queued cover prefetch/cache reuse, stalled artwork fallback, rapid skips, slow audio and playlist responses, real natural song endings, stale error recovery, first-song artwork recovery and clearing missing covers passed.');
+    }
+
+    async function exerciseNaturalMiniArtwork() {
+        await run("renderPage('home'); window.api.window.toggleMini()");
+        await waitFor(() => run("document.body.classList.contains('mini-mode')"), 'mini mode for natural endings');
+        let finishQueuedCover;
+        let finishRefill;
+        queuedCoverGate = new Promise(resolve => { finishQueuedCover = resolve; });
+        refillGate = new Promise(resolve => { finishRefill = resolve; });
+        stressTracks = tracks.slice(0, 2).map((track, index) => ({ ...track, trackToken: 'mini-natural-' + index,
+            albumArt: index === 0 ? art : [
+                { size: 1080, url: 'https://fixture.invalid/queued-stalled.svg' },
+                { size: 500, url: 'https://fixture.invalid/queued-ready.svg' }
+            ] }));
+        freshTracks = tracks.slice(0, 2).map((track, index) => ({ ...track, trackToken: 'mini-refill-' + index,
+            albumArt: [{ size: 500, url: 'https://fixture.invalid/refill-ready.svg' }] }));
+        await run("window.api.content.playItem({type:'station', id:'fixture-station'})");
+        await waitFor(() => run("AppState.playerState.trackToken === 'mini-natural-0' && !document.querySelector('audio').paused"), 'first song plays in mini mode');
+        await waitFor(() => run(`
+            window.preparedMiniCover = upcomingArtworkPreloads.get('https://fixture.invalid/queued-stalled.svg');
+            window.preparedMiniCover?.complete && window.preparedMiniCover.naturalWidth > 0 &&
+                window.preparedMiniCover.currentSrc === 'https://fixture.invalid/queued-ready.svg';
+        `), 'stalled queued cover recovers before the current song ends', 8000);
+        assert.equal(artworkRequests.filter(url => url === '/queued-ready.svg').length, 1);
+        await run(`
+            window.naturalArtworkEvents = [];
+            window.captureNaturalArtwork = () => {
+                const image = document.getElementById('now-playing-art');
+                window.naturalArtworkEvents.push({ token: AppState.playerState.trackToken,
+                    ready: image.complete && image.naturalWidth > 0,
+                    source: image.currentSrc, prepared: image === window.preparedMiniCover });
+            };
+            document.querySelector('audio').addEventListener('playing', window.captureNaturalArtwork);
+        `);
+        const endNaturally = async () => {
+            await waitFor(() => run("Number.isFinite(document.querySelector('audio').duration) && document.querySelector('audio').duration > 0"), 'natural-ending duration');
+            await run("document.querySelector('audio').currentTime = document.querySelector('audio').duration - 0.08");
+        };
+        await endNaturally();
+        await waitFor(() => run("window.naturalArtworkEvents.some(event => event.token === 'mini-natural-1')"), 'second song starts from a real ended event');
+        assert.deepEqual(await run("window.naturalArtworkEvents.find(event => event.token === 'mini-natural-1')"), {
+            token: 'mini-natural-1', ready: true, source: 'https://fixture.invalid/queued-ready.svg', prepared: true
+        }, 'The recovered mini cover is already displayed when the next song starts');
+        assert.equal(artworkRequests.filter(url => url === '/queued-ready.svg').length, 1, 'Even a no-store cover is reused without a second download');
+
+        finishRefill();
+        refillGate = null;
+        await waitFor(() => run(`
+            window.preparedMiniCover = upcomingArtworkPreloads.get('https://fixture.invalid/refill-ready.svg');
+            window.preparedMiniCover?.complete && window.preparedMiniCover.naturalWidth > 0;
+        `), 'refilled cover preloads before the last queued song ends');
+        assert.equal(await run('AppState.playerState.trackToken'), 'mini-natural-1');
+        await endNaturally();
+        await waitFor(() => run("window.naturalArtworkEvents.some(event => event.token === 'mini-refill-0')"), 'refilled song starts naturally');
+        assert.deepEqual(await run("window.naturalArtworkEvents.find(event => event.token === 'mini-refill-0')"), {
+            token: 'mini-refill-0', ready: true, source: 'https://fixture.invalid/refill-ready.svg', prepared: true
+        });
+        assert.equal(artworkRequests.filter(url => url === '/refill-ready.svg').length, 1);
+        finishQueuedCover();
+        queuedCoverGate = null;
+        await capture('natural-ending-mini-artwork');
+        assert.equal(await run("document.getElementById('now-playing-art').currentSrc"), 'https://fixture.invalid/refill-ready.svg', 'Late stalled artwork cannot restore an earlier song');
+        await run("document.querySelector('audio').removeEventListener('playing', window.captureNaturalArtwork); window.api.window.toggleMini()");
+        await run("document.getElementById('now-playing-art').click()");
+        await waitFor(() => run("AppState.currentPage === 'nowplaying' && document.getElementById('np-large-art').complete && document.getElementById('np-large-art').currentSrc === 'https://fixture.invalid/refill-ready.svg'"), 'promoted cover still opens the full player');
+        stressTracks = freshTracks = null;
+        console.log('Natural endings in mini mode passed: stalled preload fallback, no-store image reuse at audio start, early refill artwork, late responses and full-player expansion.');
     }
 
     async function exerciseAudioRecovery() {
@@ -763,6 +832,7 @@ app.whenReady().then(async () => {
     assert.equal(calls.some(c => ['fonts.googleapis.com', 'fonts.gstatic.com', 'unpkg.com'].includes(c.host)), false, 'App and website make no external font or icon requests');
     site.close();
     await exerciseQueuedPlayback();
+    await exerciseNaturalMiniArtwork();
     await exerciseAudioRecovery();
     // Real audio -> renderer -> isolated preload -> main -> actual local IPC frames.
     assert.equal(discordServer.connections.length, 0, 'Discord is opt-in throughout normal playback');
