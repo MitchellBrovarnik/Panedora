@@ -96,7 +96,7 @@ app.whenReady().then(async () => {
     // Intercept every HTTPS request, including images and the audio fixture.
     session.defaultSession.protocol.handle('https', async request => {
         const url = new URL(request.url);
-        if (url.pathname === '/missing-large.svg' || url.pathname === '/audio-error.wav') {
+        if (['/missing-large.svg', '/refill-missing.svg', '/audio-error.wav'].includes(url.pathname)) {
             return new Response('Unavailable fixture', { status: 503 });
         }
         if (url.pathname === '/held-cover.svg') {
@@ -314,8 +314,11 @@ app.whenReady().then(async () => {
                 { size: 1080, url: 'https://fixture.invalid/queued-stalled.svg' },
                 { size: 500, url: 'https://fixture.invalid/queued-ready.svg' }
             ] }));
+        // Count the player's fallback independently of the OS media session,
+        // which can fetch the primary artwork URL for its own controls.
         freshTracks = tracks.slice(0, 2).map((track, index) => ({ ...track, trackToken: 'mini-refill-' + index,
-            albumArt: [{ size: 500, url: 'https://fixture.invalid/refill-ready.svg' }] }));
+            albumArt: [{ size: 1080, url: 'https://fixture.invalid/refill-missing.svg' },
+                { size: 500, url: 'https://fixture.invalid/refill-ready.svg' }] }));
         await run("window.api.content.playItem({type:'station', id:'fixture-station'})");
         await waitFor(() => run("AppState.playerState.trackToken === 'mini-natural-0' && !document.querySelector('audio').paused"), 'first song plays in mini mode');
         await waitFor(() => run(`
@@ -348,8 +351,9 @@ app.whenReady().then(async () => {
         finishRefill();
         refillGate = null;
         await waitFor(() => run(`
-            window.preparedMiniCover = upcomingArtworkPreloads.get('https://fixture.invalid/refill-ready.svg');
-            window.preparedMiniCover?.complete && window.preparedMiniCover.naturalWidth > 0;
+            window.preparedMiniCover = upcomingArtworkPreloads.get('https://fixture.invalid/refill-missing.svg');
+            window.preparedMiniCover?.complete && window.preparedMiniCover.naturalWidth > 0 &&
+                window.preparedMiniCover.currentSrc === 'https://fixture.invalid/refill-ready.svg';
         `), 'refilled cover preloads before the last queued song ends');
         assert.equal(await run('AppState.playerState.trackToken'), 'mini-natural-1');
         await endNaturally();
