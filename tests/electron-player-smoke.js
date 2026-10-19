@@ -303,7 +303,8 @@ app.whenReady().then(async () => {
     }
 
     async function exerciseNaturalMiniArtwork() {
-        await run("renderPage('home'); window.api.window.toggleMini()");
+        const previousEffect = await run('AppState.currentEffect');
+        await run("renderPage('home'); applyBgEffect('reactive-wave'); window.api.window.toggleMini()");
         await waitFor(() => run("document.body.classList.contains('mini-mode')"), 'mini mode for natural endings');
         let finishQueuedCover;
         let finishRefill;
@@ -362,6 +363,8 @@ app.whenReady().then(async () => {
             token: 'mini-refill-0', ready: true, source: 'https://fixture.invalid/refill-ready.svg', prepared: true
         });
         assert.equal(artworkRequests.filter(url => url === '/refill-ready.svg').length, 1);
+        assert.equal(await run("window.visualizer.isVisualizing && window.visualizer.style === 'wave'"), true,
+            'Natural transitions keep the reactive mini-player background running');
         finishQueuedCover();
         queuedCoverGate = null;
         await capture('natural-ending-mini-artwork');
@@ -369,6 +372,7 @@ app.whenReady().then(async () => {
         await run("document.querySelector('audio').removeEventListener('playing', window.captureNaturalArtwork); window.api.window.toggleMini()");
         await run("document.getElementById('now-playing-art').click()");
         await waitFor(() => run("AppState.currentPage === 'nowplaying' && document.getElementById('np-large-art').complete && document.getElementById('np-large-art').currentSrc === 'https://fixture.invalid/refill-ready.svg'"), 'promoted cover still opens the full player');
+        await run(`applyBgEffect(${JSON.stringify(previousEffect || 'aurora')})`);
         stressTracks = freshTracks = null;
         console.log('Natural endings in mini mode passed: stalled preload fallback, no-store image reuse at audio start, early refill artwork, late responses and full-player expansion.');
     }

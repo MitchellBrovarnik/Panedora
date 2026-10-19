@@ -64,6 +64,10 @@ class AudioVisualizer {
             return;
         }
 
+        // Each new song calls start again. Release the previous frame and
+        // resize listener before starting another rendering loop.
+        this.stop();
+
         this.canvas = canvasElement;
         this.ctx = this.canvas.getContext('2d');
         this.setStyle(style);
