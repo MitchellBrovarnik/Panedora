@@ -14,7 +14,9 @@ app.setPath('userData', testData);
 app.disableHardwareAcceleration();
 // Exercise the release-only update checker with intercepted network fixtures.
 Object.defineProperty(app, 'isPackaged', { value: true });
-const deadline = setTimeout(() => { console.error('Native player test timed out'); app.exit(1); }, 90000);
+// Allow the expanded suite's real artwork deadlines and Discord rate limits;
+// each individual waitFor check still has its own short timeout.
+const deadline = setTimeout(() => { console.error('Native player test timed out'); app.exit(1); }, 120000);
 let discordServer;
 
 async function waitFor(check, description, timeout = 6000) {
