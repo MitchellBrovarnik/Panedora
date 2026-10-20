@@ -370,7 +370,18 @@ app.whenReady().then(async () => {
         await run("document.getElementById('now-playing-art').click()");
         await waitFor(() => run("AppState.currentPage === 'nowplaying' && document.getElementById('np-large-art').complete && document.getElementById('np-large-art').currentSrc === 'https://fixture.invalid/refill-ready.svg'"), 'promoted cover still opens the full player');
         stressTracks = freshTracks = null;
-        console.log('Natural endings in mini mode passed: stalled preload fallback, no-store image reuse at audio start, early refill artwork, late responses and full-player expansion.');
+        const historyCoverReady = (token, url) => run(`(() => {
+            const image = document.querySelector('.history-item[data-token="${token}"] .history-art');
+            return image?.complete && image.naturalWidth > 0 && image.currentSrc === '${url}';
+        })()`);
+        await waitFor(() => historyCoverReady('mini-natural-1', 'https://fixture.invalid/queued-ready.svg'),
+            'opening history reuses the cover that recovered during mini playback');
+        await endNaturally();
+        await waitFor(() => run("AppState.playerState.trackToken === 'mini-refill-1'"), 'next natural ending with history open');
+        await waitFor(() => historyCoverReady('mini-refill-0', 'https://fixture.invalid/refill-ready.svg'),
+            'live history uses the working fallback after a song with unavailable primary artwork ends');
+        await capture('recovered-history-artwork');
+        console.log('Natural endings in mini mode passed: stalled preload fallback, no-store image reuse at audio start, early refill artwork, late responses, full-player expansion and recovered artwork in initial/live history.');
     }
 
     async function exerciseAudioRecovery() {

@@ -94,6 +94,17 @@ test('player state supplies only the next two queued covers before their songs s
     assert.equal(s.getCurrentState().trackToken, 'b');
 });
 
+test('history retains every supplied artwork size after playback advances', async () => {
+    const s = setup();
+    const urls = ['https://fixture.invalid/large.jpg', 'https://fixture.invalid/small.jpg'];
+    s.playlists.push({ tracks: [{ ...track(0, 'first'), albumArt: urls.map(url => ({ url })) }, track(0, 'next')] });
+    await s.playStation('station-1');
+    await s.skipTrack();
+    const previous = s.getCurrentState().history.find(item => item.trackToken === 'first');
+    assert.equal(previous.coverArt, urls[0]);
+    assert.deepEqual(Array.from(previous.coverArtSources || []), urls);
+});
+
 test('a background refill publishes upcoming cover sizes before the current song ends', async () => {
     const s = setup();
     s.seed([track(0, 'first'), track(0, 'last-queued')]);

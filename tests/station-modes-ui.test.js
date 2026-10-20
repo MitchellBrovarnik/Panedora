@@ -224,6 +224,94 @@ function artworkStatus(s, image, complete, width) {
     if (complete && width) image.dispatchEvent(new s.window.Event('load'));
 }
 
+test('history reuses a cover recovered during playback in both initial and live renders', t => {
+    for (const alreadyOpen of [false, true]) {
+        const s = setup(t);
+        const sources = ['https://fixture.invalid/missing.jpg', 'https://fixture.invalid/working.jpg'];
+        const previous = { trackToken: 'previous', songTitle: 'Previous song', coverArt: sources[0], coverArtSources: sources };
+        s.ui.update({ ...previous, track: previous.songTitle });
+        const playing = s.node('now-playing-art');
+        artworkStatus(s, playing, true, 0);
+        playing.dispatchEvent(new s.window.Event('error'));
+        assert.equal(playing.src, sources[1]);
+        artworkStatus(s, playing, true, 500);
+        if (alreadyOpen) s.open();
+        const history = [previous, { trackToken: 'next', songTitle: 'Next song' }];
+        s.ui.update({ trackToken: 'next', track: 'Next song', coverArt: null, coverArtSources: [], history });
+        if (!alreadyOpen) s.open();
+        const thumbnail = () => s.window.document.querySelector('.history-art');
+        assert.equal(thumbnail().src, sources[1], 'History starts with the size that actually loaded, not the failed original');
+        assert.equal(s.window.document.querySelectorAll('.history-art').length, 1, 'The current song stays out of history');
+        s.ui.update({ history });
+        assert.equal(thumbnail().src, sources[1], 'Subsequent history refreshes keep the working URL');
+        s.ui.render('home');
+        s.open();
+        assert.equal(thumbnail().src, sources[1], 'Leaving and reopening the page preserves the recovered source');
+    }
+});
+
+test('history recovers stalled and failed artwork without a previously loaded player image', t => {
+    for (const failure of ['error', 'timeout']) {
+        const s = setup(t);
+        const clock = artworkClock(s);
+        const sources = ['https://fixture.invalid/large.jpg', 'https://fixture.invalid/small.jpg'];
+        const history = [{ trackToken: 'previous', songTitle: 'Previous song', coverArt: sources[0], coverArtSources: sources }];
+        s.ui.update({ history });
+        s.open();
+        const image = s.window.document.querySelector('.history-art');
+        assert.equal(image.src, sources[0]);
+        if (failure === 'error') {
+            artworkStatus(s, image, true, 0);
+            image.dispatchEvent(new s.window.Event('error'));
+        } else clock.advance(5000);
+        assert.equal(image.src, sources[1], 'History tries another supplied size instead of staying blank');
+        artworkStatus(s, image, true, 500);
+        clock.advance(60000);
+        assert.equal(clock.timers.size, 0);
+        s.ui.update({ history });
+        assert.equal(s.window.document.querySelector('.history-art').src, sources[1]);
+    }
+});
+
+test('history uses a placeholder for absent art and bounds retries for unavailable covers', t => {
+    const s = setup(t);
+    const clock = artworkClock(s);
+    const history = [
+        { trackToken: 'missing', coverArt: null },
+        { trackToken: 'unavailable', coverArt: 'https://fixture.invalid/unavailable.jpg' }
+    ];
+    s.ui.update({ history });
+    s.open();
+    const images = [...s.window.document.querySelectorAll('.history-art')];
+    clock.advance(60000);
+    assert.ok(images.every(image => image.src.startsWith('data:image/svg')));
+    assert.equal(clock.timers.size, 0, 'Unavailable history images stop retrying');
+});
+
+test('a previously working history size can fail without skipping the other supplied sizes', t => {
+    const s = setup(t);
+    const sources = ['https://fixture.invalid/large.jpg', 'https://fixture.invalid/medium.jpg', 'https://fixture.invalid/small.jpg'];
+    const previous = { trackToken: 'previous', coverArt: sources[0], coverArtSources: sources };
+    s.ui.update(previous);
+    const playing = s.node('now-playing-art');
+    artworkStatus(s, playing, true, 0);
+    playing.dispatchEvent(new s.window.Event('error'));
+    playing.dispatchEvent(new s.window.Event('error'));
+    artworkStatus(s, playing, true, 150);
+    s.ui.update({ trackToken: 'next', history: [previous] });
+    s.open();
+    const image = s.window.document.querySelector('.history-art');
+    assert.equal(image.src, sources[2]);
+    artworkStatus(s, image, true, 0);
+    image.dispatchEvent(new s.window.Event('error'));
+    assert.equal(image.src, sources[0]);
+    image.dispatchEvent(new s.window.Event('error'));
+    assert.equal(image.src, sources[1]);
+    artworkStatus(s, image, true, 300);
+    s.ui.update({ history: [previous] });
+    assert.equal(s.window.document.querySelector('.history-art').src, sources[1]);
+});
+
 test('stalled covers fall back in both players without a network error event', t => {
     const s = setup(t);
     const clock = artworkClock(s);

@@ -13,6 +13,19 @@ const PLAYER_ART_PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.o
 const PLAYER_ART_TIMEOUT_MS = 5000;
 const playerArtworkLoads = new WeakMap();
 const upcomingArtworkPreloads = new Map();
+const successfulArtworkSources = new Map();
+
+function getArtworkSources(track) {
+    return [...new Set([track.coverArt, ...(track.coverArtSources || [])]
+        .filter(url => typeof url === 'string' && url))];
+}
+
+function renderHistoryArtwork(container, tracks) {
+    container.querySelectorAll('.history-art').forEach((image, index) => {
+        const track = tracks[index];
+        loadPlayerArtwork(image, getArtworkSources(track), track.trackToken);
+    });
+}
 
 function cancelPlayerArtwork(image) {
     const request = playerArtworkLoads.get(image);
@@ -60,8 +73,7 @@ function isLoadedArtwork(image, key, sources) {
 
 function renderPlayerArtwork() {
     const state = AppState.playerState;
-    const sources = [...new Set([state.coverArt, ...(state.coverArtSources || [])]
-        .filter(url => typeof url === 'string' && url))];
+    const sources = getArtworkSources(state);
     // The same album cover can belong to another song or playback generation.
     // Preserve the loaded image whenever its supplied URLs haven't changed.
     const key = JSON.stringify(sources);
@@ -115,7 +127,7 @@ function loadPlayerArtwork(image, sources, trackKey, images = [], preload = fals
     const load = index => {
         if (!isCurrent() || !sources.length) return;
         clearLoadTimer();
-        if (index >= sources.length) {
+        if (index >= orderedSources.length) {
             showPlaceholder();
             // One bounded retry also covers a transient failure on first play.
             if (!request.retried) {
@@ -125,18 +137,25 @@ function loadPlayerArtwork(image, sources, trackKey, images = [], preload = fals
             return;
         }
         const attempt = ++request.attempt;
-        const url = sources[index];
+        const url = orderedSources[index];
         const isAttempt = () => isCurrent() && request.attempt === attempt && image.getAttribute('src') === url;
         image.onload = () => {
             if (!isAttempt() || !image.complete || image.naturalWidth === 0) return;
             clearLoadTimer();
+            // History is rendered after the player has moved on. Remember the
+            // working URL without retaining old image elements or their bitmaps.
+            successfulArtworkSources.delete(key);
+            successfulArtworkSources.set(key, url);
+            if (successfulArtworkSources.size > 50) {
+                successfulArtworkSources.delete(successfulArtworkSources.keys().next().value);
+            }
             if (request.preload && AppState.playerState.coverArt === sources[0]) renderPlayerArtwork();
         };
         image.onerror = () => {
             // A queued error from an abandoned request must not fail a
             // replacement that is still loading or already displayed.
             if (!isAttempt() || !image.complete || image.naturalWidth > 0) return;
-            load(request.retried ? sources.length : index + 1);
+            load(request.retried ? orderedSources.length : index + 1);
         };
         // Without a ready preload, the current cover loads directly in its
         // visible element so starting playback never waits on a hidden probe.
@@ -148,17 +167,20 @@ function loadPlayerArtwork(image, sources, trackKey, images = [], preload = fals
             // A pending replacement may still display the old song's
             // bitmap. Clear it before trying another supplied cover size.
             showPlaceholder();
-            load(request.retried ? sources.length : index + 1);
+            load(request.retried ? orderedSources.length : index + 1);
         }, PLAYER_ART_TIMEOUT_MS);
     };
     if (!sources.length) {
         showPlaceholder();
         return;
     }
-    // Opening the expanded player can reuse a size that already succeeded
-    // in the footer instead of retrying a known-broken larger size first.
+    // Start with a size that already succeeded in the player or history, but
+    // keep every supplied alternative available if that URL now fails.
     const loaded = images.find(other => other !== image && isLoadedArtwork(other, key, sources));
-    load(loaded ? sources.indexOf(loaded.getAttribute('src')) : 0);
+    const preferred = loaded?.getAttribute('src') || successfulArtworkSources.get(key);
+    const orderedSources = sources.includes(preferred)
+        ? [preferred, ...sources.filter(url => url !== preferred)] : sources;
+    load(0);
 }
 
 function nextPlayerTrack() {
@@ -1333,7 +1355,7 @@ function renderNowPlayingPage() {
     if (pastSongs.length > 0) {
         historyHtml += pastSongs.map(h => `
             <div class="history-item ${h.feedback ? 'history-' + h.feedback : ''}" data-token="${h.trackToken}">
-                <img class="history-art" src="${h.coverArt || ''}" alt="">
+                <img class="history-art" src="${PLAYER_ART_PLACEHOLDER}" alt="">
                 <div class="history-info">
                     <span class="history-title">${escapeHtml(h.songTitle)}</span>
                     <span class="history-artist">${escapeHtml(h.artistName)}</span>
@@ -1398,6 +1420,7 @@ function renderNowPlayingPage() {
 
     // Attach event handlers
     renderPlayerArtwork();
+    renderHistoryArtwork(DOM.pageContent, pastSongs);
     document.getElementById('np-back-btn')?.addEventListener('click', () => renderPage('home'));
 
     // Sync thumb button states with current track feedback
@@ -2121,11 +2144,14 @@ function updatePlayerUI(state) {
         if (histContainer) {
             // Remove old history section
             const oldHistory = histContainer.querySelector('.np-history');
-            if (oldHistory) oldHistory.remove();
+            if (oldHistory) {
+                oldHistory.querySelectorAll('.history-art').forEach(cancelPlayerArtwork);
+                oldHistory.remove();
+            }
 
             // Build fresh history
             let pastSongs = [...(state.history || [])];
-            if (pastSongs.length > 0 && pastSongs[pastSongs.length - 1].trackToken === state.trackToken) {
+            if (pastSongs.length > 0 && pastSongs[pastSongs.length - 1].trackToken === AppState.playerState.trackToken) {
                 pastSongs.pop(); // Remove currently playing song
             }
             pastSongs.reverse(); // Show newest first
@@ -2137,7 +2163,7 @@ function updatePlayerUI(state) {
             if (pastSongs.length > 0) {
                 listContent = pastSongs.map(h => `
                     <div class="history-item ${h.feedback ? 'history-' + h.feedback : ''}" data-token="${h.trackToken}">
-                        <img class="history-art" src="${h.coverArt || ''}" alt="">
+                        <img class="history-art" src="${PLAYER_ART_PLACEHOLDER}" alt="">
                         <div class="history-info">
                             <span class="history-title">${escapeHtml(h.songTitle)}</span>
                             <span class="history-artist">${escapeHtml(h.artistName)}</span>
@@ -2165,6 +2191,7 @@ function updatePlayerUI(state) {
                 </div>
             `;
             histContainer.appendChild(histDiv);
+            renderHistoryArtwork(histDiv, pastSongs);
 
             // Re-attach undo handlers
             histDiv.querySelectorAll('.history-undo-btn').forEach(btn => {
@@ -2828,6 +2855,7 @@ function initAPIListeners() {
             AppState.isLoading = false;
             AppState.stations = [];
             AppState.playerState = { volume: 50 };
+            successfulArtworkSources.clear();
             audioRevision++;
             currentAudioToken = null;
             cancelRecovery();

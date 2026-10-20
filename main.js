@@ -239,6 +239,7 @@ function rememberTrack(track) {
         artistName: track.artistName,
         albumTitle: track.albumTitle,
         coverArt: PandoraAPI.getHighResArt(track.albumArt),
+        coverArtSources: PandoraAPI.getArtUrls(track.albumArt),
         trackToken: track.trackToken,
         feedbackId: track.feedbackId || null,
         feedback: feedback === 'thumbUp' ? 'liked' : feedback === 'thumbDown' ? 'disliked' : null
