@@ -225,10 +225,28 @@ app.whenReady().then(async () => {
         fs.writeFileSync(path.join(testData, name + '.png'), (await win.webContents.capturePage()).toPNG());
     };
     async function exerciseMiniMarqueeClipping() {
+        const fullSize = win.getSize();
         const saved = await run('({track: AppState.playerState.track, artist: AppState.playerState.artist})');
         await run("renderPage('home'); window.api.window.toggleMini()");
         await waitFor(() => run("document.body.classList.contains('mini-mode')"), 'mini marquee clipping');
+        assert.deepEqual(win.getSize(), [540, 80], 'Mini mode opens at its minimum size');
+        win.setSize(1080, 600);
+        await waitFor(() => win.getSize()[0] === 1080 && win.getSize()[1] === 80,
+            'mini mode can grow horizontally while its native height stays fixed');
         const paint = () => run('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+        const layout = () => run(`(() => {
+            const box = selector => {
+                const r = document.querySelector(selector).getBoundingClientRect();
+                return { left: r.left, right: r.right, top: r.top, width: r.width, height: r.height, center: (r.left + r.right) / 2 };
+            };
+            const info = document.querySelector('.now-playing-info');
+            const style = getComputedStyle(info);
+            return { width: innerWidth, height: innerHeight,
+                textWidth: info.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
+                art: box('.now-playing-art'), info: box('.now-playing-info'), thumbs: box('.mini-thumbs'),
+                up: box('#mini-thumb-up'), down: box('#mini-thumb-down'),
+                playback: box('.control-buttons'), volume: box('.volume-controls') };
+        })()`);
         const countTextPixels = (before, after) => {
             let pixels = 0;
             for (let i = 0; i < before.length; i += 4) {
@@ -237,7 +255,8 @@ app.whenReady().then(async () => {
             return pixels;
         };
         let oldOverlap = 0;
-        for (const width of [540, 800]) {
+        for (const width of [540, 799, 800, 1080, 1920]) {
+            let collapsedLayout;
             for (const expanded of [false, true]) {
                 win.setSize(width, 80);
                 win.webContents.sendInputEvent({ type: 'mouseMove', x: 0, y: 0 });
@@ -246,6 +265,31 @@ app.whenReady().then(async () => {
                 await run(`updatePlayerUI({track: 'WWWW Long scrolling song title WWWW WWWW WWWW WWWW WWWW',
                     artist: 'WWWW Long scrolling artist name WWWW WWWW WWWW WWWW WWWW'})`);
                 await paint();
+                const currentLayout = await layout();
+                assert.equal(currentLayout.width, width);
+                assert.equal(currentLayout.height, 80);
+                assert.ok(Math.abs(currentLayout.up.top - currentLayout.down.top) < 1,
+                    'Thumbs stay side by side');
+                assert.ok(currentLayout.thumbs.left - currentLayout.info.right <= 16,
+                    'Thumbs stay next to the information instead of drifting across the window');
+                assert.ok(currentLayout.thumbs.right <= currentLayout.playback.left,
+                    'Song information and thumbs stay clear of playback controls');
+                assert.ok(currentLayout.playback.right <= currentLayout.volume.left,
+                    'Playback controls stay clear of the expanded volume area');
+                if (width >= 800) {
+                    assert.ok(Math.abs(currentLayout.playback.center - width / 2) < 1,
+                        'Wide playback controls are centered on the actual window');
+                    assert.ok(currentLayout.textWidth >= 150 && currentLayout.textWidth <= 250,
+                        'Wide song information stays readable and stops stretching at 250px');
+                    if (expanded) {
+                        for (const group of ['art', 'info', 'thumbs', 'playback']) {
+                            assert.ok(Math.abs(currentLayout[group].left - collapsedLayout[group].left) < 1 &&
+                                Math.abs(currentLayout[group].width - collapsedLayout[group].width) < 1,
+                            'Opening volume keeps the wide player groups in place: ' + group);
+                        }
+                    }
+                }
+                if (!expanded) collapsedLayout = currentLayout;
                 // Sample the opaque right edge of the real cover, away from
                 // its rounded corners and the animated background behind it.
                 const crop = await run(`(() => {
@@ -287,7 +331,12 @@ app.whenReady().then(async () => {
         }
         await run(`for (const id of ['now-playing-title', 'now-playing-artist']) document.getElementById(id).style.removeProperty('visibility');
             updatePlayerUI(${JSON.stringify(saved)}); window.api.window.toggleMini()`);
-        console.log(`Mini-player marquee clipping passed at 540px/800px with volume collapsed/expanded: no text pixels over artwork; removing the clip reproduced ${oldOverlap} pixels.`);
+        await waitFor(() => !win.webContents.isLoading() && win.getSize()[1] === fullSize[1], 'full-player size restored');
+        assert.deepEqual(win.getSize(), fullSize);
+        win.setSize(fullSize[0], fullSize[1] + 60);
+        await waitFor(() => win.getSize()[1] === fullSize[1] + 60, 'full player can resize vertically again');
+        win.setSize(...fullSize);
+        console.log(`Mini-player layout and marquee clipping passed at 540/799/800/1080/1920px: wide playback centered, horizontal thumbs beside bounded text, volume expansion stable, mini height fixed, full height restored; removing the clip reproduced ${oldOverlap} artwork pixels.`);
     }
     async function exerciseQueuedPlayback() {
         // The cover must load directly in the visible player, without waiting

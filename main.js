@@ -5,6 +5,8 @@
 
 const { app, BrowserWindow, ipcMain, shell, net, powerMonitor } = require('electron');
 const path = require('path');
+// A positive, effectively unbounded dimension also works with macOS window constraints.
+const MAX_WINDOW_DIMENSION = Math.floor(0x7fffffff / 10);
 
 // Disable GPU caching to prevent 'Access is denied' cache_util_win errors on Windows startup
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
@@ -32,6 +34,7 @@ let currentTrackIndex = 0;
 let songHistory = []; // Track played songs for history display
 let isMiniPlayer = false;
 let savedBounds = null; // Save window position/size before entering mini mode
+let savedMaximumSize = null;
 let playlistRefill = null;
 let streamReclaimed = false;
 let isPaused = false; // Track pause state so we don't force-play on state updates
@@ -113,19 +116,22 @@ ipcMain.handle('WINDOW:TOGGLE_MINI', async () => {
     if (isMiniPlayer) {
         // Save current bounds before shrinking
         savedBounds = uiWindow.getBounds();
+        savedMaximumSize = uiWindow.getMaximumSize();
         uiWindow.setMenuBarVisibility(false);
         uiWindow.setAutoHideMenuBar(true);
         uiWindow.setMinimumSize(540, 80);
+        uiWindow.setMaximumSize(savedMaximumSize[0] || MAX_WINDOW_DIMENSION, 80);
         uiWindow.setSize(540, 80);
         // Use 'screen-saver' level to stay on top of fullscreen borderless games
         uiWindow.setAlwaysOnTop(true, 'screen-saver');
-        uiWindow.setResizable(true); // Let user resize it a bit horizontally if they want
+        uiWindow.setResizable(true); // Width remains adjustable; height stays at 80px.
     } else {
         // Restore saved bounds
         uiWindow.setAlwaysOnTop(false);
         uiWindow.setResizable(true);
         uiWindow.setMenuBarVisibility(true);
         uiWindow.setAutoHideMenuBar(false);
+        uiWindow.setMaximumSize(...savedMaximumSize.map(size => size || MAX_WINDOW_DIMENSION));
         uiWindow.setMinimumSize(900, 600);
         if (savedBounds) {
             uiWindow.setBounds(savedBounds);
