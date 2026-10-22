@@ -2799,6 +2799,8 @@ body.mini-mode .now-playing-info {
     padding: 2px 0 2px 8px;
     margin-left: -8px;
     /* Offset the padding visually */
+    /* Keep scrolling text and its shadow out of the artwork. */
+    clip-path: inset(0 0 0 8px);
     border-radius: 8px;
 }
 
@@ -2973,6 +2975,26 @@ body.mini-mode .volume-slider.collapsed {
     opacity: 0;
     padding: 0;
     margin: 0;
+}
+
+/* Once both side groups fit comfortably, center playback on the window. */
+@media (min-width: 800px) {
+    body.mini-mode .player-footer {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    }
+
+    body.mini-mode .now-playing-info {
+        max-width: 258px; /* 250px of text plus the existing left padding. */
+    }
+
+    body.mini-mode .player-controls {
+        justify-self: center;
+    }
+
+    body.mini-mode .volume-controls {
+        justify-self: end;
+    }
 }
 
 body.mini-mode #volume-btn {
