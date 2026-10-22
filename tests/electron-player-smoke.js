@@ -230,9 +230,10 @@ app.whenReady().then(async () => {
         await run("renderPage('home'); window.api.window.toggleMini()");
         await waitFor(() => run("document.body.classList.contains('mini-mode')"), 'mini marquee clipping');
         assert.deepEqual(win.getSize(), [540, 80], 'Mini mode opens at its minimum size');
-        win.setSize(1080, 600);
-        await waitFor(() => win.getSize()[0] === 1080 && win.getSize()[1] === 80,
-            'mini mode can grow horizontally while its native height stays fixed');
+        assert.deepEqual(win.getMaximumSize(), [900, 80], 'Mini mode has a compact maximum width and fixed height');
+        win.setSize(1920, 600);
+        await waitFor(() => win.getSize()[0] === 900 && win.getSize()[1] === 80,
+            'native constraints stop oversized mini-player resizing at 900px by 80px');
         const paint = () => run('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
         const layout = () => run(`(() => {
             const box = selector => {
@@ -255,7 +256,7 @@ app.whenReady().then(async () => {
             return pixels;
         };
         let oldOverlap = 0;
-        for (const width of [540, 799, 800, 1080, 1920]) {
+        for (const width of [540, 680, 799, 800, 900]) {
             let collapsedLayout;
             for (const expanded of [false, true]) {
                 win.setSize(width, 80);
@@ -332,8 +333,8 @@ app.whenReady().then(async () => {
         // Check movement between sizes, not only whether each final layout fits.
         // The former 799px -> 800px switch moved playback by over 100px.
         const boundaryWidths = Array.from({ length: 41 }, (_, index) => 780 + index);
-        const trajectory = [540, 600, 680, 740, ...boundaryWidths,
-            ...[...boundaryWidths].reverse().slice(1), 740, 680, 600, 540];
+        const trajectory = [540, 600, 680, 740, ...boundaryWidths, 900,
+            ...[...boundaryWidths].reverse(), 740, 680, 600, 540];
         let largestPlaybackStep = 0;
         for (const expanded of [false, true]) {
             await run(`document.querySelector('.volume-controls').dispatchEvent(new MouseEvent('${expanded ? 'mouseenter' : 'mouseleave'}'))`);
@@ -367,10 +368,11 @@ app.whenReady().then(async () => {
             updatePlayerUI(${JSON.stringify(saved)}); window.api.window.toggleMini()`);
         await waitFor(() => !win.webContents.isLoading() && win.getSize()[1] === fullSize[1], 'full-player size restored');
         assert.deepEqual(win.getSize(), fullSize);
-        win.setSize(fullSize[0], fullSize[1] + 60);
-        await waitFor(() => win.getSize()[1] === fullSize[1] + 60, 'full player can resize vertically again');
+        win.setSize(fullSize[0] + 60, fullSize[1] + 60);
+        await waitFor(() => win.getSize()[0] === fullSize[0] + 60 && win.getSize()[1] === fullSize[1] + 60,
+            'full player can resize in both directions beyond the mini-player limits');
         win.setSize(...fullSize);
-        console.log(`Mini-player layout and marquee clipping passed at 540/799/800/1080/1920px: wide playback centered, horizontal thumbs beside bounded text, volume expansion stable, mini height fixed, full height restored; removing the clip reproduced ${oldOverlap} artwork pixels.`);
+        console.log(`Mini-player layout and marquee clipping passed at 540/680/799/800/900px: wide playback centered, horizontal thumbs beside bounded text, volume expansion stable, native mini size limited to 540–900px by 80px, full size constraints restored; removing the clip reproduced ${oldOverlap} artwork pixels.`);
     }
     async function exerciseQueuedPlayback() {
         // The cover must load directly in the visible player, without waiting

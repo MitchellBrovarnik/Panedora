@@ -120,11 +120,11 @@ ipcMain.handle('WINDOW:TOGGLE_MINI', async () => {
         uiWindow.setMenuBarVisibility(false);
         uiWindow.setAutoHideMenuBar(true);
         uiWindow.setMinimumSize(540, 80);
-        uiWindow.setMaximumSize(savedMaximumSize[0] || MAX_WINDOW_DIMENSION, 80);
+        uiWindow.setMaximumSize(900, 80);
         uiWindow.setSize(540, 80);
         // Use 'screen-saver' level to stay on top of fullscreen borderless games
         uiWindow.setAlwaysOnTop(true, 'screen-saver');
-        uiWindow.setResizable(true); // Width remains adjustable; height stays at 80px.
+        uiWindow.setResizable(true); // Width adjusts from 540–900px; height stays at 80px.
     } else {
         // Restore saved bounds
         uiWindow.setAlwaysOnTop(false);
