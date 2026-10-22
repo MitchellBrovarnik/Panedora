@@ -224,6 +224,79 @@ app.whenReady().then(async () => {
         await run('new Promise(resolve => setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(resolve)), 500))');
         fs.writeFileSync(path.join(testData, name + '.png'), (await win.webContents.capturePage()).toPNG());
     };
+    async function inspectMiniMarquee() {
+        const saved = await run('({track: AppState.playerState.track, artist: AppState.playerState.artist})');
+        await run("renderPage('home'); window.api.window.toggleMini()");
+        await waitFor(() => run("document.body.classList.contains('mini-mode')"), 'mini layout probe');
+        const initial = { size: win.getSize(), minimum: win.getMinimumSize() };
+        win.setSize(480, 70);
+        const belowMinimum = win.getSize();
+        win.setSize(720, 100);
+        const enlarged = win.getSize();
+        console.log('MINI_SIZE_PROBE ' + JSON.stringify({ initial, belowMinimum, enlarged }));
+        // Inspect the former minimum as well as the supported default/larger sizes.
+        win.setMinimumSize(480, 70);
+        const results = [];
+        const paint = () => run('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+        const countBrightened = (before, after) => {
+            let pixels = 0;
+            for (let i = 0; i < before.length; i += 4) {
+                if ([0, 1, 2].every(channel => after[i + channel] > before[i + channel] + 10)) pixels++;
+            }
+            return pixels;
+        };
+        for (const width of [480, 540, 800]) {
+            for (const expanded of [false, true]) {
+                win.setSize(width, 80);
+                win.webContents.sendInputEvent({ type: 'mouseMove', x: 0, y: 0 });
+                await run(`document.querySelector('.volume-controls').dispatchEvent(new MouseEvent('${expanded ? 'mouseenter' : 'mouseleave'}'))`);
+                await run('new Promise(resolve => setTimeout(resolve, 750))');
+                await run(`updatePlayerUI({track: 'WWWW Long scrolling song title WWWW WWWW WWWW WWWW WWWW',
+                    artist: 'WWWW Long scrolling artist name WWWW WWWW WWWW WWWW WWWW'})`);
+                await paint();
+                const geometry = await run(`(() => {
+                    const art = document.getElementById('now-playing-art').getBoundingClientRect();
+                    const info = document.querySelector('.now-playing-info').getBoundingClientRect();
+                    return { artRight: art.right, maskLeft: info.left, textWidth: info.width,
+                        crop: { x: Math.ceil(art.right) - 4, y: Math.ceil(art.top) + 10, width: 4, height: Math.floor(art.height) - 20 } };
+                })()`);
+                for (const phase of [0, 0.25, 0.5]) {
+                    await run(`for (const id of ['now-playing-title', 'now-playing-artist']) {
+                        const el = document.getElementById(id);
+                        for (const animation of el.getAnimations()) {
+                            animation.pause();
+                            const timing = animation.effect.getTiming();
+                            animation.currentTime = timing.delay + timing.duration * ${phase};
+                        }
+                        el.style.visibility = 'hidden';
+                    }`);
+                    await paint();
+                    const baseline = (await win.webContents.capturePage(geometry.crop)).toBitmap();
+                    await run("for (const id of ['now-playing-title', 'now-playing-artist']) document.getElementById(id).style.visibility = 'visible'");
+                    await paint();
+                    const actual = (await win.webContents.capturePage(geometry.crop)).toBitmap();
+                    const result = { width, expanded, phase, ...geometry, artworkPixelsBrightened: countBrightened(baseline, actual) };
+                    results.push(result);
+                    console.log('MINI_MARQUEE_PROBE ' + JSON.stringify(result));
+                    if (phase === 0.5) fs.writeFileSync(path.join(testData, `mini-marquee-${width}-${expanded ? 'expanded' : 'collapsed'}.png`),
+                        (await win.webContents.capturePage()).toPNG());
+                }
+            }
+        }
+        // A positive control verifies that the sampled artwork strip can detect text.
+        const geometry = results.at(-1);
+        await run("document.querySelector('.now-playing-info').style.overflow = 'visible'; for (const id of ['now-playing-title', 'now-playing-artist']) document.getElementById(id).style.visibility = 'hidden'");
+        await paint();
+        const controlBefore = (await win.webContents.capturePage(geometry.crop)).toBitmap();
+        await run("for (const id of ['now-playing-title', 'now-playing-artist']) document.getElementById(id).style.visibility = 'visible'");
+        await paint();
+        const controlAfter = (await win.webContents.capturePage(geometry.crop)).toBitmap();
+        console.log('MINI_MARQUEE_POSITIVE_CONTROL ' + countBrightened(controlBefore, controlAfter));
+        await run(`document.querySelector('.now-playing-info').style.removeProperty('overflow');
+            for (const id of ['now-playing-title', 'now-playing-artist']) document.getElementById(id).style.removeProperty('visibility');
+            updatePlayerUI(${JSON.stringify(saved)}); window.api.window.toggleMini()`);
+        console.log('MINI_MARQUEE_PROBE_DONE');
+    }
     async function exerciseQueuedPlayback() {
         // The cover must load directly in the visible player, without waiting
         // for a hidden probe and then starting a second image load.
@@ -852,6 +925,7 @@ app.whenReady().then(async () => {
     await captureSite('website-downloads-mobile');
     assert.equal(calls.some(c => ['fonts.googleapis.com', 'fonts.gstatic.com', 'unpkg.com'].includes(c.host)), false, 'App and website make no external font or icon requests');
     site.close();
+    await inspectMiniMarquee();
     await exerciseQueuedPlayback();
     await exerciseNaturalMiniArtwork();
     await exerciseAudioRecovery();

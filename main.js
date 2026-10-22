@@ -115,7 +115,7 @@ ipcMain.handle('WINDOW:TOGGLE_MINI', async () => {
         savedBounds = uiWindow.getBounds();
         uiWindow.setMenuBarVisibility(false);
         uiWindow.setAutoHideMenuBar(true);
-        uiWindow.setMinimumSize(480, 70);
+        uiWindow.setMinimumSize(540, 80);
         uiWindow.setSize(540, 80);
         // Use 'screen-saver' level to stay on top of fullscreen borderless games
         uiWindow.setAlwaysOnTop(true, 'screen-saver');
