@@ -2799,6 +2799,8 @@ body.mini-mode .now-playing-info {
     padding: 2px 0 2px 8px;
     margin-left: -8px;
     /* Offset the padding visually */
+    /* Keep scrolling text and its shadow out of the artwork. */
+    clip-path: inset(0 0 0 8px);
     border-radius: 8px;
 }
 
