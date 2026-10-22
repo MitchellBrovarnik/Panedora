@@ -2744,7 +2744,8 @@ body.mini-mode .player-footer {
     position: fixed;
     inset: 0;
     height: 100vh;
-    display: flex;
+    display: grid;
+    grid-template-columns: var(--mini-player-columns, minmax(0, 1fr) minmax(0, 1fr) auto);
     align-items: center;
     padding: 4px 14px;
     background: transparent;
@@ -2793,6 +2794,7 @@ body.mini-mode .now-playing-art {
 body.mini-mode .now-playing-info {
     flex: 1;
     min-width: 0;
+    max-width: 258px; /* 250px of text plus the existing left padding. */
     overflow: hidden;
     position: relative;
     background: none;
@@ -2875,6 +2877,7 @@ body.mini-mode .now-playing-heart {
 /* Controls */
 body.mini-mode .player-controls {
     flex: 1;
+    justify-self: center;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -2924,6 +2927,7 @@ body.mini-mode .progress-container {
 /* Volume area — extra padding for larger hover target */
 body.mini-mode .volume-controls {
     flex: 0 0 auto;
+    justify-self: end;
     display: flex;
     gap: 4px;
     align-items: center;
@@ -2975,26 +2979,6 @@ body.mini-mode .volume-slider.collapsed {
     opacity: 0;
     padding: 0;
     margin: 0;
-}
-
-/* Once both side groups fit comfortably, center playback on the window. */
-@media (min-width: 800px) {
-    body.mini-mode .player-footer {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-    }
-
-    body.mini-mode .now-playing-info {
-        max-width: 258px; /* 250px of text plus the existing left padding. */
-    }
-
-    body.mini-mode .player-controls {
-        justify-self: center;
-    }
-
-    body.mini-mode .volume-controls {
-        justify-self: end;
-    }
 }
 
 body.mini-mode #volume-btn {

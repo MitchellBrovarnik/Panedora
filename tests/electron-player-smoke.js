@@ -329,6 +329,40 @@ app.whenReady().then(async () => {
                 }
             }
         }
+        // Check movement between sizes, not only whether each final layout fits.
+        // The former 799px -> 800px switch moved playback by over 100px.
+        const boundaryWidths = Array.from({ length: 41 }, (_, index) => 780 + index);
+        const trajectory = [540, 600, 680, 740, ...boundaryWidths,
+            ...[...boundaryWidths].reverse().slice(1), 740, 680, 600, 540];
+        let largestPlaybackStep = 0;
+        for (const expanded of [false, true]) {
+            await run(`document.querySelector('.volume-controls').dispatchEvent(new MouseEvent('${expanded ? 'mouseenter' : 'mouseleave'}'))`);
+            await run('new Promise(resolve => setTimeout(resolve, 750))');
+            let previous;
+            for (const width of trajectory) {
+                win.setSize(width, 80);
+                await paint();
+                const current = await layout();
+                assert.equal(current.width, width);
+                if (width === 540) {
+                    assert.ok(Math.abs(current.playback.center - (expanded ? 277.5 : 322.5)) < 1,
+                        'The default-size playback position matches the original compact layout');
+                }
+                if (width >= 800) assert.ok(Math.abs(current.playback.center - width / 2) < 1);
+                if (previous) {
+                    const step = Math.abs(current.width - previous.width);
+                    for (const group of ['art', 'info', 'thumbs', 'playback', 'volume']) {
+                        assert.ok(Math.abs(current[group].left - previous[group].left) <= step + 1 &&
+                            Math.abs(current[group].width - previous[group].width) <= step + 1,
+                        `Resizing ${previous.width}px -> ${width}px must not snap ${group}, volumeExpanded=${expanded}`);
+                    }
+                    if (step === 1) largestPlaybackStep = Math.max(largestPlaybackStep,
+                        Math.abs(current.playback.center - previous.playback.center));
+                }
+                previous = current;
+            }
+        }
+        console.log(`Mini-player resize continuity passed in both directions with volume collapsed/expanded; largest playback movement per 1px resize: ${largestPlaybackStep.toFixed(2)}px.`);
         await run(`for (const id of ['now-playing-title', 'now-playing-artist']) document.getElementById(id).style.removeProperty('visibility');
             updatePlayerUI(${JSON.stringify(saved)}); window.api.window.toggleMini()`);
         await waitFor(() => !win.webContents.isLoading() && win.getSize()[1] === fullSize[1], 'full-player size restored');
