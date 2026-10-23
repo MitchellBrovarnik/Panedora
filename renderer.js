@@ -2248,22 +2248,36 @@ function updateMiniPlayerLayout() {
     const volume = footer?.querySelector('.volume-controls');
     if (!playback || !volume) return;
     const style = getComputedStyle(footer);
-    const space = footer.clientWidth - (parseFloat(style.paddingLeft) || 0) -
-        (parseFloat(style.paddingRight) || 0) - 2 * (parseFloat(style.columnGap) || 0);
+    const paddingLeft = parseFloat(style.paddingLeft) || 0;
+    const paddingRight = parseFloat(style.paddingRight) || 0;
+    const contentLeft = paddingLeft + (parseFloat(style.borderLeftWidth) || 0);
+    const width = footer.getBoundingClientRect().width;
+    const gap = parseFloat(style.columnGap) || 0;
+    const contentWidth = footer.clientWidth - paddingLeft - paddingRight;
     const playbackWidth = playback.getBoundingClientRect().width;
     const volumeWidth = volume.getBoundingClientRect().width;
-    if (!playbackWidth || !volumeWidth || space <= playbackWidth + volumeWidth) return;
+    if (!playbackWidth || !volumeWidth || contentWidth <= playbackWidth + volumeWidth + 2 * gap) return;
 
-    // Preserve the 540px layout, then continuously balance the three regions.
-    // By 800px, equal side regions keep playback exactly on the window center.
-    const progress = Math.max(0, Math.min(1, (footer.getBoundingClientRect().width - 540) / 260));
-    const compactColumn = (space - volumeWidth) / 2;
-    const centeredColumn = (space - playbackWidth) / 2;
-    const left = compactColumn + (centeredColumn - compactColumn) * progress;
-    const center = compactColumn + (playbackWidth - compactColumn) * progress;
-    const columns = `${left.toFixed(3)}px ${center.toFixed(3)}px minmax(0, 1fr)`;
+    // Keep the original compact positions until the window center reaches
+    // playback. A fixed-width playback cell avoids squeezing its pill toward
+    // the thumbs while the song information is growing.
+    const compactColumn = (contentWidth - (width - 540) - 6 - volumeWidth) / 2;
+    const compactSpacing = 3 + (compactColumn - playbackWidth) / 2;
+    const compactPlaybackLeft = contentLeft + compactColumn + compactSpacing;
+    const playbackLeft = Math.max(compactPlaybackLeft, (width - playbackWidth) / 2);
+    const left = playbackLeft - contentLeft - gap;
+    const columns = `${left.toFixed(3)}px ${playbackWidth.toFixed(3)}px minmax(0, 1fr)`;
     if (footer.style.getPropertyValue('--mini-player-columns') !== columns) {
         footer.style.setProperty('--mini-player-columns', columns);
+    }
+
+    // Settle at a comfortable gap by 680px. Further width expands the text
+    // only up to its 180px cap, leaving spare space before centered playback.
+    const progress = Math.max(0, Math.min(1, (width - 540) / 140));
+    const thumbsGap = compactSpacing + (32 - compactSpacing) * progress;
+    const songWidth = `${Math.max(0, playbackLeft - contentLeft - thumbsGap).toFixed(3)}px`;
+    if (footer.style.getPropertyValue('--mini-song-width') !== songWidth) {
+        footer.style.setProperty('--mini-song-width', songWidth);
     }
 }
 

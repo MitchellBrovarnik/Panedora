@@ -2838,6 +2838,7 @@ body.mini-mode .volume-btn svg {
 /* Album Art */
 body.mini-mode .now-playing {
     flex: 1;
+    max-width: var(--mini-song-width, 100%);
     gap: 4px;
     overflow: hidden;
     position: relative;
