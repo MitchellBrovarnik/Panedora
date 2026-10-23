@@ -351,8 +351,24 @@ app.whenReady().then(async () => {
                             text.left >= info.left + 7 && text.right <= info.right + 1;
                     })`), true, 'The idle labels are visible after resetting the paused marquee fixture');
                     const idleLayout = await layout();
+                    const idleTextWidth = await run(`Math.max(...['now-playing-title', 'now-playing-artist'].map(id => {
+                        const range = document.createRange();
+                        range.selectNodeContents(document.getElementById(id));
+                        return range.getBoundingClientRect().width;
+                    }))`);
+                    assert.ok(idleLayout.textWidth <= idleTextWidth + 1,
+                        'Short labels use their natural width instead of reserving blank space before the thumbs');
+                    assert.ok(idleLayout.thumbs.left - idleLayout.info.right <= 16,
+                        'The thumbs stay beside the short song information');
+                    await run("document.querySelector('.now-playing-info').style.flex = '1'");
+                    await paint();
+                    assert.ok((await layout()).textWidth - idleLayout.textWidth > 50,
+                        'Restoring the former flex growth reproduces the large empty space before the thumbs');
+                    await run("document.querySelector('.now-playing-info').style.removeProperty('flex')");
+                    await paint();
                     assert.ok(idleLayout.playback.left - idleLayout.thumbs.right >= 15,
                         'The empty player also keeps its thumbs separate from playback');
+                    console.log(`Short mini-player labels: ${idleLayout.textWidth}px of text, thumbs at ${idleLayout.thumbs.left.toFixed(1)}px, volume expanded=${expanded}.`);
                     assert.equal(await run(`['mini-thumb-up', 'mini-thumb-down'].every(id => {
                         const button = document.getElementById(id);
                         const rect = button.getBoundingClientRect();

@@ -2855,7 +2855,8 @@ body.mini-mode .now-playing-art {
 
 /* Track Info — this is the overflow mask */
 body.mini-mode .now-playing-info {
-    flex: 1;
+    /* Keep the thumbs beside short labels instead of filling empty text space. */
+    flex: 0 1 auto;
     min-width: 0;
     max-width: 188px; /* 180px of text plus the existing left padding. */
     overflow: hidden;
