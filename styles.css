@@ -2372,7 +2372,6 @@ body.mini-mode .stream-dialog-actions button { padding: 8px 10px; border-radius:
 }
 
 .history-item.history-disliked {
-    background: rgba(239, 68, 68, 0.06);
     border-left: 2px solid rgba(239, 68, 68, 0.4);
 }
 
@@ -2857,7 +2856,7 @@ body.mini-mode .now-playing-art {
 body.mini-mode .now-playing-info {
     flex: 1;
     min-width: 0;
-    max-width: 258px; /* 250px of text plus the existing left padding. */
+    max-width: 188px; /* 180px of text plus the existing left padding. */
     overflow: hidden;
     position: relative;
     background: none;
