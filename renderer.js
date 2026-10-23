@@ -2933,8 +2933,20 @@ function showErrorToast(message) {
 // Initialize Application
 // ============================================================================
 
+// Use macOS-style title bar (traffic lights on the left, centered title) only
+// when macOS is positively detected. Any failure leaves the default layout.
+function applyPlatformTitlebar() {
+    try {
+        if (window.api?.platform === 'darwin') document.body.classList.add('platform-mac');
+    } catch (error) {
+        console.warn('[UI] Platform detection failed, using default title bar:', error);
+    }
+}
+
 async function init() {
     console.log('[UI] Initializing Panedora...');
+
+    applyPlatformTitlebar();
 
     // Replace broken images with a dark placeholder
     document.addEventListener('error', (e) => {

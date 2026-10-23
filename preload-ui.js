@@ -9,7 +9,19 @@ const { contextBridge, ipcRenderer } = require('electron');
 // Exposed API via Context Bridge
 // ============================================================================
 
+// Detect the host OS defensively. Anything unexpected yields null so the
+// renderer keeps the default (Windows-style) title bar.
+function detectPlatform() {
+    try {
+        return typeof process.platform === 'string' ? process.platform : null;
+    } catch {
+        return null;
+    }
+}
+
 contextBridge.exposeInMainWorld('api', {
+    platform: detectPlatform(),
+
     // ========================================
     // App Lifecycle
     // ========================================
