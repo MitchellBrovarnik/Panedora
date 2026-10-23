@@ -1337,46 +1337,67 @@ function renderSettingsPage() {
     }
 }
 
+const HISTORY_THUMB_UP_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" /></svg>';
+const HISTORY_THUMB_DOWN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17" /></svg>';
+
+// Same thumb controls as the mini player, one pair per Recently Played song.
+function historyItemHtml(h) {
+    const liked = h.feedback === 'liked';
+    const disliked = h.feedback === 'disliked';
+    return `
+        <div class="history-item ${h.feedback ? 'history-' + h.feedback : ''}" data-token="${escapeAttribute(h.trackToken)}">
+            <img class="history-art" src="${PLAYER_ART_PLACEHOLDER}" alt="">
+            <div class="history-info">
+                <span class="history-title">${escapeHtml(h.songTitle)}</span>
+                <span class="history-artist">${escapeHtml(h.artistName)}</span>
+            </div>
+            <div class="mini-thumbs history-thumbs">
+                <button class="mini-thumb-btn history-thumb-btn history-thumb-up ${liked ? 'liked' : ''}" data-thumb="up"
+                    aria-label="Thumb Up" aria-pressed="${liked}" title="Thumb Up">${HISTORY_THUMB_UP_ICON}</button>
+                <button class="mini-thumb-btn history-thumb-btn history-thumb-down ${disliked ? 'disliked' : ''}" data-thumb="down"
+                    aria-label="Thumb Down" aria-pressed="${disliked}" title="Thumb Down">${HISTORY_THUMB_DOWN_ICON}</button>
+            </div>
+        </div>
+    `;
+}
+
+function historyEmptyHtml() {
+    return `
+        <div class="empty-state" style="padding: 24px 0; min-height: auto;">
+            <p style="text-align: left; color: rgba(255,255,255,0.7); margin-bottom: 8px;">Songs you've played will appear here.</p>
+            <p style="text-align: left; color: rgba(255,255,255,0.4); font-size: 13px;">Stores your last 20 tracks.</p>
+        </div>
+    `;
+}
+
+// Songs shown in Recently Played: newest first, without the current song.
+function getPastSongs(history) {
+    const pastSongs = [...(history || [])];
+    if (pastSongs.length > 0 && pastSongs[pastSongs.length - 1].trackToken === AppState.playerState.trackToken) {
+        pastSongs.pop();
+    }
+    return pastSongs.reverse();
+}
+
+function bindHistoryThumbs(container) {
+    container.querySelectorAll('.history-thumb-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const token = btn.closest('.history-item')?.dataset.token;
+            if (token) handleHistoryThumb(token, btn.dataset.thumb === 'up');
+        });
+    });
+}
+
 function renderNowPlayingPage() {
     const { track, artist, album, coverArt, time, duration, isPlaying } = AppState.playerState;
 
     // Build history section
-    let pastSongs = [...(AppState.playerState.history || [])];
-    if (pastSongs.length > 0 && pastSongs[pastSongs.length - 1].trackToken === AppState.playerState.trackToken) {
-        pastSongs.pop(); // Remove currently playing song
-    }
-    pastSongs.reverse(); // Show newest first
-    let historyHtml = `
+    const pastSongs = getPastSongs(AppState.playerState.history);
+    const historyHtml = `
         <div class="np-history">
             <h3 class="tune-title">RECENTLY PLAYED</h3>
             <div class="history-list">
-    `;
-
-    if (pastSongs.length > 0) {
-        historyHtml += pastSongs.map(h => `
-            <div class="history-item ${h.feedback ? 'history-' + h.feedback : ''}" data-token="${h.trackToken}">
-                <img class="history-art" src="${PLAYER_ART_PLACEHOLDER}" alt="">
-                <div class="history-info">
-                    <span class="history-title">${escapeHtml(h.songTitle)}</span>
-                    <span class="history-artist">${escapeHtml(h.artistName)}</span>
-                </div>
-                <div class="history-feedback">
-                    ${h.feedback === 'liked' ? '<span class="history-badge history-badge-liked" title="Liked">👍</span>' : ''}
-                    ${h.feedback === 'disliked' ? '<button class="history-undo-btn" title="Undo dislike" data-token="' + h.trackToken + '">Undo 👎</button>' : ''}
-                    ${!h.feedback ? '<span class="history-badge">—</span>' : ''}
-                </div>
-            </div>
-        `).join('');
-    } else {
-        historyHtml += `
-            <div class="empty-state" style="padding: 24px 0; min-height: auto;">
-                <p style="text-align: left; color: rgba(255,255,255,0.7); margin-bottom: 8px;">Songs you've played will appear here.</p>
-                <p style="text-align: left; color: rgba(255,255,255,0.4); font-size: 13px;">Stores your last 20 tracks.</p>
-            </div>
-        `;
-    }
-
-    historyHtml += `
+                ${pastSongs.length > 0 ? pastSongs.map(historyItemHtml).join('') : historyEmptyHtml()}
             </div>
         </div>
     `;
@@ -1435,24 +1456,7 @@ function renderNowPlayingPage() {
     renderStationModes();
     requestStationModes();
 
-    // History undo-dislike handlers
-    document.querySelectorAll('.history-undo-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            const token = btn.dataset.token;
-            const result = await window.api.player.undoFeedback(token);
-            if (result && result.success) {
-                // Update the UI: remove disliked state from this history item
-                const item = btn.closest('.history-item');
-                if (item) {
-                    item.classList.remove('history-disliked');
-                    btn.replaceWith(Object.assign(document.createElement('span'), {
-                        className: 'history-badge',
-                        textContent: '✓ Removed'
-                    }));
-                }
-            }
-        });
-    });
+    bindHistoryThumbs(DOM.pageContent);
 }
 
 let stationModesRequest = null;
@@ -2144,72 +2148,28 @@ function updatePlayerUI(state) {
         if (histContainer) {
             // Remove old history section
             const oldHistory = histContainer.querySelector('.np-history');
+            const previousScroll = oldHistory?.querySelector('.history-list')?.scrollTop || 0;
             if (oldHistory) {
                 oldHistory.querySelectorAll('.history-art').forEach(cancelPlayerArtwork);
                 oldHistory.remove();
             }
 
             // Build fresh history
-            let pastSongs = [...(state.history || [])];
-            if (pastSongs.length > 0 && pastSongs[pastSongs.length - 1].trackToken === AppState.playerState.trackToken) {
-                pastSongs.pop(); // Remove currently playing song
-            }
-            pastSongs.reverse(); // Show newest first
+            const pastSongs = getPastSongs(state.history);
 
             const histDiv = document.createElement('div');
             histDiv.className = 'np-history';
-
-            let listContent = '';
-            if (pastSongs.length > 0) {
-                listContent = pastSongs.map(h => `
-                    <div class="history-item ${h.feedback ? 'history-' + h.feedback : ''}" data-token="${h.trackToken}">
-                        <img class="history-art" src="${PLAYER_ART_PLACEHOLDER}" alt="">
-                        <div class="history-info">
-                            <span class="history-title">${escapeHtml(h.songTitle)}</span>
-                            <span class="history-artist">${escapeHtml(h.artistName)}</span>
-                        </div>
-                        <div class="history-feedback">
-                            ${h.feedback === 'liked' ? '<span class="history-badge history-badge-liked" title="Liked">\ud83d\udc4d</span>' : ''}
-                            ${h.feedback === 'disliked' ? '<button class="history-undo-btn" title="Undo dislike" data-token="' + h.trackToken + '">Undo \ud83d\udc4e</button>' : ''}
-                            ${!h.feedback ? '<span class="history-badge">\u2014</span>' : ''}
-                        </div>
-                    </div>
-                `).join('');
-            } else {
-                listContent = `
-                    <div class="empty-state" style="padding: 24px 0; min-height: auto;">
-                        <p style="text-align: left; color: rgba(255,255,255,0.7); margin-bottom: 8px;">Songs you've played will appear here.</p>
-                        <p style="text-align: left; color: rgba(255,255,255,0.4); font-size: 13px;">Stores your last 20 tracks.</p>
-                    </div>
-                `;
-            }
-
             histDiv.innerHTML = `
                 <h3 class="tune-title">RECENTLY PLAYED</h3>
                 <div class="history-list">
-                    ${listContent}
+                    ${pastSongs.length > 0 ? pastSongs.map(historyItemHtml).join('') : historyEmptyHtml()}
                 </div>
             `;
             histContainer.appendChild(histDiv);
+            // Rebuilding must not jump the list back to the top after a thumb.
+            if (previousScroll) histDiv.querySelector('.history-list').scrollTop = previousScroll;
             renderHistoryArtwork(histDiv, pastSongs);
-
-            // Re-attach undo handlers
-            histDiv.querySelectorAll('.history-undo-btn').forEach(btn => {
-                btn.addEventListener('click', async () => {
-                    const token = btn.dataset.token;
-                    const result = await window.api.player.undoFeedback(token);
-                    if (result && result.success) {
-                        const item = btn.closest('.history-item');
-                        if (item) {
-                            item.classList.remove('history-disliked');
-                            btn.replaceWith(Object.assign(document.createElement('span'), {
-                                className: 'history-badge',
-                                textContent: '\u2713 Removed'
-                            }));
-                        }
-                    }
-                });
-            });
+            bindHistoryThumbs(histDiv);
         }
     }
 }
@@ -2229,6 +2189,26 @@ async function handleThumb(isPositive) {
     } finally {
         feedbackPending = false;
         // Main sends the confirmed rating. Failed writes leave it unchanged.
+        updatePlayerUI({});
+    }
+}
+
+// Thumb a song in Recently Played. Behaves like the mini player: tapping the
+// active thumb removes it, tapping the other one switches it.
+async function handleHistoryThumb(trackToken, isPositive) {
+    if (feedbackPending || !trackToken || !rateLimitOk('thumb')) return;
+    feedbackPending = true;
+    try {
+        const item = (AppState.playerState.history || []).find(h => h.trackToken === trackToken);
+        const result = item?.feedback === (isPositive ? 'liked' : 'disliked')
+            ? await window.api.player.undoFeedback(trackToken)
+            : await (isPositive ? window.api.player.thumbUp(trackToken) : window.api.player.thumbDown(trackToken));
+        if (!result?.success) showErrorToast(result?.error || 'Could not update your thumb. Please try again.');
+    } catch {
+        showErrorToast('Could not update your thumb. Please try again.');
+    } finally {
+        feedbackPending = false;
+        // Main sends the confirmed history. Failed writes leave it unchanged.
         updatePlayerUI({});
     }
 }

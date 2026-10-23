@@ -1238,3 +1238,52 @@ test('an inherited thumb without an undo ID remains highlighted and is not re-ad
     assert.equal(s.getCurrentState().feedback, 'thumbUp');
     assert.deepEqual(s.calls, []);
 });
+
+test('thumbing a Recently Played song saves it without skipping or changing the current song', async () => {
+    const s = setup();
+    s.seed([track(0, 'past'), track(0, 'current'), track(0, 'next')]);
+    await s.skipTrack();
+    const sent = [];
+    s.api.addFeedback = async (token, positive) => { sent.push([token, positive]); return { success: true, feedbackId: 'past-feedback' }; };
+    const cmd = s.handlers.get('PLAYER:CMD');
+    for (const [action, positive, feedback] of [['thumbUp', true, 'liked'], ['thumbDown', false, 'disliked']]) {
+        assert.equal((await cmd({}, { action, value: 'past' })).success, true);
+        assert.deepEqual(sent.at(-1), ['past', positive]);
+        assert.equal(s.getCurrentState().history.find(h => h.trackToken === 'past').feedback, feedback);
+        assert.equal(s.getCurrentState().trackToken, 'current', 'A past thumb never skips');
+        assert.equal(s.getCurrentState().feedback, null, 'The playing song is unaffected');
+    }
+    assert.equal(s.getCurrentState().history.find(h => h.trackToken === 'current').feedback, null);
+    // The saved thumb can be removed like any other, by its feedback ID.
+    assert.equal((await s.handlers.get('PLAYER:UNDO_FEEDBACK')({}, { trackToken: 'past' })).success, true);
+    assert.deepEqual(s.calls.at(-1), ['deleteFeedback', 'past-feedback']);
+    assert.equal(s.getCurrentState().history.find(h => h.trackToken === 'past').feedback, null);
+});
+
+test('thumbing a history song twice in the same direction does not re-submit', async () => {
+    const s = setup();
+    s.seed([track(0, 'past'), track(0, 'current')]);
+    await s.skipTrack();
+    assert.equal((await s.thumbUp('past')).success, true);
+    assert.equal((await s.thumbUp('past')).success, true);
+    assert.equal(s.calls.filter(call => call[0] === 'addFeedback').length, 1);
+});
+
+test('a failed or unknown history thumb changes nothing', async () => {
+    const s = setup();
+    s.seed([track(0, 'past'), track(0, 'current')]);
+    await s.skipTrack();
+    s.api.addFeedback = async () => ({ success: false });
+    assert.equal((await s.thumbUp('past')).success, false);
+    assert.equal(s.getCurrentState().history.find(h => h.trackToken === 'past').feedback, null);
+    assert.equal((await s.thumbDown('not-in-history')).success, false);
+    assert.equal(s.getCurrentState().trackToken, 'current');
+});
+
+test('passing the current song token behaves like the normal thumb, including the skip', async () => {
+    const s = setup();
+    s.seed([track(0, 'current'), track(0, 'next')]);
+    assert.equal((await s.thumbDown('current')).success, true);
+    assert.equal(s.getCurrentState().trackToken, 'next');
+    assert.equal(s.getCurrentState().history.find(h => h.trackToken === 'current').feedback, 'disliked');
+});

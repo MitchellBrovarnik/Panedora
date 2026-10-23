@@ -54,8 +54,9 @@ contextBridge.exposeInMainWorld('api', {
         setVolume: (value) => ipcRenderer.invoke('PLAYER:CMD', { action: 'volume', value }),
         shuffle: () => ipcRenderer.invoke('PLAYER:CMD', { action: 'shuffle' }),
         repeat: () => ipcRenderer.invoke('PLAYER:CMD', { action: 'repeat' }),
-        thumbUp: () => ipcRenderer.invoke('PLAYER:CMD', { action: 'thumbUp' }),
-        thumbDown: () => ipcRenderer.invoke('PLAYER:CMD', { action: 'thumbDown' }),
+        // trackToken is optional: omit it for the current song, pass it for a Recently Played song.
+        thumbUp: (trackToken) => ipcRenderer.invoke('PLAYER:CMD', { action: 'thumbUp', value: trackToken }),
+        thumbDown: (trackToken) => ipcRenderer.invoke('PLAYER:CMD', { action: 'thumbDown', value: trackToken }),
         undoFeedback: (trackToken) => ipcRenderer.invoke('PLAYER:UNDO_FEEDBACK', { trackToken }),
         getMoreTracks: () => ipcRenderer.invoke('PLAYER:GET_MORE_TRACKS'),
         getStationModes: (stationId) => ipcRenderer.invoke('PLAYER:GET_STATION_MODES', { stationId }),

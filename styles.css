@@ -2337,36 +2337,24 @@ body.mini-mode .stream-dialog-actions button { padding: 8px 10px; border-radius:
     text-overflow: ellipsis;
 }
 
-.history-feedback {
-    flex-shrink: 0;
+.history-thumbs {
+    margin-left: 0;
+    gap: 2px;
 }
 
-.history-badge {
-    font-size: 10px;
-    color: var(--text-3);
+.history-thumb-btn {
+    width: 24px;
+    height: 24px;
 }
 
-.history-badge-liked {
-    color: #22c55e;
+.history-thumb-up:hover {
+    color: #1db954;
+    background: rgba(29, 185, 84, 0.12);
 }
 
-.history-undo-btn {
-    font-size: 10px;
-    font-weight: 500;
-    padding: 4px 10px;
-    border-radius: var(--r-pill);
-    background: rgba(239, 68, 68, 0.12);
-    border: 1px solid rgba(239, 68, 68, 0.25);
-    color: #f87171;
-    cursor: pointer;
-    transition: all 200ms var(--ease);
-    white-space: nowrap;
-}
-
-.history-undo-btn:hover {
-    background: rgba(239, 68, 68, 0.2);
-    border-color: rgba(239, 68, 68, 0.4);
-    transform: scale(1.05);
+.history-thumb-down:hover {
+    color: #e81123;
+    background: rgba(232, 17, 35, 0.12);
 }
 
 /* ============================================================================

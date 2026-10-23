@@ -1112,3 +1112,68 @@ test('station removal recovers from an IPC exception without leaving controls di
     s.node('station-remove-cancel').click();
     assert.equal(s.node('station-remove-dialog').open, false);
 });
+
+test('Recently Played songs get the mini-player thumbs and toggle like them', async t => {
+    const s = setup(t);
+    let now = 1000;
+    s.window.Date.now = () => (now += 10000); // clear the click cooldown between actions
+    const sent = [];
+    s.player.thumbUp = async token => { sent.push(['up', token]); return { success: true }; };
+    s.player.thumbDown = async token => { sent.push(['down', token]); return { success: true }; };
+    s.player.undoFeedback = async token => { sent.push(['undo', token]); return { success: true }; };
+    const history = [
+        { trackToken: 'plain', songTitle: 'Plain', feedback: null },
+        { trackToken: 'liked', songTitle: 'Liked', feedback: 'liked' },
+        { trackToken: 'disliked', songTitle: 'Disliked', feedback: 'disliked' },
+        { trackToken: 'current', songTitle: 'Current' }
+    ];
+    s.ui.update({ trackToken: 'current', track: 'Current', history });
+    s.open();
+    const item = token => s.window.document.querySelector(`.history-item[data-token="${token}"]`);
+    const btn = (token, which) => item(token).querySelector(`.history-thumb-${which}`);
+    assert.equal(s.window.document.querySelectorAll('.history-item').length, 3, 'The current song is not listed');
+    assert.equal(s.window.document.querySelectorAll('.history-undo-btn').length, 0);
+    assert.ok(btn('plain', 'up').classList.contains('mini-thumb-btn'), 'Same controls as the mini player');
+    assert.equal(btn('plain', 'up').classList.contains('liked'), false);
+    assert.equal(btn('liked', 'up').classList.contains('liked'), true);
+    assert.equal(btn('liked', 'up').getAttribute('aria-pressed'), 'true');
+    assert.equal(btn('disliked', 'down').classList.contains('disliked'), true);
+    assert.equal(item('liked').classList.contains('history-liked'), true);
+
+    btn('plain', 'up').click(); await tick();
+    btn('plain', 'down').click(); await tick();
+    btn('liked', 'up').click(); await tick(); // active thumb toggles off
+    btn('disliked', 'down').click(); await tick();
+    btn('liked', 'down').click(); await tick(); // switching sides saves the new thumb
+    assert.deepEqual(sent, [['up', 'plain'], ['down', 'plain'], ['undo', 'liked'], ['undo', 'disliked'], ['down', 'liked']]);
+
+    // The confirmed state arrives from the main process and re-renders the list.
+    s.ui.update({ history: history.map(h => h.trackToken === 'plain' ? { ...h, feedback: 'liked' } : h) });
+    assert.equal(btn('plain', 'up').classList.contains('liked'), true);
+    assert.equal(btn('plain', 'down').classList.contains('disliked'), false);
+});
+
+test('a failed Recently Played thumb shows an error and leaves the list unchanged', async t => {
+    const s = setup(t);
+    s.window.Date.now = () => 1e9;
+    s.player.thumbUp = async () => ({ success: false, error: 'Could not save your thumb. Please try again.' });
+    const history = [{ trackToken: 'plain', songTitle: 'Plain' }, { trackToken: 'current', songTitle: 'Current' }];
+    s.ui.update({ trackToken: 'current', track: 'Current', history });
+    s.open();
+    const up = s.window.document.querySelector('.history-thumb-up');
+    up.click(); await tick();
+    assert.equal(up.classList.contains('liked'), false);
+    assert.match(s.window.document.body.textContent, /Could not save your thumb/);
+});
+
+test('history thumbs escape track tokens and the list keeps its scroll position on refresh', t => {
+    const s = setup(t);
+    const history = Array.from({ length: 12 }, (_, i) => ({ trackToken: i === 0 ? 'a"b<c' : 'song-' + i, songTitle: 'Song ' + i }));
+    s.ui.update({ trackToken: 'current', track: 'Current', history: [...history, { trackToken: 'current' }] });
+    s.open();
+    assert.equal(s.window.document.querySelectorAll('.history-item[data-token^="a"]').length, 1);
+    assert.equal(s.window.document.querySelector('.history-item:last-child').dataset.token, 'a"b<c');
+    s.window.document.querySelector('.history-list').scrollTop = 120;
+    s.ui.update({ history: [...history, { trackToken: 'current' }] });
+    assert.equal(s.window.document.querySelector('.history-list').scrollTop, 120);
+});
