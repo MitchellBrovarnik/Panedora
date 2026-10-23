@@ -278,6 +278,8 @@ app.whenReady().then(async () => {
                 assert.ok(currentLayout.playback.right <= currentLayout.volume.left,
                     'Playback controls stay clear of the expanded volume area');
                 if (width >= 800) {
+                    assert.ok(currentLayout.playback.left - currentLayout.thumbs.right >= 15,
+                        'Wide thumbs and playback pills have a clear gap between them');
                     assert.ok(Math.abs(currentLayout.playback.center - width / 2) < 1,
                         'Wide playback controls are centered on the actual window');
                     assert.ok(currentLayout.textWidth >= 150 && currentLayout.textWidth <= 250,
@@ -327,6 +329,20 @@ app.whenReady().then(async () => {
                         await run("document.querySelector('.now-playing-info').style.removeProperty('clip-path')");
                         assert.ok(oldOverlap > 0, 'The former clipping must reproduce text pixels inside the cover');
                     }
+                }
+                if (width === 900) {
+                    await run("updatePlayerUI({track: 'Not Playing', artist: '--'})");
+                    await paint();
+                    const idleLayout = await layout();
+                    assert.ok(idleLayout.playback.left - idleLayout.thumbs.right >= 15,
+                        'The empty player also keeps its thumbs separate from playback');
+                    assert.equal(await run(`['mini-thumb-up', 'mini-thumb-down'].every(id => {
+                        const button = document.getElementById(id);
+                        const rect = button.getBoundingClientRect();
+                        return document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)?.closest('button') === button;
+                    })`), true, 'Both mini thumbs remain unobstructed click targets');
+                    fs.writeFileSync(path.join(testData, `mini-idle-thumb-spacing-${expanded}.png`),
+                        (await win.webContents.capturePage()).toPNG());
                 }
             }
         }
