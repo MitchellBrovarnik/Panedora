@@ -282,8 +282,8 @@ app.whenReady().then(async () => {
                         'Wide thumbs and playback pills have a clear gap between them');
                     assert.ok(Math.abs(currentLayout.playback.center - width / 2) < 1,
                         'Wide playback controls are centered on the actual window');
-                    assert.ok(currentLayout.textWidth >= 150 && currentLayout.textWidth <= 250,
-                        'Wide song information stays readable and stops stretching at 250px');
+                    assert.ok(currentLayout.textWidth >= 150 && currentLayout.textWidth <= 180,
+                        'Wide song information stays readable and stops stretching at 180px');
                     if (expanded) {
                         for (const group of ['art', 'info', 'thumbs', 'playback']) {
                             assert.ok(Math.abs(currentLayout[group].left - collapsedLayout[group].left) < 1 &&
