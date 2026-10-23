@@ -266,3 +266,23 @@ test('quitting cancels the schedule and an in-flight check without publishing a 
         'An expiring snooze must not publish a notice after quitting');
     assert.equal(await s.checker.check(), null);
 });
+
+test('development builds never check for updates, even when GitHub has a higher release', async () => {
+    for (const version of ['1.2.2-dev', '1.2.2-dev.3', '1.2.2-DEV']) {
+        assert.equal(parseVersion(version).dev, true, version);
+        const s = setup({ version, fetch: async () => { throw new Error('must not fetch'); } });
+        assert.equal(await s.checker.start(), undefined);
+        assert.equal(await s.checker.check(), null);
+        assert.equal(s.requests.length, 0);
+        s.checker.stop();
+    }
+    // Same release being compared to a dev build would otherwise notify.
+    assert.equal(isNewerRelease(parseVersion('1.3.0'), parseVersion('1.2.2-dev')), true);
+    // Only the "dev" label opts out; other prereleases and stable builds still check.
+    for (const version of ['1.2.2', '1.2.2-beta.1', '1.2.2-devel', '1.1.3']) {
+        assert.equal(parseVersion(version).dev, false, version);
+        const s = setup({ version });
+        assert.notEqual(await s.checker.check(), undefined);
+        assert.equal(s.requests.length, 1, version);
+    }
+});
