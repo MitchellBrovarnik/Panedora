@@ -331,8 +331,23 @@ app.whenReady().then(async () => {
                     }
                 }
                 if (width === 900) {
-                    await run("updatePlayerUI({track: 'Not Playing', artist: '--'})");
+                    await run(`for (const id of ['now-playing-title', 'now-playing-artist']) {
+                        const element = document.getElementById(id);
+                        for (const animation of element.getAnimations()) animation.cancel();
+                        element.classList.remove('marquee');
+                        element.style.visibility = 'visible';
+                    }
+                    updatePlayerUI({track: 'Not Playing', artist: '--'})`);
                     await paint();
+                    assert.equal(await run(`['now-playing-title', 'now-playing-artist'].every(id => {
+                        const element = document.getElementById(id);
+                        const range = document.createRange();
+                        range.selectNodeContents(element);
+                        const text = range.getBoundingClientRect();
+                        const info = element.parentElement.getBoundingClientRect();
+                        return getComputedStyle(element).visibility === 'visible' && text.width > 0 &&
+                            text.left >= info.left + 7 && text.right <= info.right + 1;
+                    })`), true, 'The idle labels are visible after resetting the paused marquee fixture');
                     const idleLayout = await layout();
                     assert.ok(idleLayout.playback.left - idleLayout.thumbs.right >= 15,
                         'The empty player also keeps its thumbs separate from playback');
