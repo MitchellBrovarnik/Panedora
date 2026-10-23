@@ -2261,6 +2261,32 @@ const debouncedSearch = debounce(async (query) => {
 // Event Listeners
 // ============================================================================
 
+function updateMiniPlayerLayout() {
+    if (!document.body.classList.contains('mini-mode')) return;
+    const footer = document.querySelector('.player-footer');
+    const playback = footer?.querySelector('.control-buttons');
+    const volume = footer?.querySelector('.volume-controls');
+    if (!playback || !volume) return;
+    const style = getComputedStyle(footer);
+    const space = footer.clientWidth - (parseFloat(style.paddingLeft) || 0) -
+        (parseFloat(style.paddingRight) || 0) - 2 * (parseFloat(style.columnGap) || 0);
+    const playbackWidth = playback.getBoundingClientRect().width;
+    const volumeWidth = volume.getBoundingClientRect().width;
+    if (!playbackWidth || !volumeWidth || space <= playbackWidth + volumeWidth) return;
+
+    // Preserve the 540px layout, then continuously balance the three regions.
+    // By 800px, equal side regions keep playback exactly on the window center.
+    const progress = Math.max(0, Math.min(1, (footer.getBoundingClientRect().width - 540) / 260));
+    const compactColumn = (space - volumeWidth) / 2;
+    const centeredColumn = (space - playbackWidth) / 2;
+    const left = compactColumn + (centeredColumn - compactColumn) * progress;
+    const center = compactColumn + (playbackWidth - compactColumn) * progress;
+    const columns = `${left.toFixed(3)}px ${center.toFixed(3)}px minmax(0, 1fr)`;
+    if (footer.style.getPropertyValue('--mini-player-columns') !== columns) {
+        footer.style.setProperty('--mini-player-columns', columns);
+    }
+}
+
 function initEventListeners() {
     document.getElementById('update-download')?.addEventListener('click', () => answerUpdateNotice('download'));
     document.getElementById('update-later')?.addEventListener('click', () => answerUpdateNotice('later'));
@@ -2334,6 +2360,14 @@ function initEventListeners() {
             checkMarquee(DOM.nowPlayingArtist);
         }
     }, 100));
+    window.addEventListener('resize', updateMiniPlayerLayout);
+    if (typeof ResizeObserver !== 'undefined') {
+        const observer = new ResizeObserver(updateMiniPlayerLayout);
+        for (const selector of ['.player-footer', '.control-buttons', '.volume-controls']) {
+            const element = document.querySelector(selector);
+            if (element) observer.observe(element);
+        }
+    }
 
     // Click on now playing section to open Now Playing page
     if (DOM.nowPlayingArt) {
@@ -2893,6 +2927,7 @@ function initAPIListeners() {
         } else {
             DOM.volumeSlider.classList.remove('collapsed');
         }
+        updateMiniPlayerLayout();
     });
 
     window.api.onError((data) => {
