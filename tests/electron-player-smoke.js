@@ -278,6 +278,8 @@ app.whenReady().then(async () => {
                 assert.ok(currentLayout.playback.right <= currentLayout.volume.left,
                     'Playback controls stay clear of the expanded volume area');
                 if (width >= 800) {
+                    assert.ok(currentLayout.playback.left - currentLayout.thumbs.right >= 15,
+                        'Wide thumbs and playback pills have a clear gap between them');
                     assert.ok(Math.abs(currentLayout.playback.center - width / 2) < 1,
                         'Wide playback controls are centered on the actual window');
                     assert.ok(currentLayout.textWidth >= 150 && currentLayout.textWidth <= 250,
@@ -327,6 +329,35 @@ app.whenReady().then(async () => {
                         await run("document.querySelector('.now-playing-info').style.removeProperty('clip-path')");
                         assert.ok(oldOverlap > 0, 'The former clipping must reproduce text pixels inside the cover');
                     }
+                }
+                if (width === 900) {
+                    await run(`for (const id of ['now-playing-title', 'now-playing-artist']) {
+                        const element = document.getElementById(id);
+                        for (const animation of element.getAnimations()) animation.cancel();
+                        element.classList.remove('marquee');
+                        element.style.visibility = 'visible';
+                    }
+                    updatePlayerUI({track: 'Not Playing', artist: '--'})`);
+                    await paint();
+                    assert.equal(await run(`['now-playing-title', 'now-playing-artist'].every(id => {
+                        const element = document.getElementById(id);
+                        const range = document.createRange();
+                        range.selectNodeContents(element);
+                        const text = range.getBoundingClientRect();
+                        const info = element.parentElement.getBoundingClientRect();
+                        return getComputedStyle(element).visibility === 'visible' && text.width > 0 &&
+                            text.left >= info.left + 7 && text.right <= info.right + 1;
+                    })`), true, 'The idle labels are visible after resetting the paused marquee fixture');
+                    const idleLayout = await layout();
+                    assert.ok(idleLayout.playback.left - idleLayout.thumbs.right >= 15,
+                        'The empty player also keeps its thumbs separate from playback');
+                    assert.equal(await run(`['mini-thumb-up', 'mini-thumb-down'].every(id => {
+                        const button = document.getElementById(id);
+                        const rect = button.getBoundingClientRect();
+                        return document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)?.closest('button') === button;
+                    })`), true, 'Both mini thumbs remain unobstructed click targets');
+                    fs.writeFileSync(path.join(testData, `mini-idle-thumb-spacing-${expanded}.png`),
+                        (await win.webContents.capturePage()).toPNG());
                 }
             }
         }

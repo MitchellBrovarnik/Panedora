@@ -2756,7 +2756,8 @@ body.mini-mode .player-footer {
     border-radius: 12px;
     border-top: none;
     -webkit-app-region: drag;
-    gap: 3px;
+    /* Preserve the compact gap and separate the pills as playback centers. */
+    gap: clamp(3px, calc(5vw - 24px), 16px);
     z-index: 5;
 }
 
