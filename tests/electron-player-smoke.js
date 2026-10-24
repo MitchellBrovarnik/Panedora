@@ -273,17 +273,19 @@ app.whenReady().then(async () => {
                     'Thumbs stay side by side');
                 assert.ok(currentLayout.thumbs.left - currentLayout.info.right <= 16,
                     'Thumbs stay next to the information instead of drifting across the window');
-                assert.ok(currentLayout.thumbs.right <= currentLayout.playback.left,
-                    'Song information and thumbs stay clear of playback controls');
+                assert.ok(currentLayout.playback.left - currentLayout.thumbs.right >= 27,
+                    'Thumbs keep comfortable spacing from playback at every size');
                 assert.ok(currentLayout.playback.right <= currentLayout.volume.left,
                     'Playback controls stay clear of the expanded volume area');
-                if (width >= 800) {
-                    assert.ok(currentLayout.playback.left - currentLayout.thumbs.right >= 15,
-                        'Wide thumbs and playback pills have a clear gap between them');
+                if (width >= 680) {
+                    assert.ok(currentLayout.playback.left - currentLayout.thumbs.right >= 31,
+                        'The thumbs-to-playback gap does not squeeze shut at intermediate widths');
                     assert.ok(Math.abs(currentLayout.playback.center - width / 2) < 1,
-                        'Wide playback controls are centered on the actual window');
-                    assert.ok(currentLayout.textWidth >= 150 && currentLayout.textWidth <= 250,
-                        'Wide song information stays readable and stops stretching at 250px');
+                        'Playback is centered as soon as the compact groups have room');
+                }
+                if (width >= 800) {
+                    assert.ok(currentLayout.textWidth >= 150 && currentLayout.textWidth <= 180,
+                        'Wide song information stays readable and stops stretching at 180px');
                     if (expanded) {
                         for (const group of ['art', 'info', 'thumbs', 'playback']) {
                             assert.ok(Math.abs(currentLayout[group].left - collapsedLayout[group].left) < 1 &&
@@ -349,8 +351,24 @@ app.whenReady().then(async () => {
                             text.left >= info.left + 7 && text.right <= info.right + 1;
                     })`), true, 'The idle labels are visible after resetting the paused marquee fixture');
                     const idleLayout = await layout();
+                    const idleTextWidth = await run(`Math.max(...['now-playing-title', 'now-playing-artist'].map(id => {
+                        const range = document.createRange();
+                        range.selectNodeContents(document.getElementById(id));
+                        return range.getBoundingClientRect().width;
+                    }))`);
+                    assert.ok(idleLayout.textWidth <= idleTextWidth + 1,
+                        'Short labels use their natural width instead of reserving blank space before the thumbs');
+                    assert.ok(idleLayout.thumbs.left - idleLayout.info.right <= 16,
+                        'The thumbs stay beside the short song information');
+                    await run("document.querySelector('.now-playing-info').style.flex = '1'");
+                    await paint();
+                    assert.ok((await layout()).textWidth - idleLayout.textWidth > 50,
+                        'Restoring the former flex growth reproduces the large empty space before the thumbs');
+                    await run("document.querySelector('.now-playing-info').style.removeProperty('flex')");
+                    await paint();
                     assert.ok(idleLayout.playback.left - idleLayout.thumbs.right >= 15,
                         'The empty player also keeps its thumbs separate from playback');
+                    console.log(`Short mini-player labels: ${idleLayout.textWidth}px of text, thumbs at ${idleLayout.thumbs.left.toFixed(1)}px, volume expanded=${expanded}.`);
                     assert.equal(await run(`['mini-thumb-up', 'mini-thumb-down'].every(id => {
                         const button = document.getElementById(id);
                         const rect = button.getBoundingClientRect();
@@ -361,11 +379,12 @@ app.whenReady().then(async () => {
                 }
             }
         }
-        // Check movement between sizes, not only whether each final layout fits.
-        // The former 799px -> 800px switch moved playback by over 100px.
-        const boundaryWidths = Array.from({ length: 41 }, (_, index) => 780 + index);
-        const trajectory = [540, 600, 680, 740, ...boundaryWidths, 900,
-            ...[...boundaryWidths].reverse(), 740, 680, 600, 540];
+        // Check both compact centering points and the former 800px boundary
+        // one pixel at a time, in both directions and with both volume states.
+        const sizes = [540, ...Array.from({ length: 11 }, (_, i) => 550 + i), 600,
+            ...Array.from({ length: 11 }, (_, i) => 640 + i), 680, 740,
+            ...Array.from({ length: 11 }, (_, i) => 795 + i), 900];
+        const trajectory = [...sizes, ...sizes.slice(0, -1).reverse()];
         let largestPlaybackStep = 0;
         for (const expanded of [false, true]) {
             await run(`document.querySelector('.volume-controls').dispatchEvent(new MouseEvent('${expanded ? 'mouseenter' : 'mouseleave'}'))`);
@@ -380,7 +399,11 @@ app.whenReady().then(async () => {
                     assert.ok(Math.abs(current.playback.center - (expanded ? 277.5 : 322.5)) < 1,
                         'The default-size playback position matches the original compact layout');
                 }
-                if (width >= 800) assert.ok(Math.abs(current.playback.center - width / 2) < 1);
+                if (width >= 680) {
+                    assert.ok(Math.abs(current.playback.center - width / 2) < 1);
+                    assert.ok(current.playback.left - current.thumbs.right >= 31,
+                        'Resizing never squeezes thumbs back toward the centered playback pill');
+                }
                 if (previous) {
                     const step = Math.abs(current.width - previous.width);
                     for (const group of ['art', 'info', 'thumbs', 'playback', 'volume']) {

@@ -28,7 +28,8 @@ function setup() {
     visualizer.audioContext = { state: 'running' };
     visualizer.analyser = {
         fftSize: 256, get frequencyBinCount() { return this.fftSize / 2; },
-        getByteFrequencyData: array => array.fill(128), getByteTimeDomainData: array => array.fill(128)
+        getByteFrequencyData: array => array.fill(128), getByteTimeDomainData: array => array.fill(128),
+        getFloatFrequencyData: array => array.fill(-60)
     };
     return {
         visualizer, frames, resizeListeners, window,

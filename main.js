@@ -811,8 +811,37 @@ async function setTrackFeedback(isPositive) {
     return { success: true };
 }
 
-async function thumbUp() { return setTrackFeedback(true); }
-async function thumbDown() { return setTrackFeedback(false); }
+// Thumb a song that has already played (Recently Played). Unlike the current
+// song, a past song is never skipped, since it is no longer playing.
+async function setHistoryFeedback(isPositive, trackToken) {
+    const histItem = songHistory.find(h => h.trackToken === trackToken);
+    if (!histItem) return { success: false, error: 'That song is no longer in your history.' };
+    const wanted = isPositive ? 'liked' : 'disliked';
+    if (histItem.feedback === wanted) return { success: true };
+    const result = await api.addFeedback(trackToken, isPositive);
+    if (!result.success) {
+        sendPlayerState(getCurrentState());
+        return { success: false, error: 'Could not save your thumb. Please try again.' };
+    }
+    const rating = isPositive ? 1 : -1;
+    const feedbackId = result.feedbackId || null;
+    histItem.feedback = wanted;
+    histItem.feedbackId = feedbackId;
+    // Keep the queued copy of the track in sync so a replay shows the same state.
+    const queued = currentPlaylist.find(t => t.trackToken === trackToken);
+    if (queued) { queued.rating = rating; queued.songRating = rating; queued.feedbackId = feedbackId; }
+    sendPlayerState(getCurrentState());
+    return { success: true };
+}
+
+// An optional trackToken targets a song other than the one currently playing.
+const isPastTrack = trackToken => !!trackToken && trackToken !== currentPlaylist[currentTrackIndex]?.trackToken;
+async function thumbUp(trackToken) {
+    return isPastTrack(trackToken) ? setHistoryFeedback(true, trackToken) : setTrackFeedback(true);
+}
+async function thumbDown(trackToken) {
+    return isPastTrack(trackToken) ? setHistoryFeedback(false, trackToken) : setTrackFeedback(false);
+}
 
 // ============================================================================
 // IPC Handlers
@@ -940,9 +969,9 @@ ipcMain.handle('PLAYER:CMD', async (event, { action, value }) => {
         case 'prev':
             return await replayTrack();
         case 'thumbUp':
-            return await thumbUp();
+            return await thumbUp(value);
         case 'thumbDown':
-            return await thumbDown();
+            return await thumbDown(value);
         case 'toggle':
             return isPaused || streamReclaimed ? await resumePlayer() : await pausePlayer();
         case 'play':

@@ -9,7 +9,19 @@ const { contextBridge, ipcRenderer } = require('electron');
 // Exposed API via Context Bridge
 // ============================================================================
 
+// Detect the host OS defensively. Anything unexpected yields null so the
+// renderer keeps the default (Windows-style) title bar.
+function detectPlatform() {
+    try {
+        return typeof process.platform === 'string' ? process.platform : null;
+    } catch {
+        return null;
+    }
+}
+
 contextBridge.exposeInMainWorld('api', {
+    platform: detectPlatform(),
+
     // ========================================
     // App Lifecycle
     // ========================================
@@ -54,8 +66,9 @@ contextBridge.exposeInMainWorld('api', {
         setVolume: (value) => ipcRenderer.invoke('PLAYER:CMD', { action: 'volume', value }),
         shuffle: () => ipcRenderer.invoke('PLAYER:CMD', { action: 'shuffle' }),
         repeat: () => ipcRenderer.invoke('PLAYER:CMD', { action: 'repeat' }),
-        thumbUp: () => ipcRenderer.invoke('PLAYER:CMD', { action: 'thumbUp' }),
-        thumbDown: () => ipcRenderer.invoke('PLAYER:CMD', { action: 'thumbDown' }),
+        // trackToken is optional: omit it for the current song, pass it for a Recently Played song.
+        thumbUp: (trackToken) => ipcRenderer.invoke('PLAYER:CMD', { action: 'thumbUp', value: trackToken }),
+        thumbDown: (trackToken) => ipcRenderer.invoke('PLAYER:CMD', { action: 'thumbDown', value: trackToken }),
         undoFeedback: (trackToken) => ipcRenderer.invoke('PLAYER:UNDO_FEEDBACK', { trackToken }),
         getMoreTracks: () => ipcRenderer.invoke('PLAYER:GET_MORE_TRACKS'),
         getStationModes: (stationId) => ipcRenderer.invoke('PLAYER:GET_STATION_MODES', { stationId }),
