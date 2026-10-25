@@ -168,6 +168,21 @@ function decryptString(str) {
     return str;
 }
 
+const DEFAULT_VOLUME = 100;
+const SILENT_RESTORE_VOLUME = 25;
+
+// Whole percent from 0 to 100, or null for anything that is not a finite number.
+function clampVolume(value) {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+    return Math.min(100, Math.max(0, Math.round(value)));
+}
+
+function restoredVolume(value) {
+    const volume = clampVolume(value);
+    if (volume === null) return DEFAULT_VOLUME;
+    return volume === 0 ? SILENT_RESTORE_VOLUME : volume;
+}
+
 module.exports = {
     // Credentials (encrypted at rest)
     getCredentials: () => {
@@ -207,6 +222,24 @@ module.exports = {
     // Optional sharing preference belongs to this installation; default is off.
     getDiscordEnabled: () => getConfig().discordEnabled === true,
     setDiscordEnabled: enabled => setConfig('discordEnabled', enabled === true),
+
+    // Volume memory is an installation preference (default off) and survives sign-out.
+    // A saved volume of 0 would reopen the app silent, so it is restored as 25%.
+    getVolumeSettings: () => {
+        const stored = getConfig();
+        const remember = stored.rememberVolume === true;
+        return { remember, volume: remember ? restoredVolume(stored.volume) : 100 };
+    },
+    setRememberVolume: (enabled, volume) => {
+        setConfig('rememberVolume', enabled === true);
+        // Turning it off forgets the saved level, so the next launch starts at 100%.
+        setConfig('volume', enabled === true ? clampVolume(volume) : null);
+    },
+    setVolume: volume => {
+        if (getConfig().rememberVolume !== true) return;
+        const value = clampVolume(volume);
+        if (value !== null) setConfig('volume', value);
+    },
 
     // Auth Token (from login response)
     getAuthToken: () => getConfig().authToken,

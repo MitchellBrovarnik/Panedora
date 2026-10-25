@@ -1287,3 +1287,24 @@ test('passing the current song token behaves like the normal thumb, including th
     assert.equal(s.getCurrentState().trackToken, 'next');
     assert.equal(s.getCurrentState().history.find(h => h.trackToken === 'current').feedback, 'disliked');
 });
+
+test('volume settings IPC only answers the app window and validates its inputs', async () => {
+    const saved = [];
+    const s = setup({
+        getVolumeSettings: () => ({ remember: true, volume: 42 }),
+        setRememberVolume: (enabled, volume) => saved.push(['remember', enabled, volume]),
+        setVolume: volume => saved.push(['volume', volume])
+    });
+    const app = { sender: s.window.webContents };
+    const stranger = { sender: {} };
+    const call = (name, event, ...args) => s.handlers.get(name)(event, ...args);
+    assert.deepEqual({ ...await call('SETTINGS:GET_VOLUME', app) }, { remember: true, volume: 42 });
+    assert.equal(await call('SETTINGS:GET_VOLUME', stranger), null);
+    assert.deepEqual({ ...await call('SETTINGS:SET_REMEMBER_VOLUME', app, true, 55) }, { remember: true, volume: 42 });
+    assert.equal(await call('SETTINGS:SET_REMEMBER_VOLUME', app, 'yes', 55), null);
+    assert.equal(await call('SETTINGS:SET_REMEMBER_VOLUME', stranger, true, 55), null);
+    assert.equal(await call('SETTINGS:SAVE_VOLUME', app, 61), true);
+    assert.equal(await call('SETTINGS:SAVE_VOLUME', app, '61'), false);
+    assert.equal(await call('SETTINGS:SAVE_VOLUME', stranger, 61), false);
+    assert.deepEqual(saved, [['remember', true, 55], ['volume', 61]]);
+});

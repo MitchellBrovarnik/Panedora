@@ -44,6 +44,12 @@ contextBridge.exposeInMainWorld('api', {
         }
     },
 
+    settings: {
+        getVolume: () => ipcRenderer.invoke('SETTINGS:GET_VOLUME'),
+        setRememberVolume: (enabled, volume) => ipcRenderer.invoke('SETTINGS:SET_REMEMBER_VOLUME', enabled, volume),
+        saveVolume: volume => ipcRenderer.invoke('SETTINGS:SAVE_VOLUME', volume)
+    },
+
     // ========================================
     // Authentication
     // ========================================

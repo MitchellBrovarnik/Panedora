@@ -860,6 +860,19 @@ ipcMain.handle('DISCORD:SET_ENABLED', (event, enabled) => {
     config.setDiscordEnabled(enabled);
     return discordPresence.setEnabled(enabled);
 });
+// Volume memory (stored in the same config file as the other installation settings)
+ipcMain.handle('SETTINGS:GET_VOLUME', event => isAppRenderer(event) ? config.getVolumeSettings() : null);
+ipcMain.handle('SETTINGS:SET_REMEMBER_VOLUME', (event, enabled, volume) => {
+    if (!isAppRenderer(event) || typeof enabled !== 'boolean') return null;
+    config.setRememberVolume(enabled, volume);
+    return config.getVolumeSettings();
+});
+ipcMain.handle('SETTINGS:SAVE_VOLUME', (event, volume) => {
+    if (!isAppRenderer(event) || typeof volume !== 'number') return false;
+    config.setVolume(volume);
+    return true;
+});
+
 ipcMain.handle('DISCORD:PLAYBACK', (event, report) => {
     if (!isAppRenderer(event)) return false;
     return discordPresence?.reportPlayback(report) || false;

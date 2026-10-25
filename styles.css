@@ -1493,6 +1493,55 @@ body::before {
     box-shadow: 0 0 6px var(--accent-glow);
 }
 
+/* Volume percentage popover: shown only while the slider is being adjusted */
+.volume-controls {
+    position: relative;
+}
+
+.volume-popover {
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: 0;
+    transform: translate(-50%, 4px);
+    padding: 4px 9px;
+    border-radius: var(--r-pill);
+    background: rgba(18, 18, 28, 0.88);
+    backdrop-filter: blur(var(--blur));
+    -webkit-backdrop-filter: blur(var(--blur));
+    border: 1px solid var(--glass-border-hover);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    color: var(--text-1);
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.3;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 120ms ease, transform 120ms ease;
+    z-index: 10;
+}
+
+.volume-popover::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -4px;
+    border: 4px solid transparent;
+    border-top-color: rgba(18, 18, 28, 0.88);
+}
+
+.volume-popover.visible {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+
+/* The mini player window is too short for the popover and collapses its slider. */
+body.mini-mode .volume-popover {
+    display: none !important;
+}
+
 /* Effect speed slider */
 #effect-speed-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
@@ -2434,7 +2483,7 @@ body.mini-mode .stream-dialog-actions button { padding: 8px 10px; border-radius:
    Settings / Theme Picker
    ============================================================================ */
 
-.discord-setting {
+.discord-setting, .setting-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -2446,10 +2495,10 @@ body.mini-mode .stream-dialog-actions button { padding: 8px 10px; border-radius:
     background: var(--glass);
 }
 
-.discord-setting-label { font-size: 14px; font-weight: 600; cursor: pointer; }
-.discord-setting-description { margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: var(--text-2); }
+.discord-setting-label, .setting-label { font-size: 14px; font-weight: 600; cursor: pointer; }
+.discord-setting-description, .setting-help { margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: var(--text-2); }
 .discord-setting-status { margin: 8px 0 0; font-size: 12px; line-height: 1.4; color: var(--text-3); }
-.discord-sharing-toggle {
+.discord-sharing-toggle, .setting-toggle {
     appearance: none;
     flex: 0 0 36px;
     width: 36px;
@@ -2461,7 +2510,7 @@ body.mini-mode .stream-dialog-actions button { padding: 8px 10px; border-radius:
     cursor: pointer;
     position: relative;
 }
-.discord-sharing-toggle::after {
+.discord-sharing-toggle::after, .setting-toggle::after {
     content: '';
     position: absolute;
     width: 12px;
@@ -2472,10 +2521,10 @@ body.mini-mode .stream-dialog-actions button { padding: 8px 10px; border-radius:
     background: var(--text-2);
     transition: transform 120ms ease;
 }
-.discord-sharing-toggle:checked { background: var(--accent); border-color: var(--accent); }
-.discord-sharing-toggle:checked::after { transform: translateX(16px); background: white; }
-.discord-sharing-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
-.discord-sharing-toggle:disabled { opacity: 0.5; cursor: default; }
+.discord-sharing-toggle:checked, .setting-toggle:checked { background: var(--accent); border-color: var(--accent); }
+.discord-sharing-toggle:checked::after, .setting-toggle:checked::after { transform: translateX(16px); background: white; }
+.discord-sharing-toggle:focus-visible, .setting-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.discord-sharing-toggle:disabled, .setting-toggle:disabled { opacity: 0.5; cursor: default; }
 
 .settings-section {
     padding: 8px 0;

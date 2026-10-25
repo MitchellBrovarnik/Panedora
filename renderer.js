@@ -261,6 +261,7 @@ const DOM = {
     totalTime: document.getElementById('total-time'),
     volumeSlider: document.getElementById('volume-slider'),
     volumeBtn: document.getElementById('volume-btn'),
+    volumePopover: document.getElementById('volume-popover'),
     navItems: document.querySelectorAll('.nav-item')
 };
 
@@ -1237,6 +1238,16 @@ function renderSettingsPage() {
     DOM.pageContent.innerHTML = `
     <div class="fade-in" style="display: flex; flex-direction: column; gap: 32px;">
       <section class="settings-section">
+        <h2 class="section-title">Panedora Settings</h2>
+        <div class="setting-row">
+          <div>
+            <label class="setting-label" for="remember-volume-toggle">Remember volume</label>
+            <p class="setting-help" id="remember-volume-description">Restore the volume level the next time Panedora opens. If it was set to 0%, Panedora reopens at 25%.</p>
+          </div>
+          <input class="setting-toggle" id="remember-volume-toggle" type="checkbox" role="switch" aria-describedby="remember-volume-description">
+        </div>
+      </section>
+      <section class="settings-section">
         <h2 class="section-title">Discord</h2>
         <div class="discord-setting">
           <div>
@@ -1279,6 +1290,25 @@ function renderSettingsPage() {
         <div class="theme-grid" style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));">${lyricsStyleButtons}</div>
       </section>
     </div>`;
+
+    const rememberToggle = document.getElementById('remember-volume-toggle');
+    rememberToggle.checked = rememberVolume;
+    rememberToggle.addEventListener('change', async event => {
+        if (volumeSettingPending) { event.target.checked = rememberVolume; return; }
+        volumeSettingPending = true;
+        rememberToggle.disabled = true;
+        try {
+            const saved = await window.api.settings.setRememberVolume(event.target.checked, currentVolume);
+            if (!saved) throw new Error('Volume setting was not saved');
+            rememberVolume = saved.remember === true;
+        } catch {
+            showErrorToast('Could not save the volume setting. Please try again.');
+        } finally {
+            volumeSettingPending = false;
+            rememberToggle.checked = rememberVolume;
+            rememberToggle.disabled = false;
+        }
+    });
 
     renderDiscordSettings();
     document.getElementById('discord-sharing-toggle').addEventListener('change', async event => {
@@ -2174,6 +2204,83 @@ function updatePlayerUI(state) {
     }
 }
 
+// ============================================================================
+// Volume
+// ============================================================================
+
+const VOLUME_THUMB_PX = 11; // matches .volume-slider::-webkit-slider-thumb
+const VOLUME_POPOVER_LINGER_MS = 700;
+const VOLUME_POPOVER_RELEASE_MS = 250;
+let currentVolume = 100;
+let rememberVolume = false;
+let volumeSettingPending = false;
+let volumeScrubbing = false;
+let volumePopoverTimer = null;
+
+function clampVolumePercent(value) {
+    const percent = Math.round(Number(value));
+    return Number.isFinite(percent) ? Math.min(100, Math.max(0, percent)) : 100;
+}
+
+// Once the visualizer's gain node exists it owns the volume (so the bars keep
+// their full height) and the element stays at 1.0. Before that, the element does.
+function applyVolume(percent, audioEl = document.querySelector('audio')) {
+    currentVolume = clampVolumePercent(percent);
+    const volume = currentVolume / 100;
+    DOM.volumeSlider.value = String(currentVolume);
+    if (window.visualizer && window.visualizer.audioContext) {
+        window.visualizer.setVolume(volume);
+        if (audioEl) audioEl.volume = 1.0;
+    } else if (audioEl) {
+        audioEl.volume = volume;
+    }
+}
+
+function saveVolume() {
+    if (!rememberVolume) return;
+    try {
+        Promise.resolve(window.api.settings?.saveVolume(currentVolume)).catch(() => {});
+    } catch { /* A missed save only means the last level is not remembered. */ }
+}
+
+// Restore the remembered level before any audio exists. The audio element and
+// visualizer pick it up when they are created.
+async function loadVolumeSettings() {
+    try {
+        const saved = await window.api.settings?.getVolume();
+        if (saved?.remember === true) {
+            rememberVolume = true;
+            applyVolume(saved.volume);
+        }
+    } catch (error) {
+        console.warn('[UI] Could not load the saved volume:', error);
+    }
+}
+
+// The percentage bubble follows the slider thumb and shows only while it is adjusted.
+function showVolumePopover() {
+    const popover = DOM.volumePopover;
+    if (!popover) return;
+    clearTimeout(volumePopoverTimer);
+    volumePopoverTimer = null;
+    const slider = DOM.volumeSlider;
+    const travel = Math.max(0, slider.offsetWidth - VOLUME_THUMB_PX);
+    popover.textContent = `${currentVolume}%`;
+    popover.style.left = `${slider.offsetLeft + VOLUME_THUMB_PX / 2 + (currentVolume / 100) * travel}px`;
+    popover.classList.add('visible');
+}
+
+function hideVolumePopover(delay = 0) {
+    clearTimeout(volumePopoverTimer);
+    volumePopoverTimer = null;
+    if (!DOM.volumePopover) return;
+    if (delay > 0) volumePopoverTimer = setTimeout(() => {
+        volumePopoverTimer = null;
+        DOM.volumePopover.classList.remove('visible');
+    }, delay);
+    else DOM.volumePopover.classList.remove('visible');
+}
+
 let feedbackPending = false;
 async function handleThumb(isPositive) {
     if (feedbackPending || !AppState.playerState.trackToken || !rateLimitOk('thumb')) return;
@@ -2395,18 +2502,27 @@ function initEventListeners() {
 
     // Volume
     DOM.volumeSlider.addEventListener('input', (e) => {
-        const vol = parseInt(e.target.value) / 100;
-        window.api.player.setVolume(parseInt(e.target.value));
-
-        // Let the WebAudio visualizer handle volume so bars stay full height, otherwise fallback to audio element
-        const audioEl = document.querySelector('audio');
-        if (window.visualizer && window.visualizer.audioContext) {
-            window.visualizer.setVolume(vol);
-            if (audioEl) audioEl.volume = 1.0; // Ensure node signal isn't attenuated
-        } else {
-            if (audioEl) audioEl.volume = vol;
-        }
+        const percent = parseInt(e.target.value);
+        window.api.player.setVolume(percent);
+        applyVolume(percent);
+        showVolumePopover();
+        // Keyboard changes have no release event, so let the popover fade on its own.
+        if (!volumeScrubbing) hideVolumePopover(VOLUME_POPOVER_LINGER_MS);
     });
+    // 'change' fires once when the drag is released (or after a keyboard step).
+    DOM.volumeSlider.addEventListener('change', saveVolume);
+    DOM.volumeSlider.addEventListener('pointerdown', () => {
+        volumeScrubbing = true;
+        showVolumePopover();
+    });
+    DOM.volumeSlider.addEventListener('blur', () => hideVolumePopover());
+    for (const event of ['pointerup', 'pointercancel']) {
+        document.addEventListener(event, () => {
+            if (!volumeScrubbing) return;
+            volumeScrubbing = false;
+            hideVolumePopover(VOLUME_POPOVER_RELEASE_MS);
+        }, true);
+    }
 
     const lyricsBtn = document.getElementById('lyrics-btn');
     if (lyricsBtn) {
@@ -2576,6 +2692,7 @@ function initAPIListeners() {
 
                 currentAudio = document.createElement('audio');
                 document.body.appendChild(currentAudio);
+                applyVolume(currentVolume, currentAudio);
 
                 // Presence observes audio events; it never controls playback or waits on Discord.
                 for (const event of ['pause', 'ended', 'error', 'emptied', 'waiting', 'seeking']) {
@@ -2976,6 +3093,7 @@ async function init() {
 
     initEventListeners();
     initAPIListeners();
+    await loadVolumeSettings();
 
     // Request initial data
     await window.api.init();
