@@ -328,7 +328,9 @@ test('the classic progress bar mirrors the footer bar and seeks the same way', t
     s.ui.update({ duration: 200, time: 0 });
     const click = (bar, x) => {
         bar.getBoundingClientRect = () => ({ left: 0, width: 200, right: 200, top: 0, bottom: 3, height: 3 });
-        bar.dispatchEvent(new s.window.MouseEvent('click', { bubbles: true, clientX: x }));
+        for (const type of ['pointerdown', 'pointerup']) {
+            bar.dispatchEvent(new s.window.MouseEvent(type, { bubbles: true, cancelable: true, clientX: x }));
+        }
     };
     click(s.node('classic-progress-bar'), 50);
     click(s.node('progress-bar'), 150);

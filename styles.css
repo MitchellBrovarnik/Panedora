@@ -314,7 +314,7 @@ body.classic-mini .classic-player {
 .classic-volume-slider,
 .classic-history,
 .classic-controls button,
-.classic-progress .progress-bar {
+.classic-progress {
     -webkit-app-region: no-drag;
 }
 
@@ -1754,9 +1754,24 @@ body::before {
     cursor: pointer;
     position: relative;
     transition: height 150ms var(--ease);
+    /* Dragging must not scroll the page or select text. */
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
-.progress-bar:hover {
+/* The bar is only 3px tall; an invisible band around it makes it easy to grab. */
+.progress-bar::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -6px;
+    bottom: -6px;
+}
+
+.progress-bar:hover,
+.progress-bar.scrubbing {
     height: 5px;
 }
 
@@ -1768,7 +1783,13 @@ body::before {
     position: relative;
 }
 
-.progress-bar:hover .progress-fill::after {
+/* The fill must follow the pointer exactly while dragging. */
+.progress-bar.scrubbing .progress-fill {
+    transition: none;
+}
+
+.progress-bar:hover .progress-fill::after,
+.progress-bar.scrubbing .progress-fill::after {
     content: '';
     position: absolute;
     right: -5px;
