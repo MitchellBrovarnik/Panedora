@@ -1892,8 +1892,9 @@ function renderUpdateNotice() {
     if (!updateNotice || blocked) {
         return;
     }
+    document.getElementById('update-current-version').textContent = updateNotice.currentVersion;
     document.getElementById('update-available-version').textContent = updateNotice.version;
-    document.getElementById('update-available-version').hidden = updateNotice.pending;
+    document.getElementById('update-version-range').hidden = updateNotice.pending;
     document.getElementById('update-message').title = `Available: ${updateNotice.version}. Installed: ${updateNotice.currentVersion}.`;
     document.getElementById('update-error').textContent = updateNotice.error || '';
     document.getElementById('update-error').hidden = !updateNotice.error;

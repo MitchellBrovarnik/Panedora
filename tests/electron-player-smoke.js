@@ -639,9 +639,12 @@ app.whenReady().then(async () => {
     await run('document.fonts.ready');
     assert.equal(await run("document.fonts.check('16px Inter')"), true, 'App uses the bundled font');
     assert.equal(await run("document.querySelector('dialog[open]') === null && !document.getElementById('update-banner').contains(document.activeElement)"), true, 'Update banner does not open a modal or take focus');
+    assert.equal(await run("document.getElementById('update-current-version').textContent"), app.getVersion());
     assert.equal(await run("document.getElementById('update-available-version').textContent"), '99.0.0');
+    assert.equal(await run("document.getElementById('update-version-range').textContent"), `${app.getVersion()} → 99.0.0`);
     assert.equal(await run("document.getElementById('update-banner').getBoundingClientRect().width <= 390 && document.getElementById('update-banner').getBoundingClientRect().height < 50"), true, 'Update pill remains compact');
     assert.equal(await run("document.getElementById('update-banner').scrollHeight <= document.getElementById('update-banner').clientHeight"), true, 'Update banner has no clipping or scrolling');
+    assert.equal(await run("document.getElementById('update-message').scrollWidth <= document.getElementById('update-message').clientWidth"), true, 'Installed and available versions are fully visible');
     assert.equal(await run("(() => { const pill = document.getElementById('update-banner').getBoundingClientRect(); const main = document.querySelector('.main-content').getBoundingClientRect(); const header = getComputedStyle(document.getElementById('main-header')); return Math.abs((pill.left + pill.right - main.left - main.right) / 2) < 1 && header.backgroundColor === 'rgba(0, 0, 0, 0)' && header.borderBottomWidth === '0px'; })()"), true, 'Update pill is centered without a full-width background or divider');
     win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
     win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
@@ -662,6 +665,7 @@ app.whenReady().then(async () => {
     win.setSize(900, 600);
     await waitFor(() => run('innerWidth === 900'), 'minimum app window');
     assert.equal(await run("(() => { const pill = document.getElementById('update-banner').getBoundingClientRect(); const search = document.getElementById('search-container').getBoundingClientRect(); const header = document.getElementById('main-header').getBoundingClientRect(); return Math.abs((pill.left + pill.right - header.left - header.right) / 2) < 1 && pill.left >= search.right && search.width > 150 && pill.right <= header.right && pill.top >= header.top && pill.bottom <= header.bottom && document.documentElement.scrollWidth <= innerWidth; })()"), true, 'Pill stays centered and search fits the minimum window without overlap or horizontal scrolling');
+    assert.equal(await run("document.getElementById('update-message').scrollWidth <= document.getElementById('update-message').clientWidth"), true, 'Both versions remain fully visible at the minimum window size');
     assert.equal(await run('document.activeElement.id'), 'search-input', 'Search remains focused with the banner visible');
     await capture('update-banner-search-small');
     win.setSize(1200, 800);
