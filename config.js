@@ -177,6 +177,15 @@ function clampVolume(value) {
     return Math.min(100, Math.max(0, Math.round(value)));
 }
 
+// A window rectangle with whole-number, finite coordinates and a positive size, or null.
+function validBounds(bounds) {
+    if (!bounds || typeof bounds !== 'object') return null;
+    const { x, y, width, height } = bounds;
+    if (![x, y, width, height].every(value => typeof value === 'number' && Number.isFinite(value))) return null;
+    if (width <= 0 || height <= 0) return null;
+    return { x: Math.round(x), y: Math.round(y), width: Math.round(width), height: Math.round(height) };
+}
+
 function restoredVolume(value) {
     const volume = clampVolume(value);
     if (volume === null) return DEFAULT_VOLUME;
@@ -240,6 +249,14 @@ module.exports = {
         const value = clampVolume(volume);
         if (value !== null) setConfig('volume', value);
     },
+
+    // Optional classic (album-art-first) mini player; default is the wide mini player.
+    getLegacyMiniplayer: () => getConfig().legacyMiniplayer === true,
+    setLegacyMiniplayer: enabled => setConfig('legacyMiniplayer', enabled === true),
+
+    // Where the classic mini player was last left (position and size). Null until it is moved.
+    getClassicMiniBounds: () => validBounds(getConfig().classicMiniBounds),
+    setClassicMiniBounds: bounds => setConfig('classicMiniBounds', validBounds(bounds)),
 
     // Auth Token (from login response)
     getAuthToken: () => getConfig().authToken,

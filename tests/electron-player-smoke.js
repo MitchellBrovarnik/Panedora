@@ -428,6 +428,228 @@ app.whenReady().then(async () => {
         win.setSize(...fullSize);
         console.log(`Mini-player layout and marquee clipping passed at 540/680/799/800/900px: wide playback centered, horizontal thumbs beside bounded text, volume expansion stable, native mini size limited to 540–900px by 80px, full size constraints restored; removing the clip reproduced ${oldOverlap} artwork pixels.`);
     }
+    async function exerciseClassicMiniplayer() {
+        const minHeight = 500; // Content needs exactly 500px: 12px margins around every row.
+        const fullSize = win.getSize();
+        const saved = await run('JSON.parse(JSON.stringify(AppState.playerState))');
+        const savedEffect = await run('AppState.currentEffect');
+        const track = 'A Song Title Long Enough To Need Truncating In A Narrow Window';
+        const history = [
+            { trackToken: 'classic-h1', songTitle: 'First song', artistName: 'First artist', feedback: null },
+            { trackToken: 'classic-h2', songTitle: 'Second song', artistName: 'Second artist', feedback: 'liked' },
+            { trackToken: 'classic-now', songTitle: track, artistName: 'Current artist' }
+        ];
+        const box = selector => run(`(() => {
+            const r = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();
+            return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height,
+                center: (r.left + r.right) / 2 };
+        })()`);
+
+        // The classic player is opt-in: the default setting keeps the wide mini player.
+        assert.equal(await run('window.api.settings.getLegacyMiniplayer()'), false, 'Legacy miniplayer is off by default');
+        assert.equal(await run('window.api.settings.setLegacyMiniplayer(true)'), true);
+        await run(`renderPage('home'); updatePlayerUI({ trackToken: 'classic-now', track: ${JSON.stringify(track)},
+            artist: 'Current artist', album: 'Current album', isPlaying: true, feedback: 'thumbUp', history: ${JSON.stringify(history)} });
+            applyBgEffect('reactive-bars'); window.api.window.toggleMini()`);
+        await waitFor(() => run("document.body.classList.contains('classic-mini')"), 'classic mini player');
+        assert.deepEqual(win.getSize(), [280, minHeight], 'The classic player opens at its minimum size');
+        assert.deepEqual(win.getMinimumSize(), [280, minHeight]);
+        assert.equal(await run("document.body.classList.contains('mini-mode')"), true);
+        assert.equal(await run("getComputedStyle(document.querySelector('.player-footer')).display"), 'none',
+            'The wide mini player footer is replaced');
+
+        // Layout at the minimum size: 12px margins, a 256px cover, frosted details, progress, controls and the button row.
+        await run('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+        const near = (actual, expected, message) => assert.ok(Math.abs(actual - expected) <= 1, `${message}: ${actual} vs ${expected}`);
+        const art = await box('#classic-art');
+        near(art.width, 256, 'cover width'); near(art.height, 256, 'cover height');
+        near(art.top, 12, 'cover top margin'); near(art.left, 12, 'cover left margin');
+        near(280 - art.right, 12, 'cover right margin');
+        const info = await box('.classic-info');
+        near(info.left, art.left, 'details box lines up with the cover (left)');
+        near(info.right, art.right, 'details box lines up with the cover (right)');
+        near(info.top - art.bottom, 12, 'margin between cover and details');
+        const lines = {};
+        for (const name of ['artist', 'track', 'album']) lines[name] = await box('#classic-' + name);
+        const fonts = await run(`Object.fromEntries(['artist', 'track', 'album'].map(name => {
+            const style = getComputedStyle(document.getElementById('classic-' + name));
+            return [name, [style.fontSize, style.fontWeight, style.textAlign]];
+        }))`);
+        assert.deepEqual(fonts, { artist: ['16px', '400', 'center'], track: ['16px', '700', 'center'], album: ['16px', '400', 'center'] },
+            '12pt centered text: artist and album normal, track bold');
+        const glass = await run(`(() => {
+            const info = getComputedStyle(document.querySelector('.classic-info'));
+            const footer = getComputedStyle(document.querySelector('.player-footer'));
+            // The footer is hidden, so compare with the full player's declared glass values.
+            const root = getComputedStyle(document.documentElement);
+            return { background: info.backgroundColor, glass: root.getPropertyValue('--glass').trim(),
+                blur: info.backdropFilter, blurValue: root.getPropertyValue('--blur').trim(),
+                border: info.borderTopColor, borderValue: root.getPropertyValue('--glass-border').trim(),
+                footerBlur: footer.backdropFilter };
+        })()`);
+        assert.equal(glass.blur, `blur(${parseFloat(glass.blurValue) + 2}px)`, 'The full player blur plus 2px');
+        // Chromium stores alpha in 8 bits, so 0.045 reads back as 0.043.
+        const alpha = value => parseFloat(value.replace(/\s/g, '').split(',')[3]);
+        assert.ok(glass.background.startsWith('rgba(255, 255, 255,') && Math.abs(alpha(glass.background) - alpha(glass.glass)) < 0.003,
+            'Uses the full player glass color: ' + JSON.stringify(glass));
+        assert.ok(glass.border.replace(/\s/g, '').startsWith('rgba(255,255,255,0.07'), 'Uses the full player glass border');
+        const tint = await run(`(() => { const s = getComputedStyle(document.querySelector('.classic-info'));
+            return { image: s.backgroundImage, color: s.backgroundColor }; })()`);
+        assert.match(tint.image, /linear-gradient\(rgba\(8, 8, 12, 0\.16/, 'A light smoky tint darkens the glass');
+        assert.ok(tint.color.startsWith('rgba(255, 255, 255,'), 'The full player glass colour is still underneath');
+        const timeAlpha = await run(`parseFloat(getComputedStyle(document.getElementById('classic-current-time')).color.split(',')[3])`);
+        assert.ok(timeAlpha >= 0.7, 'Times are easier to read than the full player\u2019s faint labels: ' + timeAlpha);
+        assert.ok(lines.artist.top >= info.top && lines.track.top >= lines.artist.bottom - 1 &&
+            lines.album.top >= lines.track.bottom - 1 && lines.album.bottom <= info.bottom, 'Artist, track and album stack inside the details box');
+        near(lines.artist.center, info.center, 'text is centered in the box');
+        assert.equal(await run("document.getElementById('classic-track').scrollWidth > document.getElementById('classic-track').clientWidth"),
+            true, 'A long title is truncated, not wrapped');
+        const progress = await box('.classic-progress');
+        near(progress.top - info.bottom, 12, 'margin between details and progress bar');
+        near(progress.width, 256, 'progress row lines up with the cover');
+        const controls = await box('.classic-controls');
+        near(controls.center, 140, 'play controls are centered');
+        near(controls.top - progress.bottom, 12, 'margin between progress bar and controls');
+        const barStyle = await run(`(() => {
+            const classic = getComputedStyle(document.getElementById('classic-progress-bar'));
+            const footer = document.getElementById('progress-bar');
+            const fill = getComputedStyle(document.getElementById('classic-progress-fill'));
+            return { height: classic.height, background: classic.backgroundColor, radius: classic.borderTopLeftRadius,
+                fill: fill.backgroundImage.slice(0, 15), sameClass: footer.className === document.getElementById('classic-progress-bar').className };
+        })()`);
+        assert.equal(barStyle.sameClass, true, 'Same progress bar class as the full player');
+        assert.equal(barStyle.height, '3px');
+        assert.ok(barStyle.fill.startsWith('linear-gradient'), 'Same accent gradient fill as the full player');
+        // The bar mirrors the footer's position and times, and a click seeks like the footer bar.
+        await run(`DOM.progressFill.style.width = '40%'; DOM.currentTime.textContent = '1:23'; DOM.totalTime.textContent = '3:30'; syncClassicProgress()`);
+        assert.deepEqual(await run(`[document.getElementById('classic-progress-fill').style.width,
+            document.getElementById('classic-current-time').textContent, document.getElementById('classic-total-time').textContent,
+            document.getElementById('classic-progress-bar').getAttribute('aria-valuenow')]`), ['40%', '1:23', '3:30', '40']);
+        // Prev/play/next are the full player's controls, so they follow the colour theme.
+        const controlStyle = () => run(`(() => {
+            const classic = getComputedStyle(document.getElementById('classic-play'));
+            const footer = getComputedStyle(document.getElementById('play-pause-btn'));
+            const prev = document.getElementById('classic-prev').getBoundingClientRect();
+            const play = document.getElementById('classic-play').getBoundingClientRect();
+            return { classic: classic.backgroundImage, footer: footer.backgroundImage, glow: classic.boxShadow,
+                play: [play.width, play.height], prev: [prev.width, prev.height],
+                playClass: document.getElementById('classic-play').className, prevClass: document.getElementById('classic-prev').className };
+        })()`);
+        const themed = await controlStyle();
+        assert.equal(themed.playClass, 'play-pause-btn');
+        assert.equal(themed.prevClass, 'control-btn');
+        assert.deepEqual([themed.play, themed.prev], [[40, 40], [32, 32]], 'Same sizes as the full player');
+        assert.equal(themed.classic, themed.footer);
+        assert.ok(themed.classic.startsWith('linear-gradient') && themed.glow !== 'none', 'Accent gradient and glow');
+        const otherTheme = await run("Object.keys(THEMES).find(id => id !== (AppState.currentTheme || localStorage.getItem('panedora-theme') || 'midnight'))");
+        const originalTheme = await run("AppState.currentTheme || localStorage.getItem('panedora-theme') || 'midnight'");
+        await run(`applyTheme(${JSON.stringify(otherTheme)})`);
+        const recoloured = await controlStyle();
+        assert.notEqual(recoloured.classic, themed.classic, 'The play button changes with the colour theme');
+        assert.equal(recoloured.classic, recoloured.footer);
+        await run(`applyTheme(${JSON.stringify(originalTheme)})`);
+        const bottom = await box('.classic-bottom');
+        const thumbs = await box('.classic-thumbs');
+        const center = await box('.classic-center');
+        const volume = await box('.classic-volume');
+        const sizes = await run(`({ thumb: document.getElementById('classic-thumb-up').getBoundingClientRect().width,
+            expand: document.getElementById('classic-expand').getBoundingClientRect().width,
+            history: document.getElementById('classic-history-btn').getBoundingClientRect().width })`);
+        assert.ok(sizes.expand > 28 && sizes.expand <= 34, 'Centre buttons are a touch bigger than before: ' + sizes.expand);
+        assert.ok(sizes.thumb > sizes.expand && sizes.thumb <= 42, 'Thumbs are larger than the other buttons, but not huge: ' + sizes.thumb);
+        assert.ok(bottom.top - controls.bottom >= 12 - 1, 'Controls keep their margin above the button row');
+        near(thumbs.left, 12, 'thumbs sit at the left'); near(volume.right, 268, 'volume sits at the right');
+        near(center.center, 140, 'mini and history buttons are centered');
+        // Every icon is vertically centred on the row (the mini-player icon used to sit too high).
+        const iconOffsets = await run(`(() => {
+            const row = document.querySelector('.classic-bottom').getBoundingClientRect();
+            const rowCenter = row.top + row.height / 2;
+            const offsets = {};
+            const icons = { thumbUp: '#classic-thumb-up svg', thumbDown: '#classic-thumb-down svg', miniPlayer: '#classic-expand svg',
+                history: '#classic-history-btn svg', volume: '.classic-volume-icon' };
+            for (const [name, selector] of Object.entries(icons)) {
+                const svg = document.querySelector(selector);
+                const rect = svg.getBoundingClientRect();
+                const content = svg.getBBox();
+                offsets[name] = +(rect.top + (content.y + content.height / 2) * rect.height / 24 - rowCenter).toFixed(2);
+            }
+            return offsets;
+        })()`);
+        for (const [name, offset] of Object.entries(iconOffsets)) {
+            assert.ok(Math.abs(offset) <= 0.75, `${name} icon is centred on the button row: ${JSON.stringify(iconOffsets)}`);
+        }
+        assert.equal(await run("document.getElementById('classic-history-btn').title"), 'History');
+        assert.equal(await run("document.querySelector('#classic-history-btn svg path').getAttribute('d').startsWith('M5.07 16A8 8')"), true,
+            'History uses the backwards-arrow clock');
+        assert.ok(thumbs.right <= center.left && center.right <= volume.left, 'Thumbs, centre buttons and volume do not overlap');
+        assert.ok(bottom.bottom <= minHeight - 12 + 1, `Everything fits inside ${minHeight}px with the margin kept: ${bottom.bottom}`);
+        assert.equal(await run("document.getElementById('classic-thumb-up').classList.contains('liked')"), true,
+            'A thumbed song is shown the same way as in the wide mini player');
+        assert.equal(await run("document.getElementById('classic-play').getAttribute('aria-label')"), 'Pause');
+        // The visualizer still fills the window behind the controls.
+        const canvas = await box('#reactive-canvas');
+        near(canvas.width, 280, 'visualizer canvas width'); near(canvas.height, minHeight, 'visualizer canvas height');
+        await capture('classic-mini');
+
+        // History replaces the cover and keeps the full player's rows and thumbs.
+        await run("document.getElementById('classic-history-btn').click()");
+        assert.equal(await run("document.getElementById('classic-history').hidden"), false);
+        assert.equal(await run("document.getElementById('classic-history-btn').getAttribute('aria-expanded')"), 'true');
+        assert.equal(await run("document.querySelectorAll('#classic-history .history-item').length"), 2,
+            'The playing song is not part of its own history');
+        assert.equal(await run("document.querySelectorAll('#classic-history .history-thumb-btn').length"), 4);
+        assert.equal(await run("document.querySelector('#classic-history .history-thumb-up.liked') !== null"), true);
+        const panel = await box('#classic-history');
+        assert.ok(panel.top >= 11 && panel.bottom <= progress.top + 1 && panel.width >= 250, 'History fills the cover and details area');
+        await capture('classic-mini-history');
+        await run("document.getElementById('classic-history-btn').click()");
+        assert.equal(await run("document.getElementById('classic-history').hidden"), true);
+
+        // Freely resizable above the minimum; the layout stays centered with the button row pinned low.
+        win.setSize(200, 300);
+        await waitFor(() => win.getSize()[0] === 280 && win.getSize()[1] === minHeight, 'classic player cannot shrink below its minimum size');
+        win.setSize(420, 760);
+        await waitFor(() => win.getSize()[0] === 420 && win.getSize()[1] === 760, 'classic player can be resized larger');
+        await run('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+        const wideArt = await box('#classic-art');
+        near(wideArt.width, 256, 'cover keeps its size'); near(wideArt.center, 210, 'cover stays centered');
+        near((await box('.classic-bottom')).bottom, 760 - 12, 'button row stays at the bottom margin');
+        await capture('classic-mini-large');
+        win.setSize(280, minHeight);
+        await waitFor(() => win.getSize()[0] === 280 && win.getSize()[1] === minHeight, 'classic minimum size');
+
+        // It remembers where it was left: move it, leave, and come back.
+        win.setPosition(120, 90);
+        await waitFor(() => {
+            const saved = require('../config').getClassicMiniBounds();
+            return saved && saved.x === 120 && saved.y === 90;
+        }, 'classic player position saved after moving it');
+        assert.deepEqual(require('../config').getClassicMiniBounds(), { x: 120, y: 90, width: 280, height: minHeight });
+
+        // Back to the full player from the classic controls.
+        await run("document.getElementById('classic-expand').click()");
+        await waitFor(() => run("!document.body.classList.contains('mini-mode')"), 'leaving the classic player');
+        assert.equal(await run("document.body.classList.contains('classic-mini')"), false);
+        await waitFor(() => !win.webContents.isLoading() && win.getSize()[1] === fullSize[1], 'full-player size restored');
+        assert.deepEqual(win.getSize(), fullSize);
+        assert.deepEqual(win.getMinimumSize(), [900, 600]);
+        await run('window.api.window.toggleMini()');
+        await waitFor(() => run("document.body.classList.contains('classic-mini')"), 'classic player reopened');
+        assert.deepEqual(win.getBounds(), { x: 120, y: 90, width: 280, height: minHeight }, 'The classic player reopens where it was left');
+        await run("document.getElementById('classic-expand').click()");
+        await waitFor(() => run("!document.body.classList.contains('mini-mode')"), 'leaving the reopened classic player');
+        await waitFor(() => !win.webContents.isLoading() && win.getSize()[1] === fullSize[1], 'full-player size restored after reopening');
+
+        // Turning the setting off restores the wide mini player.
+        assert.equal(await run('window.api.settings.setLegacyMiniplayer(false)'), false);
+        await run('window.api.window.toggleMini()');
+        await waitFor(() => run("document.body.classList.contains('mini-mode')"), 'wide mini player');
+        assert.equal(await run("document.body.classList.contains('classic-mini')"), false);
+        assert.deepEqual(win.getSize(), [540, 80]);
+        await run(`window.api.window.toggleMini(); applyBgEffect(${JSON.stringify(savedEffect)}); updatePlayerUI(${JSON.stringify(saved)})`);
+        await waitFor(() => !win.webContents.isLoading() && win.getSize()[1] === fullSize[1], 'full-player size restored again');
+        console.log('Classic mini player passed: opt-in setting, 280x' + minHeight + ' minimum with free resizing, 256px cover with 12px margins, frosted centered 12pt artist/track/album box, full-player progress bar, centered controls, enlarged thumbs/history/volume row, history view, background visualizer canvas, and return to the full and wide mini players.');
+    }
     async function exerciseQueuedPlayback() {
         // The cover must load directly in the visible player, without waiting
         // for a hidden probe and then starting a second image load.
@@ -1057,6 +1279,7 @@ app.whenReady().then(async () => {
     assert.equal(calls.some(c => ['fonts.googleapis.com', 'fonts.gstatic.com', 'unpkg.com'].includes(c.host)), false, 'App and website make no external font or icon requests');
     site.close();
     await exerciseMiniMarqueeClipping();
+    await exerciseClassicMiniplayer();
     await exerciseQueuedPlayback();
     await exerciseNaturalMiniArtwork();
     await exerciseAudioRecovery();

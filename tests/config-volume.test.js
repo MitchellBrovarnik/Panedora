@@ -83,3 +83,42 @@ test('the volume preference lives with the other installation settings and survi
     assert.equal(stored.rememberVolume, true);
     assert.equal(stored.volume, 35);
 });
+
+test('the legacy miniplayer is opt-in, strictly boolean, and survives sign-out', t => {
+    const reopen = setup(t);
+    assert.equal(reopen().getLegacyMiniplayer(), false);
+    const config = reopen();
+    config.setLegacyMiniplayer(true);
+    assert.equal(reopen().getLegacyMiniplayer(), true);
+    config.clearAll();
+    assert.equal(reopen().getLegacyMiniplayer(), true);
+    config.setLegacyMiniplayer('true');
+    assert.equal(reopen().getLegacyMiniplayer(), false, 'Only a literal true enables it');
+    config.setLegacyMiniplayer(true);
+    config.setLegacyMiniplayer(false);
+    assert.equal(reopen().getLegacyMiniplayer(), false);
+    assert.equal(JSON.parse(fs.readFileSync(reopen.file, 'utf8')).legacyMiniplayer, false);
+    // Independent of the volume preference stored beside it.
+    reopen().setRememberVolume(true, 40);
+    reopen().setLegacyMiniplayer(true);
+    assert.deepEqual(settings(reopen()), { remember: true, volume: 40 });
+    assert.equal(reopen().getLegacyMiniplayer(), true);
+});
+
+test('the classic mini player\u2019s position is remembered, validated and independent of other settings', t => {
+    const reopen = setup(t);
+    assert.equal(reopen().getClassicMiniBounds(), null);
+    const bounds = { x: 120.4, y: -30, width: 301.6, height: 640 };
+    reopen().setClassicMiniBounds(bounds);
+    assert.deepEqual({ ...reopen().getClassicMiniBounds() }, { x: 120, y: -30, width: 302, height: 640 });
+    reopen().clearAll();
+    assert.deepEqual({ ...reopen().getClassicMiniBounds() }, { x: 120, y: -30, width: 302, height: 640 }, 'Survives sign-out');
+    for (const bad of [null, undefined, 'x', {}, { x: 1, y: 2, width: 0, height: 5 }, { x: 1, y: 2, width: 5, height: -1 },
+        { x: NaN, y: 2, width: 5, height: 5 }, { x: '1', y: 2, width: 5, height: 5 }, { x: 1, y: 2, width: Infinity, height: 5 }]) {
+        reopen().setClassicMiniBounds(bad);
+        assert.equal(reopen().getClassicMiniBounds(), null, JSON.stringify(bad));
+    }
+    reopen().setClassicMiniBounds(bounds);
+    fs.writeFileSync(reopen.file, JSON.stringify({ classicMiniBounds: { x: 1, y: 2, width: 'wide', height: 5 } }));
+    assert.equal(reopen().getClassicMiniBounds(), null, 'A corrupt stored value is ignored');
+});

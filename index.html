@@ -249,6 +249,85 @@
         </footer>
     </div>
 
+    <!-- Classic mini player: shown instead of the wide mini player when "Use legacy miniplayer" is on -->
+    <div class="classic-player" id="classic-player" aria-label="Mini player">
+        <div class="classic-stage">
+            <div class="classic-now" id="classic-now">
+                <img class="classic-art" id="classic-art" width="256" height="256" alt="Album art"
+                    src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Crect fill='%23282828' width='256' height='256'/%3E%3C/svg%3E">
+                <div class="classic-info">
+                    <span class="classic-artist" id="classic-artist"></span>
+                    <span class="classic-track" id="classic-track">Not Playing</span>
+                    <span class="classic-album" id="classic-album"></span>
+                </div>
+            </div>
+            <section class="classic-history" id="classic-history" aria-label="Recently played" hidden></section>
+        </div>
+
+        <div class="classic-progress">
+            <span class="progress-time" id="classic-current-time">0:00</span>
+            <div class="progress-bar" id="classic-progress-bar" role="progressbar" aria-label="Song progress"
+                aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                <div class="progress-fill" id="classic-progress-fill" style="width: 0%"></div>
+            </div>
+            <span class="progress-time" id="classic-total-time">0:00</span>
+        </div>
+
+        <div class="classic-controls">
+            <!-- Same control styles as the full player, so they follow the color theme -->
+            <button class="control-btn" id="classic-prev" aria-label="Previous">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" /></svg>
+            </button>
+            <button class="play-pause-btn" id="classic-play" aria-label="Play">
+                <svg viewBox="0 0 24 24" fill="currentColor" id="classic-play-icon"><path d="M8 5v14l11-7z" /></svg>
+            </button>
+            <button class="control-btn" id="classic-next" aria-label="Next">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" /></svg>
+            </button>
+        </div>
+
+        <div class="classic-bottom">
+            <div class="classic-thumbs">
+                <button class="classic-btn classic-thumb" id="classic-thumb-up" aria-label="Thumb Up" title="Thumb Up">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                        <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+                    </svg>
+                </button>
+                <button class="classic-btn classic-thumb" id="classic-thumb-down" aria-label="Thumb Down" title="Thumb Down">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                        <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17" />
+                    </svg>
+                </button>
+            </div>
+            <div class="classic-center">
+                <button class="classic-btn" id="classic-expand" aria-label="Back to full player" title="Back to full player">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                        <rect x="2" y="5" width="20" height="14" rx="2" ry="2"></rect>
+                        <rect x="12" y="12" width="8" height="6" rx="1" ry="1" fill="currentColor" opacity="0.4"></rect>
+                    </svg>
+                </button>
+                <button class="classic-btn" id="classic-history-btn" aria-label="Show song history" aria-expanded="false"
+                    aria-controls="classic-history" title="History">
+                    <!-- Clock whose rim is an arrow running backwards in time -->
+                    <svg class="classic-history-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" width="18" height="18" aria-hidden="true">
+                        <path d="M5.07 16A8 8 0 1 0 5.07 8" />
+                        <path d="M8.3 6.8 5.07 8 4.5 4.65" />
+                        <path d="M12 8v4h3.5" />
+                        <path d="M4.1 10.6h.01M4.1 13.4h.01" stroke-width="2.4" />
+                    </svg>
+                </button>
+            </div>
+            <div class="classic-volume">
+                <svg class="classic-volume-icon" viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true">
+                    <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
+                </svg>
+                <div class="volume-popover" id="classic-volume-popover" aria-hidden="true">100%</div>
+                <input type="range" class="classic-volume-slider" id="classic-volume-slider" aria-label="Volume" min="0" max="100" value="100">
+            </div>
+        </div>
+    </div>
+
     <dialog class="stream-dialog" id="stream-conflict-dialog" aria-labelledby="stream-dialog-title" aria-describedby="stream-dialog-description">
         <button class="stream-dialog-close" id="stream-dialog-close" type="button" aria-label="Keep Panedora paused">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>

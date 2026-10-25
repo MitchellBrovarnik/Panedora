@@ -18,7 +18,8 @@ function modes(currentModeId = 0) {
 }
 
 function setup(config = { getRememberedShuffle: () => null, rememberShuffle() {} }) {
-    config = { getStationRecency: () => ({}), rememberStationPlayed() {}, forgetStationRecency() {}, ...config };
+    config = { getStationRecency: () => ({}), rememberStationPlayed() {}, forgetStationRecency() {},
+        getClassicMiniBounds: () => null, setClassicMiniBounds() {}, ...config };
     const handlers = new Map();
     const prompts = [];
     const messages = [];
@@ -29,7 +30,8 @@ function setup(config = { getRememberedShuffle: () => null, rememberShuffle() {}
     const electron = {
         app: { isPackaged: true, commandLine: { appendSwitch() {} }, on() {}, whenReady: () => new Promise(() => {}) },
         shell: { openExternal: async url => { calls.push(['openExternal', url]); } },
-        ipcMain: { handle: (name, fn) => handlers.set(name, fn) }
+        ipcMain: { handle: (name, fn) => handlers.set(name, fn) },
+        screen: { getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 1920, height: 1080 } }) }
     };
     const api = {
         getPlaylist: async () => playlists.shift() || { tracks: [track()] },
@@ -1307,4 +1309,97 @@ test('volume settings IPC only answers the app window and validates its inputs',
     assert.equal(await call('SETTINGS:SAVE_VOLUME', app, '61'), false);
     assert.equal(await call('SETTINGS:SAVE_VOLUME', stranger, 61), false);
     assert.deepEqual(saved, [['remember', true, 55], ['volume', 61]]);
+});
+
+test('legacy miniplayer IPC only answers the app window and accepts only booleans', async () => {
+    let stored = false;
+    const s = setup({
+        getLegacyMiniplayer: () => stored,
+        setLegacyMiniplayer: enabled => { stored = enabled; }
+    });
+    const app = { sender: s.window.webContents };
+    const stranger = { sender: {} };
+    const call = (name, event, ...args) => s.handlers.get(name)(event, ...args);
+    assert.equal(await call('SETTINGS:GET_LEGACY_MINIPLAYER', app), false);
+    assert.equal(await call('SETTINGS:GET_LEGACY_MINIPLAYER', stranger), null);
+    assert.equal(await call('SETTINGS:SET_LEGACY_MINIPLAYER', app, true), true);
+    assert.equal(await call('SETTINGS:SET_LEGACY_MINIPLAYER', app, 'false'), null);
+    assert.equal(await call('SETTINGS:SET_LEGACY_MINIPLAYER', app, 0), null);
+    assert.equal(await call('SETTINGS:SET_LEGACY_MINIPLAYER', stranger, false), null);
+    assert.equal(stored, true, 'Rejected requests change nothing');
+    assert.equal(await call('SETTINGS:SET_LEGACY_MINIPLAYER', app, false), false);
+});
+
+function miniWindow(s) {
+    const log = [];
+    const state = { bounds: { x: 10, y: 20, width: 1200, height: 800 } };
+    Object.assign(s.window, {
+        getBounds: () => state.bounds, getMaximumSize: () => [0, 0],
+        setBounds: value => log.push(['bounds', { ...value }]),
+        setMenuBarVisibility() {}, setAutoHideMenuBar() {}, setResizable: value => log.push(['resizable', value]),
+        setAlwaysOnTop: (...args) => log.push(['onTop', ...args]),
+        setMinimumSize: (...size) => log.push(['min', ...size]),
+        setMaximumSize: (...size) => log.push(['max', ...size]),
+        setSize: (...size) => log.push(['size', ...size])
+    });
+    return { log, state, toggle: () => s.handlers.get('WINDOW:TOGGLE_MINI')({}) };
+}
+
+test('toggling the mini player sizes the window for the classic or wide layout and restores it', async () => {
+    let legacy = true;
+    const saved = [];
+    const s = setup({ getLegacyMiniplayer: () => legacy, setClassicMiniBounds: bounds => saved.push({ ...bounds }) });
+    const { log, state, toggle } = miniWindow(s);
+    const miniMessages = () => s.messages.filter(m => m.name === 'UI:MINI_MODE').map(m => ({ ...m.data }));
+    const fullBounds = { ...state.bounds };
+
+    assert.deepEqual({ ...await toggle() }, { isMini: true, legacy: true });
+    assert.deepEqual(log.filter(c => ['min', 'size'].includes(c[0])), [['min', 280, 500]]);
+    assert.deepEqual(log.find(c => c[0] === 'bounds')[1], { x: 10, y: 20, width: 280, height: 500 },
+        'The first time it opens from the full player\u2019s top-left corner');
+    const max = log.find(c => c[0] === 'max');
+    assert.ok(max[1] > 10000 && max[2] > 10000, 'The classic player has no practical maximum size');
+    assert.deepEqual(log.find(c => c[0] === 'resizable'), ['resizable', true]);
+    assert.ok(log.some(c => c[0] === 'onTop' && c[1] === true), 'Stays on top like the wide mini player');
+
+    log.length = 0;
+    legacy = false; // The saved setting is read when entering, so leaving is unaffected by it.
+    state.bounds = { x: 33, y: 44, width: 300, height: 600 }; // Where the classic player was left
+    assert.deepEqual({ ...await toggle() }, { isMini: false, legacy: false });
+    assert.deepEqual(saved, [{ x: 33, y: 44, width: 300, height: 600 }], 'Its position and size are remembered on the way out');
+    assert.ok(log.some(c => c[0] === 'min' && c[1] === 900 && c[2] === 600), 'Full player minimum restored');
+    assert.deepEqual(log.find(c => c[0] === 'bounds')[1], fullBounds, 'Original full player bounds restored');
+
+    log.length = 0;
+    assert.deepEqual({ ...await toggle() }, { isMini: true, legacy: false });
+    assert.deepEqual(log.filter(c => ['min', 'max', 'size'].includes(c[0])), [['min', 540, 80], ['max', 900, 80], ['size', 540, 80]]);
+    assert.equal(log.some(c => c[0] === 'bounds'), false, 'The wide mini player still keeps the full player\u2019s corner');
+    await toggle();
+    assert.equal(saved.length, 1, 'The wide mini player never overwrites the classic player\u2019s remembered spot');
+    assert.deepEqual(miniMessages(), [{ isMini: true, legacy: true }, { isMini: false, legacy: false },
+        { isMini: true, legacy: false }, { isMini: false, legacy: false }]);
+});
+
+test('the classic mini player reopens where it was left, kept fully on screen', async () => {
+    const remembered = { value: { x: 300, y: 200, width: 400, height: 700 } };
+    const s = setup({ getLegacyMiniplayer: () => true, getClassicMiniBounds: () => remembered.value });
+    const { log, toggle } = miniWindow(s);
+    const opened = async () => {
+        log.length = 0;
+        await toggle();
+        const bounds = log.find(c => c[0] === 'bounds')[1];
+        await toggle();
+        return bounds;
+    };
+    assert.deepEqual(await opened(), { x: 300, y: 200, width: 400, height: 700 }, 'Position and size come back');
+    // A monitor that was unplugged, or a layout change, must not strand it off screen (display is 1920x1080).
+    remembered.value = { x: 5000, y: 4000, width: 400, height: 700 };
+    assert.deepEqual(await opened(), { x: 1520, y: 380, width: 400, height: 700 }, 'Pulled back inside the display');
+    remembered.value = { x: -900, y: -700, width: 400, height: 700 };
+    assert.deepEqual(await opened(), { x: 0, y: 0, width: 400, height: 700 });
+    // Never smaller than the classic minimum, and a window taller than the display is limited to it.
+    remembered.value = { x: 50, y: 60, width: 100, height: 100 };
+    assert.deepEqual(await opened(), { x: 50, y: 60, width: 280, height: 500 });
+    remembered.value = { x: 0, y: 0, width: 3000, height: 3000 };
+    assert.deepEqual(await opened(), { x: 0, y: 0, width: 1920, height: 1080 });
 });

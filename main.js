@@ -3,10 +3,14 @@
  * Direct API-based architecture (no hidden browser)
  */
 
-const { app, BrowserWindow, ipcMain, shell, net, powerMonitor } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, shell, net, powerMonitor } = require('electron');
 const path = require('path');
 // A positive, effectively unbounded dimension also works with macOS window constraints.
 const MAX_WINDOW_DIMENSION = Math.floor(0x7fffffff / 10);
+// The classic mini player: 12px margins around a 256px cover need 280px of width.
+const CLASSIC_MINI_MIN_WIDTH = 280;
+// Cover, song details, progress, controls and button row with 12px margins need exactly 500px.
+const CLASSIC_MINI_MIN_HEIGHT = 500;
 
 // Disable GPU caching to prevent 'Access is denied' cache_util_win errors on Windows startup
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
@@ -34,6 +38,8 @@ let currentTrackIndex = 0;
 let songHistory = []; // Track played songs for history display
 let isMiniPlayer = false;
 let savedBounds = null; // Save window position/size before entering mini mode
+let classicMiniActive = false; // True while the classic mini player is the open window
+let classicBoundsTimer = null;
 let savedMaximumSize = null;
 let playlistRefill = null;
 let streamReclaimed = false;
@@ -89,7 +95,14 @@ function createUIWindow() {
         uiWindow.webContents.openDevTools();
     }
 
+    // The classic mini player remembers where it was left, even across restarts.
+    uiWindow.on('move', scheduleClassicBoundsSave);
+    uiWindow.on('resize', scheduleClassicBoundsSave);
+    uiWindow.on('close', saveClassicBoundsNow);
+
     uiWindow.on('closed', () => {
+        classicMiniActive = false;
+        clearTimeout(classicBoundsTimer);
         playbackGeneration++;
         discordPresence?.setPlayerState(null);
         cancelStreamPrompt();
@@ -108,10 +121,43 @@ function createUIWindow() {
 // Mini Player Toggle
 // ============================================================================
 
+// ----------------------------------------------------------------------------
+// Classic mini player: remember where it was left
+// ----------------------------------------------------------------------------
+
+// Keep a rectangle fully on the display that matches it best (the nearest one if
+// its monitor has gone), without ever shrinking it below the classic minimum size.
+function fitBoundsToScreen(bounds) {
+    const area = screen.getDisplayMatching(bounds).workArea;
+    const width = Math.min(Math.max(bounds.width, CLASSIC_MINI_MIN_WIDTH), Math.max(area.width, CLASSIC_MINI_MIN_WIDTH));
+    const height = Math.min(Math.max(bounds.height, CLASSIC_MINI_MIN_HEIGHT), Math.max(area.height, CLASSIC_MINI_MIN_HEIGHT));
+    return {
+        x: Math.min(Math.max(bounds.x, area.x), Math.max(area.x, area.x + area.width - width)),
+        y: Math.min(Math.max(bounds.y, area.y), Math.max(area.y, area.y + area.height - height)),
+        width, height
+    };
+}
+
+function saveClassicBoundsNow() {
+    clearTimeout(classicBoundsTimer);
+    classicBoundsTimer = null;
+    if (!classicMiniActive || !uiWindow || uiWindow.isDestroyed()) return;
+    config.setClassicMiniBounds(uiWindow.getBounds());
+}
+
+// Moving or resizing fires a stream of events; save once things settle.
+function scheduleClassicBoundsSave() {
+    if (!classicMiniActive) return;
+    clearTimeout(classicBoundsTimer);
+    classicBoundsTimer = setTimeout(saveClassicBoundsNow, 400);
+}
+
 ipcMain.handle('WINDOW:TOGGLE_MINI', async () => {
     if (!uiWindow) return { isMini: false };
 
     isMiniPlayer = !isMiniPlayer;
+    // Decided once per entry so the layout and window size always agree.
+    const legacy = isMiniPlayer && config.getLegacyMiniplayer();
 
     if (isMiniPlayer) {
         // Save current bounds before shrinking
@@ -119,13 +165,28 @@ ipcMain.handle('WINDOW:TOGGLE_MINI', async () => {
         savedMaximumSize = uiWindow.getMaximumSize();
         uiWindow.setMenuBarVisibility(false);
         uiWindow.setAutoHideMenuBar(true);
-        uiWindow.setMinimumSize(540, 80);
-        uiWindow.setMaximumSize(900, 80);
-        uiWindow.setSize(540, 80);
+        if (legacy) {
+            // Classic player: freely resizable above its minimum size. It reopens where it was
+            // last left; the first time it opens from the full player's top-left corner.
+            uiWindow.setMinimumSize(CLASSIC_MINI_MIN_WIDTH, CLASSIC_MINI_MIN_HEIGHT);
+            uiWindow.setMaximumSize(MAX_WINDOW_DIMENSION, MAX_WINDOW_DIMENSION);
+            const remembered = config.getClassicMiniBounds();
+            uiWindow.setBounds(fitBoundsToScreen(remembered || {
+                x: savedBounds.x, y: savedBounds.y, width: CLASSIC_MINI_MIN_WIDTH, height: CLASSIC_MINI_MIN_HEIGHT
+            }));
+            classicMiniActive = true;
+        } else {
+            uiWindow.setMinimumSize(540, 80);
+            uiWindow.setMaximumSize(900, 80);
+            uiWindow.setSize(540, 80);
+        }
         // Use 'screen-saver' level to stay on top of fullscreen borderless games
         uiWindow.setAlwaysOnTop(true, 'screen-saver');
-        uiWindow.setResizable(true); // Width adjusts from 540–900px; height stays at 80px.
+        uiWindow.setResizable(true); // Wide mini player: width adjusts from 540–900px; height stays at 80px.
     } else {
+        // Remember the classic player's spot before the full player takes the window back.
+        saveClassicBoundsNow();
+        classicMiniActive = false;
         // Restore saved bounds
         uiWindow.setAlwaysOnTop(false);
         uiWindow.setResizable(true);
@@ -141,8 +202,8 @@ ipcMain.handle('WINDOW:TOGGLE_MINI', async () => {
     }
 
     // Notify the renderer about the mode change
-    sendToUI('UI:MINI_MODE', { isMini: isMiniPlayer });
-    return { isMini: isMiniPlayer };
+    sendToUI('UI:MINI_MODE', { isMini: isMiniPlayer, legacy });
+    return { isMini: isMiniPlayer, legacy };
 });
 
 // Window control handlers for custom title bar
@@ -866,6 +927,12 @@ ipcMain.handle('SETTINGS:SET_REMEMBER_VOLUME', (event, enabled, volume) => {
     if (!isAppRenderer(event) || typeof enabled !== 'boolean') return null;
     config.setRememberVolume(enabled, volume);
     return config.getVolumeSettings();
+});
+ipcMain.handle('SETTINGS:GET_LEGACY_MINIPLAYER', event => isAppRenderer(event) ? config.getLegacyMiniplayer() : null);
+ipcMain.handle('SETTINGS:SET_LEGACY_MINIPLAYER', (event, enabled) => {
+    if (!isAppRenderer(event) || typeof enabled !== 'boolean') return null;
+    config.setLegacyMiniplayer(enabled);
+    return config.getLegacyMiniplayer();
 });
 ipcMain.handle('SETTINGS:SAVE_VOLUME', (event, volume) => {
     if (!isAppRenderer(event) || typeof volume !== 'number') return false;
