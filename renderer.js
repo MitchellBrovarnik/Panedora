@@ -1243,7 +1243,7 @@ function renderSettingsPage() {
         <div class="setting-row">
           <div>
             <label class="setting-label" for="remember-volume-toggle">Remember volume</label>
-            <p class="setting-help" id="remember-volume-description">Restore the volume level the next time Panedora opens. If it was set to 0%, Panedora reopens at 25%.</p>
+            <p class="setting-help" id="remember-volume-description">Remember the chosen volume level the next time Panedora opens. If it was set to 0%, Panedora reopens at 25%.</p>
           </div>
           <input class="setting-toggle" id="remember-volume-toggle" type="checkbox" role="switch" aria-describedby="remember-volume-description">
         </div>
@@ -2134,6 +2134,8 @@ function updatePlayerUI(state) {
         stationModesRequest = null;
     }
     if (state.trackToken !== undefined && state.trackToken !== AppState.playerState.trackToken) {
+        // A drag would otherwise seek the new song to the old song's position.
+        activeProgressScrub?.cancel();
         AppState.playerState.coverArt = null;
         AppState.playerState.coverArtSources = [];
     }
@@ -2192,7 +2194,7 @@ function updatePlayerUI(state) {
 
     // Update progress (only if we don't have a live audio element overriding it)
     const audioEl = document.querySelector('audio');
-    if (state.duration > 0 && !audioEl) {
+    if (state.duration > 0 && !audioEl && !progressScrubbing) {
         const progress = (state.time / state.duration) * 100;
         DOM.progressFill.style.width = `${progress}%`;
         DOM.currentTime.textContent = formatTime(state.time);
@@ -2233,6 +2235,100 @@ function updatePlayerUI(state) {
 
     updateClassicPlayerUI();
     if (classicHistoryOpen && state.history) renderClassicHistory();
+}
+
+// ============================================================================
+// Progress bar scrubbing (click or drag to seek)
+// ============================================================================
+
+// While a bar is being dragged the UI shows the dragged position instead of the
+// playing one, and the song is only sought once, when the drag is released.
+let progressScrubbing = false;
+let activeProgressScrub = null;
+
+function currentTrackDuration() {
+    const audioEl = document.querySelector('audio');
+    return audioEl && Number.isFinite(audioEl.duration) && audioEl.duration > 0
+        ? audioEl.duration : AppState.playerState.duration || 0;
+}
+
+function showScrubbedPosition(fraction) {
+    DOM.progressFill.style.width = `${fraction * 100}%`;
+    DOM.currentTime.textContent = formatTime(fraction * currentTrackDuration());
+    syncClassicProgress();
+}
+
+// Put the bars back on the real playback position (a drag was cancelled).
+function restoreProgressPosition() {
+    const audioEl = document.querySelector('audio');
+    const duration = currentTrackDuration();
+    const time = audioEl && Number.isFinite(audioEl.currentTime) ? audioEl.currentTime : AppState.playerState.time || 0;
+    DOM.progressFill.style.width = duration > 0 ? `${Math.min(100, time / duration * 100)}%` : '0%';
+    DOM.currentTime.textContent = formatTime(time);
+    syncClassicProgress();
+}
+
+function seekToFraction(fraction) {
+    const audioEl = document.querySelector('audio');
+    if (audioEl && audioEl.duration) {
+        audioEl.currentTime = fraction * audioEl.duration;
+        // Update UI immediately
+        showScrubbedPosition(fraction);
+        DOM.currentTime.textContent = formatTime(audioEl.currentTime);
+        syncClassicProgress();
+    } else {
+        // Fallback if no audio element
+        window.api.player.seek(fraction * AppState.playerState.duration);
+    }
+}
+
+function createProgressScrubber(bar) {
+    if (!bar) return;
+    let pointerId = null; // null while idle
+    let fraction = 0;
+
+    const fractionAt = event => {
+        const rect = bar.getBoundingClientRect();
+        return rect.width > 0 ? Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)) : 0;
+    };
+    const stop = () => {
+        try { bar.releasePointerCapture(pointerId); } catch { /* Already released. */ }
+        pointerId = null;
+        progressScrubbing = false;
+        activeProgressScrub = null;
+        bar.classList.remove('scrubbing');
+    };
+    const cancel = () => {
+        if (pointerId === null) return;
+        stop();
+        restoreProgressPosition();
+    };
+
+    bar.addEventListener('pointerdown', event => {
+        if (event.button !== 0 || event.isPrimary === false || pointerId !== null) return;
+        pointerId = event.pointerId;
+        progressScrubbing = true;
+        activeProgressScrub = { cancel };
+        bar.classList.add('scrubbing');
+        // Keeps the drag going when the pointer leaves the bar or the window.
+        try { bar.setPointerCapture(pointerId); } catch { /* Not supported everywhere. */ }
+        event.preventDefault(); // No text selection while dragging.
+        fraction = fractionAt(event);
+        showScrubbedPosition(fraction);
+    });
+    bar.addEventListener('pointermove', event => {
+        if (pointerId === null || event.pointerId !== pointerId) return;
+        fraction = fractionAt(event);
+        showScrubbedPosition(fraction);
+    });
+    bar.addEventListener('pointerup', event => {
+        if (pointerId === null || event.pointerId !== pointerId) return;
+        fraction = fractionAt(event);
+        stop();
+        seekToFraction(fraction); // A plain click is just a drag that never moved.
+    });
+    bar.addEventListener('pointercancel', event => { if (event.pointerId === pointerId) cancel(); });
+    bar.addEventListener('lostpointercapture', event => { if (event.pointerId === pointerId) cancel(); });
 }
 
 // ============================================================================
@@ -2722,26 +2818,9 @@ function initEventListeners() {
     document.getElementById('mini-thumb-up')?.addEventListener('click', () => handleThumb(true));
     document.getElementById('mini-thumb-down')?.addEventListener('click', () => handleThumb(false));
 
-    // Progress bar seeking (the footer bar and the classic player's bar behave identically)
-    const seekFromClick = (bar) => (e) => {
-        const rect = bar.getBoundingClientRect();
-        const percent = (e.clientX - rect.left) / rect.width;
-        const audioEl = document.querySelector('audio');
-        if (audioEl && audioEl.duration) {
-            audioEl.currentTime = percent * audioEl.duration;
-            // Update UI immediately
-            DOM.progressFill.style.width = `${percent * 100}%`;
-            DOM.currentTime.textContent = formatTime(audioEl.currentTime);
-            syncClassicProgress();
-        } else {
-            // Fallback if no audio element
-            const seekTime = percent * AppState.playerState.duration;
-            window.api.player.seek(seekTime);
-        }
-    };
-    DOM.progressBar.addEventListener('click', seekFromClick(DOM.progressBar));
-    const classicProgressBar = document.getElementById('classic-progress-bar');
-    classicProgressBar?.addEventListener('click', seekFromClick(classicProgressBar));
+    // Progress bar seeking: click or drag, on the footer bar and the classic player's bar
+    createProgressScrubber(DOM.progressBar);
+    createProgressScrubber(document.getElementById('classic-progress-bar'));
 }
 
 // ============================================================================
@@ -2884,11 +2963,13 @@ function initAPIListeners() {
                     if (!AppState.playerState.isPlaying) return;
                     const duration = Number.isFinite(currentAudio.duration) && currentAudio.duration > 0
                         ? currentAudio.duration : AppState.playerState.duration || 0;
-                    const progress = duration > 0 ? Math.min(100, currentAudio.currentTime / duration * 100) : 0;
-                    DOM.progressFill.style.width = `${progress}%`;
-                    DOM.currentTime.textContent = formatTime(currentAudio.currentTime);
-                    DOM.totalTime.textContent = formatTime(duration);
-                    syncClassicProgress();
+                    if (!progressScrubbing) {
+                        const progress = duration > 0 ? Math.min(100, currentAudio.currentTime / duration * 100) : 0;
+                        DOM.progressFill.style.width = `${progress}%`;
+                        DOM.currentTime.textContent = formatTime(currentAudio.currentTime);
+                        DOM.totalTime.textContent = formatTime(duration);
+                        syncClassicProgress();
+                    }
 
                     // Sync lyrics
                     syncLyrics(currentAudio.currentTime);
@@ -3165,6 +3246,7 @@ function initAPIListeners() {
             if (DOM.nowPlayingTitle) DOM.nowPlayingTitle.textContent = 'Not Playing';
             if (DOM.nowPlayingArtist) DOM.nowPlayingArtist.textContent = '--';
             if (DOM.nowPlayingArt) DOM.nowPlayingArt.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56'%3E%3Crect fill='%23282828' width='56' height='56'/%3E%3C/svg%3E";
+            activeProgressScrub?.cancel();
             if (DOM.progressFill) DOM.progressFill.style.width = '0%';
             if (DOM.currentTime) DOM.currentTime.textContent = '0:00';
             if (DOM.totalTime) DOM.totalTime.textContent = '0:00';
