@@ -95,7 +95,8 @@ function renderPlayerArtwork() {
         previous.src = '';
         upcomingArtworkPreloads.delete(sources[0]);
     }
-    const images = [DOM.nowPlayingArt, document.getElementById('np-large-art')].filter(Boolean);
+    const images = [DOM.nowPlayingArt, document.getElementById('np-large-art'),
+        isClassicMini() ? document.getElementById('classic-art') : null].filter(Boolean);
     for (const image of images) {
         loadPlayerArtwork(image, sources, trackKey, images);
     }
@@ -261,6 +262,7 @@ const DOM = {
     totalTime: document.getElementById('total-time'),
     volumeSlider: document.getElementById('volume-slider'),
     volumeBtn: document.getElementById('volume-btn'),
+    volumePopover: document.getElementById('volume-popover'),
     navItems: document.querySelectorAll('.nav-item')
 };
 
@@ -1237,6 +1239,23 @@ function renderSettingsPage() {
     DOM.pageContent.innerHTML = `
     <div class="fade-in" style="display: flex; flex-direction: column; gap: 32px;">
       <section class="settings-section">
+        <h2 class="section-title">Panedora Settings</h2>
+        <div class="setting-row">
+          <div>
+            <label class="setting-label" for="remember-volume-toggle">Remember volume</label>
+            <p class="setting-help" id="remember-volume-description">Restore the volume level the next time Panedora opens. If it was set to 0%, Panedora reopens at 25%.</p>
+          </div>
+          <input class="setting-toggle" id="remember-volume-toggle" type="checkbox" role="switch" aria-describedby="remember-volume-description">
+        </div>
+        <div class="setting-row">
+          <div>
+            <label class="setting-label" for="legacy-miniplayer-toggle">Use legacy miniplayer</label>
+            <p class="setting-help" id="legacy-miniplayer-description">Open the mini player as a compact, album-art-first window in the style of the original Pandora desktop player. Takes effect the next time you open the mini player.</p>
+          </div>
+          <input class="setting-toggle" id="legacy-miniplayer-toggle" type="checkbox" role="switch" aria-describedby="legacy-miniplayer-description">
+        </div>
+      </section>
+      <section class="settings-section">
         <h2 class="section-title">Discord</h2>
         <div class="discord-setting">
           <div>
@@ -1279,6 +1298,44 @@ function renderSettingsPage() {
         <div class="theme-grid" style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));">${lyricsStyleButtons}</div>
       </section>
     </div>`;
+
+    const rememberToggle = document.getElementById('remember-volume-toggle');
+    rememberToggle.checked = rememberVolume;
+    rememberToggle.addEventListener('change', async event => {
+        if (volumeSettingPending) { event.target.checked = rememberVolume; return; }
+        volumeSettingPending = true;
+        rememberToggle.disabled = true;
+        try {
+            const saved = await window.api.settings.setRememberVolume(event.target.checked, currentVolume);
+            if (!saved) throw new Error('Volume setting was not saved');
+            rememberVolume = saved.remember === true;
+        } catch {
+            showErrorToast('Could not save the volume setting. Please try again.');
+        } finally {
+            volumeSettingPending = false;
+            rememberToggle.checked = rememberVolume;
+            rememberToggle.disabled = false;
+        }
+    });
+
+    const legacyToggle = document.getElementById('legacy-miniplayer-toggle');
+    legacyToggle.checked = useLegacyMiniplayer;
+    legacyToggle.addEventListener('change', async event => {
+        if (legacyMiniplayerPending) { event.target.checked = useLegacyMiniplayer; return; }
+        legacyMiniplayerPending = true;
+        legacyToggle.disabled = true;
+        try {
+            const saved = await window.api.settings.setLegacyMiniplayer(event.target.checked);
+            if (typeof saved !== 'boolean') throw new Error('Miniplayer setting was not saved');
+            useLegacyMiniplayer = saved;
+        } catch {
+            showErrorToast('Could not save the miniplayer setting. Please try again.');
+        } finally {
+            legacyMiniplayerPending = false;
+            legacyToggle.checked = useLegacyMiniplayer;
+            legacyToggle.disabled = false;
+        }
+    });
 
     renderDiscordSettings();
     document.getElementById('discord-sharing-toggle').addEventListener('change', async event => {
@@ -2140,6 +2197,7 @@ function updatePlayerUI(state) {
         DOM.progressFill.style.width = `${progress}%`;
         DOM.currentTime.textContent = formatTime(state.time);
         DOM.totalTime.textContent = formatTime(state.duration);
+        syncClassicProgress();
     }
 
     // Live-update the history section if the Now Playing page is visible
@@ -2171,6 +2229,215 @@ function updatePlayerUI(state) {
             renderHistoryArtwork(histDiv, pastSongs);
             bindHistoryThumbs(histDiv);
         }
+    }
+
+    updateClassicPlayerUI();
+    if (classicHistoryOpen && state.history) renderClassicHistory();
+}
+
+// ============================================================================
+// Classic mini player ("Use legacy miniplayer")
+// ============================================================================
+
+let useLegacyMiniplayer = false;
+let legacyMiniplayerPending = false;
+let classicHistoryOpen = false;
+
+function isClassicMini() {
+    return document.body.classList.contains('classic-mini');
+}
+
+// Mirror the shared player state into the classic view. The footer elements stay
+// the source of truth for playback; this view only displays state and forwards clicks.
+function updateClassicPlayerUI() {
+    if (!isClassicMini()) return;
+    const state = AppState.playerState;
+    const setText = (id, text) => {
+        const element = document.getElementById(id);
+        if (!element) return;
+        element.textContent = text;
+        element.title = text;
+    };
+    setText('classic-artist', state.artist || '');
+    setText('classic-track', state.track || 'Not Playing');
+    // The line keeps its height when there is no album so nothing below it moves.
+    setText('classic-album', state.album || '');
+    const icon = document.getElementById('classic-play-icon');
+    if (icon) {
+        icon.innerHTML = state.isPlaying
+            ? '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>'
+            : '<path d="M8 5v14l11-7z"/>';
+    }
+    document.getElementById('classic-play')?.setAttribute('aria-label', state.isPlaying ? 'Pause' : 'Play');
+    document.getElementById('classic-thumb-up')?.classList.toggle('liked', state.feedback === 'thumbUp');
+    document.getElementById('classic-thumb-down')?.classList.toggle('disliked', state.feedback === 'thumbDown');
+    syncClassicProgress();
+}
+
+// The footer bar stays the source of truth for progress; the classic bar copies it
+// wherever the footer is updated, so both always show the same position and times.
+function syncClassicProgress() {
+    if (!isClassicMini()) return;
+    const width = DOM.progressFill.style.width || '0%';
+    const fill = document.getElementById('classic-progress-fill');
+    if (fill) fill.style.width = width;
+    const setText = (id, source) => {
+        const element = document.getElementById(id);
+        if (element) element.textContent = source.textContent;
+    };
+    setText('classic-current-time', DOM.currentTime);
+    setText('classic-total-time', DOM.totalTime);
+    document.getElementById('classic-progress-bar')?.setAttribute('aria-valuenow', String(Math.round(parseFloat(width) || 0)));
+}
+
+// The same Recently Played list as the full player: artwork, titles and thumbs.
+function renderClassicHistory() {
+    const panel = document.getElementById('classic-history');
+    if (!panel || !classicHistoryOpen) return;
+    const previousScroll = panel.querySelector('.history-list')?.scrollTop || 0;
+    panel.querySelectorAll('.history-art').forEach(cancelPlayerArtwork);
+    const pastSongs = getPastSongs(AppState.playerState.history);
+    panel.innerHTML = `
+        <h3 class="tune-title">RECENTLY PLAYED</h3>
+        <div class="history-list">
+            ${pastSongs.length > 0 ? pastSongs.map(historyItemHtml).join('') : historyEmptyHtml()}
+        </div>
+    `;
+    // Rebuilding must not jump the list back to the top after a thumb.
+    if (previousScroll) panel.querySelector('.history-list').scrollTop = previousScroll;
+    renderHistoryArtwork(panel, pastSongs);
+    bindHistoryThumbs(panel);
+}
+
+function setClassicHistory(open) {
+    if (!open && !classicHistoryOpen) return;
+    classicHistoryOpen = open && isClassicMini();
+    const panel = document.getElementById('classic-history');
+    const button = document.getElementById('classic-history-btn');
+    document.body.classList.toggle('classic-history-open', classicHistoryOpen);
+    if (button) {
+        button.setAttribute('aria-expanded', String(classicHistoryOpen));
+        button.setAttribute('aria-label', classicHistoryOpen ? 'Hide song history' : 'Show song history');
+    }
+    if (!panel) return;
+    panel.hidden = !classicHistoryOpen;
+    if (classicHistoryOpen) renderClassicHistory();
+    else {
+        panel.querySelectorAll('.history-art').forEach(cancelPlayerArtwork);
+        panel.innerHTML = '';
+    }
+}
+
+async function loadMiniplayerSettings() {
+    try {
+        useLegacyMiniplayer = (await window.api.settings?.getLegacyMiniplayer()) === true;
+    } catch (error) {
+        console.warn('[UI] Could not load the miniplayer setting:', error);
+    }
+}
+
+// ============================================================================
+// Volume
+// ============================================================================
+
+const VOLUME_THUMB_PX = 11; // matches .volume-slider::-webkit-slider-thumb
+const VOLUME_POPOVER_LINGER_MS = 700;
+const VOLUME_POPOVER_RELEASE_MS = 250;
+let currentVolume = 100;
+let rememberVolume = false;
+let volumeSettingPending = false;
+
+function clampVolumePercent(value) {
+    const percent = Math.round(Number(value));
+    return Number.isFinite(percent) ? Math.min(100, Math.max(0, percent)) : 100;
+}
+
+// Once the visualizer's gain node exists it owns the volume (so the bars keep
+// their full height) and the element stays at 1.0. Before that, the element does.
+function applyVolume(percent, audioEl = document.querySelector('audio')) {
+    currentVolume = clampVolumePercent(percent);
+    const volume = currentVolume / 100;
+    DOM.volumeSlider.value = String(currentVolume);
+    const classicSlider = document.getElementById('classic-volume-slider');
+    if (classicSlider) classicSlider.value = String(currentVolume);
+    if (window.visualizer && window.visualizer.audioContext) {
+        window.visualizer.setVolume(volume);
+        if (audioEl) audioEl.volume = 1.0;
+    } else if (audioEl) {
+        audioEl.volume = volume;
+    }
+}
+
+function saveVolume() {
+    if (!rememberVolume) return;
+    try {
+        Promise.resolve(window.api.settings?.saveVolume(currentVolume)).catch(() => {});
+    } catch { /* A missed save only means the last level is not remembered. */ }
+}
+
+// Restore the remembered level before any audio exists. The audio element and
+// visualizer pick it up when they are created.
+async function loadVolumeSettings() {
+    try {
+        const saved = await window.api.settings?.getVolume();
+        if (saved?.remember === true) {
+            rememberVolume = true;
+            applyVolume(saved.volume);
+        }
+    } catch (error) {
+        console.warn('[UI] Could not load the saved volume:', error);
+    }
+}
+
+// A slider and its percentage bubble. The bubble follows the thumb and shows only
+// while the slider is being adjusted. Used by the footer and the classic player.
+function createVolumeControl(slider, popover) {
+    if (!slider) return;
+    let scrubbing = false;
+    let timer = null;
+
+    function show() {
+        if (!popover) return;
+        clearTimeout(timer);
+        timer = null;
+        const travel = Math.max(0, slider.offsetWidth - VOLUME_THUMB_PX);
+        popover.textContent = `${currentVolume}%`;
+        popover.style.left = `${slider.offsetLeft + VOLUME_THUMB_PX / 2 + (currentVolume / 100) * travel}px`;
+        popover.classList.add('visible');
+    }
+
+    function hide(delay = 0) {
+        clearTimeout(timer);
+        timer = null;
+        if (!popover) return;
+        if (delay > 0) timer = setTimeout(() => {
+            timer = null;
+            popover.classList.remove('visible');
+        }, delay);
+        else popover.classList.remove('visible');
+    }
+
+    slider.addEventListener('input', (e) => {
+        const percent = parseInt(e.target.value);
+        window.api.player.setVolume(percent);
+        applyVolume(percent);
+        show();
+        // Keyboard changes have no release event, so let the popover fade on its own.
+        if (!scrubbing) hide(VOLUME_POPOVER_LINGER_MS);
+    });
+    // 'change' fires once when the drag is released (or after a keyboard step).
+    slider.addEventListener('change', saveVolume);
+    slider.addEventListener('pointerdown', () => {
+        scrubbing = true;
+        show();
+    });
+    slider.addEventListener('blur', () => hide());
+    for (const event of ['pointerup', 'pointercancel']) {
+        document.addEventListener(event, () => {
+            if (!scrubbing) return;
+            scrubbing = false;
+            hide(VOLUME_POPOVER_RELEASE_MS);
+        }, true);
     }
 }
 
@@ -2394,19 +2661,18 @@ function initEventListeners() {
     });
 
     // Volume
-    DOM.volumeSlider.addEventListener('input', (e) => {
-        const vol = parseInt(e.target.value) / 100;
-        window.api.player.setVolume(parseInt(e.target.value));
+    createVolumeControl(DOM.volumeSlider, DOM.volumePopover);
+    createVolumeControl(document.getElementById('classic-volume-slider'), document.getElementById('classic-volume-popover'));
 
-        // Let the WebAudio visualizer handle volume so bars stay full height, otherwise fallback to audio element
-        const audioEl = document.querySelector('audio');
-        if (window.visualizer && window.visualizer.audioContext) {
-            window.visualizer.setVolume(vol);
-            if (audioEl) audioEl.volume = 1.0; // Ensure node signal isn't attenuated
-        } else {
-            if (audioEl) audioEl.volume = vol;
-        }
-    });
+    // Classic mini player: every control reuses the behavior of its footer counterpart.
+    const onClassic = (id, handler) => document.getElementById(id)?.addEventListener('click', handler);
+    onClassic('classic-prev', () => document.getElementById('prev-btn')?.click());
+    onClassic('classic-play', () => DOM.playPauseBtn.click());
+    onClassic('classic-next', () => document.getElementById('next-btn')?.click());
+    onClassic('classic-thumb-up', () => handleThumb(true));
+    onClassic('classic-thumb-down', () => handleThumb(false));
+    onClassic('classic-expand', () => window.api.window.toggleMini());
+    onClassic('classic-history-btn', () => setClassicHistory(!classicHistoryOpen));
 
     const lyricsBtn = document.getElementById('lyrics-btn');
     if (lyricsBtn) {
@@ -2456,9 +2722,9 @@ function initEventListeners() {
     document.getElementById('mini-thumb-up')?.addEventListener('click', () => handleThumb(true));
     document.getElementById('mini-thumb-down')?.addEventListener('click', () => handleThumb(false));
 
-    // Progress bar seeking
-    DOM.progressBar.addEventListener('click', (e) => {
-        const rect = DOM.progressBar.getBoundingClientRect();
+    // Progress bar seeking (the footer bar and the classic player's bar behave identically)
+    const seekFromClick = (bar) => (e) => {
+        const rect = bar.getBoundingClientRect();
         const percent = (e.clientX - rect.left) / rect.width;
         const audioEl = document.querySelector('audio');
         if (audioEl && audioEl.duration) {
@@ -2466,12 +2732,16 @@ function initEventListeners() {
             // Update UI immediately
             DOM.progressFill.style.width = `${percent * 100}%`;
             DOM.currentTime.textContent = formatTime(audioEl.currentTime);
+            syncClassicProgress();
         } else {
             // Fallback if no audio element
             const seekTime = percent * AppState.playerState.duration;
             window.api.player.seek(seekTime);
         }
-    });
+    };
+    DOM.progressBar.addEventListener('click', seekFromClick(DOM.progressBar));
+    const classicProgressBar = document.getElementById('classic-progress-bar');
+    classicProgressBar?.addEventListener('click', seekFromClick(classicProgressBar));
 }
 
 // ============================================================================
@@ -2576,6 +2846,7 @@ function initAPIListeners() {
 
                 currentAudio = document.createElement('audio');
                 document.body.appendChild(currentAudio);
+                applyVolume(currentVolume, currentAudio);
 
                 // Presence observes audio events; it never controls playback or waits on Discord.
                 for (const event of ['pause', 'ended', 'error', 'emptied', 'waiting', 'seeking']) {
@@ -2617,6 +2888,7 @@ function initAPIListeners() {
                     DOM.progressFill.style.width = `${progress}%`;
                     DOM.currentTime.textContent = formatTime(currentAudio.currentTime);
                     DOM.totalTime.textContent = formatTime(duration);
+                    syncClassicProgress();
 
                     // Sync lyrics
                     syncLyrics(currentAudio.currentTime);
@@ -2725,6 +2997,7 @@ function initAPIListeners() {
                 DOM.progressFill.style.width = '0%';
                 DOM.currentTime.textContent = '0:00';
                 DOM.totalTime.textContent = formatTime(state.duration || 0);
+                syncClassicProgress();
                 currentAudio.src = state.audioURL;
                 if (state.isPlaying !== false) currentAudio.play().then(() => {
                     if (revision !== audioRevision || currentAudio.paused) return;
@@ -2895,6 +3168,7 @@ function initAPIListeners() {
             if (DOM.progressFill) DOM.progressFill.style.width = '0%';
             if (DOM.currentTime) DOM.currentTime.textContent = '0:00';
             if (DOM.totalTime) DOM.totalTime.textContent = '0:00';
+            syncClassicProgress();
 
             const audioEl = document.querySelector('audio');
             if (audioEl) {
@@ -2913,6 +3187,9 @@ function initAPIListeners() {
     // Mini player mode toggle
     window.api.onMiniMode((data) => {
         document.body.classList.toggle('mini-mode', data.isMini);
+        const classic = data.isMini === true && data.legacy === true;
+        document.body.classList.toggle('classic-mini', classic);
+        if (!classic) setClassicHistory(false);
         renderUpdateNotice();
         updateFooterThumbVisibility();
         // Collapse volume slider by default in mini mode, reset when leaving
@@ -2922,6 +3199,10 @@ function initAPIListeners() {
             DOM.volumeSlider.classList.remove('collapsed');
         }
         updateMiniPlayerLayout();
+        if (classic) {
+            updateClassicPlayerUI();
+            renderPlayerArtwork();
+        }
     });
 
     window.api.onError((data) => {
@@ -2976,6 +3257,8 @@ async function init() {
 
     initEventListeners();
     initAPIListeners();
+    await loadVolumeSettings();
+    await loadMiniplayerSettings();
 
     // Request initial data
     await window.api.init();

@@ -44,6 +44,14 @@ contextBridge.exposeInMainWorld('api', {
         }
     },
 
+    settings: {
+        getVolume: () => ipcRenderer.invoke('SETTINGS:GET_VOLUME'),
+        setRememberVolume: (enabled, volume) => ipcRenderer.invoke('SETTINGS:SET_REMEMBER_VOLUME', enabled, volume),
+        saveVolume: volume => ipcRenderer.invoke('SETTINGS:SAVE_VOLUME', volume),
+        getLegacyMiniplayer: () => ipcRenderer.invoke('SETTINGS:GET_LEGACY_MINIPLAYER'),
+        setLegacyMiniplayer: enabled => ipcRenderer.invoke('SETTINGS:SET_LEGACY_MINIPLAYER', enabled)
+    },
+
     // ========================================
     // Authentication
     // ========================================
