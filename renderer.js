@@ -2128,6 +2128,30 @@ function checkMarquee(el) {
         el.classList.add('marquee');
     }
 }
+// The classic player's lines scroll once, wait this long, then scroll again.
+const CLASSIC_MARQUEE_REPEAT_MS = 7000;
+const classicMarqueeTimers = new WeakMap();
+
+function checkClassicMarquee(inner) {
+    clearTimeout(classicMarqueeTimers.get(inner));
+    classicMarqueeTimers.delete(inner);
+    inner.classList.remove('marquee-repeat');
+    checkMarquee(inner); // sets or clears .marquee, plus its distance and speed
+    inner.dataset.marqueeActive = inner.classList.contains('marquee') ? '1' : '';
+    if (inner.dataset.marqueeLoop) return;
+    inner.dataset.marqueeLoop = '1';
+    inner.addEventListener('animationend', event => {
+        if (event.animationName !== 'marquee-scroll') return;
+        // Back at the start: rest, then run again (only if the same text still overflows).
+        inner.classList.remove('marquee');
+        clearTimeout(classicMarqueeTimers.get(inner));
+        classicMarqueeTimers.set(inner, setTimeout(() => {
+            classicMarqueeTimers.delete(inner);
+            if (inner.dataset.marqueeActive === '1' && inner.isConnected) inner.classList.add('marquee', 'marquee-repeat');
+        }, CLASSIC_MARQUEE_REPEAT_MS));
+    });
+}
+
 function updatePlayerUI(state) {
     if ((state.stationId !== undefined && state.stationId !== AppState.playerState.stationId) ||
         (state.playbackGeneration !== undefined && state.playbackGeneration !== AppState.playerState.playbackGeneration)) {
@@ -2348,16 +2372,27 @@ function isClassicMini() {
 function updateClassicPlayerUI() {
     if (!isClassicMini()) return;
     const state = AppState.playerState;
+    const lines = [];
     const setText = (id, text) => {
         const element = document.getElementById(id);
         if (!element) return;
-        element.textContent = text;
+        // The text sits in an inner span so a long line can scroll inside its fixed-width box.
+        const inner = element.querySelector('.classic-line-text') || element;
+        inner.textContent = text;
         element.title = text;
+        // Measure only when the text changed, so an unrelated update (a thumb, play/pause)
+        // does not restart a scrolling line from the beginning.
+        if (inner.dataset.marqueeText !== text) {
+            inner.dataset.marqueeText = text;
+            lines.push(inner);
+        }
     };
     setText('classic-artist', state.artist || '');
     setText('classic-track', state.track || 'Not Playing');
     // The line keeps its height when there is no album so nothing below it moves.
     setText('classic-album', state.album || '');
+    // Scroll any line that runs off the right side (measured once the new text is laid out).
+    if (lines.length) requestAnimationFrame(() => lines.forEach(checkClassicMarquee));
     const icon = document.getElementById('classic-play-icon');
     if (icon) {
         icon.innerHTML = state.isPlaying
@@ -2437,6 +2472,7 @@ async function loadMiniplayerSettings() {
 // ============================================================================
 
 const VOLUME_THUMB_PX = 11; // matches .volume-slider::-webkit-slider-thumb
+const CLASSIC_VOLUME_THUMB_PX = 14; // matches .classic-volume-slider::-webkit-slider-thumb
 const VOLUME_POPOVER_LINGER_MS = 700;
 const VOLUME_POPOVER_RELEASE_MS = 250;
 let currentVolume = 100;
@@ -2487,7 +2523,7 @@ async function loadVolumeSettings() {
 
 // A slider and its percentage bubble. The bubble follows the thumb and shows only
 // while the slider is being adjusted. Used by the footer and the classic player.
-function createVolumeControl(slider, popover) {
+function createVolumeControl(slider, popover, thumbPx = VOLUME_THUMB_PX) {
     if (!slider) return;
     let scrubbing = false;
     let timer = null;
@@ -2496,9 +2532,9 @@ function createVolumeControl(slider, popover) {
         if (!popover) return;
         clearTimeout(timer);
         timer = null;
-        const travel = Math.max(0, slider.offsetWidth - VOLUME_THUMB_PX);
+        const travel = Math.max(0, slider.offsetWidth - thumbPx);
         popover.textContent = `${currentVolume}%`;
-        popover.style.left = `${slider.offsetLeft + VOLUME_THUMB_PX / 2 + (currentVolume / 100) * travel}px`;
+        popover.style.left = `${slider.offsetLeft + thumbPx / 2 + (currentVolume / 100) * travel}px`;
         popover.classList.add('visible');
     }
 
@@ -2758,7 +2794,7 @@ function initEventListeners() {
 
     // Volume
     createVolumeControl(DOM.volumeSlider, DOM.volumePopover);
-    createVolumeControl(document.getElementById('classic-volume-slider'), document.getElementById('classic-volume-popover'));
+    createVolumeControl(document.getElementById('classic-volume-slider'), document.getElementById('classic-volume-popover'), CLASSIC_VOLUME_THUMB_PX);
 
     // Classic mini player: every control reuses the behavior of its footer counterpart.
     const onClassic = (id, handler) => document.getElementById(id)?.addEventListener('click', handler);

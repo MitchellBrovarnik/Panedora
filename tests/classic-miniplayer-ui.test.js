@@ -340,7 +340,7 @@ test('the classic progress bar mirrors the footer bar and seeks the same way', t
 test('the classic progress row sits between the song details and the play controls', t => {
     const s = setup(t);
     const order = [...s.node('classic-player').children].map(child => child.className.split(' ')[0]);
-    assert.deepEqual(order, ['classic-stage', 'classic-progress', 'classic-controls', 'classic-bottom']);
+    assert.deepEqual(order, ['classic-drag', 'classic-stage', 'classic-progress', 'classic-controls', 'classic-bottom']);
     const stage = s.node('classic-player').querySelector('.classic-stage');
     assert.equal(stage.querySelector('.classic-info').previousElementSibling.id, 'classic-art');
 });
@@ -389,4 +389,166 @@ test('the mini-player icon is drawn centred in its box like the other bottom-row
     const top = Math.min(...rects.map(r => r.y));
     const bottom = Math.max(...rects.map(r => r.y + r.h));
     assert.equal((top + bottom) / 2, 12, 'The drawing is centred vertically in the 24-unit box');
+});
+
+const nextFrame = s => new Promise(resolve => s.window.requestAnimationFrame(() => resolve()));
+
+// jsdom has no layout, so give a line a measured width and its box an available width.
+function measure(s, id, { text, box = 234 }) {
+    const line = s.node(id);
+    const inner = line.querySelector('.classic-line-text');
+    Object.defineProperty(inner, 'scrollWidth', { value: text, configurable: true });
+    Object.defineProperty(line, 'clientWidth', { value: box, configurable: true });
+    line.style.paddingLeft = line.style.paddingRight = '0px';
+    return inner;
+}
+
+test('a line that runs off the right side scrolls, and short lines stay still and centred', async t => {
+    const s = setup(t);
+    s.ui.update(playing);
+    s.enter();
+    await nextFrame(s);
+    const track = measure(s, 'classic-track', { text: 320 });
+    const artist = measure(s, 'classic-artist', { text: 120 });
+    measure(s, 'classic-album', { text: 90 });
+    s.ui.update({ track: 'A very long song title that cannot possibly fit', artist: 'Short', album: 'Short album' });
+    await nextFrame(s);
+    assert.equal(track.classList.contains('marquee'), true, 'The long title scrolls');
+    assert.equal(track.style.getPropertyValue('--marquee-offset'), '-102px', 'Scrolls to its end (overflow plus a little room)');
+    assert.equal(track.style.getPropertyValue('--marquee-duration'), `${(320 - 234) / 15}s`);
+    assert.equal(artist.classList.contains('marquee'), false, 'Lines that fit do not scroll');
+    assert.equal(s.node('classic-album').querySelector('.classic-line-text').classList.contains('marquee'), false);
+    assert.equal(s.node('classic-track').title, 'A very long song title that cannot possibly fit', 'Full text on hover');
+
+    // Unrelated updates (play/pause, thumbs) must not restart a line that is mid-scroll.
+    Object.defineProperty(track, 'scrollWidth', { value: 100, configurable: true });
+    s.ui.update({ isPlaying: false });
+    s.ui.update({ feedback: 'thumbUp' });
+    await nextFrame(s);
+    assert.equal(track.classList.contains('marquee'), true, 'Not re-measured while the text is unchanged');
+    // A new, shorter title is measured and stops scrolling.
+    s.ui.update({ track: 'Short title' });
+    await nextFrame(s);
+    assert.equal(track.classList.contains('marquee'), false);
+    assert.equal(track.style.getPropertyValue('--marquee-offset'), '');
+});
+
+test('lines that ran off the edge are measured again when the classic view is opened later', async t => {
+    const s = setup(t);
+    s.ui.update(playing);
+    s.ui.update({ track: 'Updated while the classic view is closed' });
+    s.enter();
+    await nextFrame(s);
+    const inner = measure(s, 'classic-track', { text: 400 });
+    assert.equal(inner.classList.contains('marquee'), false, 'Nothing is measured while the view is hidden');
+    s.ui.update({ track: 'Another long title to scroll' });
+    await nextFrame(s);
+    assert.equal(inner.classList.contains('marquee'), true);
+});
+
+test('only the album art and the margin around it can drag the window', t => {
+    const s = setup(t);
+    const player = s.node('classic-player');
+    const band = player.firstElementChild;
+    assert.equal(band.className, 'classic-drag');
+    assert.equal(band.getAttribute('aria-hidden'), 'true');
+    assert.equal(s.node('classic-art').closest('.classic-drag'), null, 'The band is a sibling behind the content, not a wrapper');
+    const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
+    const classic = css.slice(css.indexOf('Classic mini player ("Use legacy miniplayer")'), css.indexOf('/* Mini Thumbs'));
+    const rule = selector => new RegExp('(?:^|\n)' + selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\{([^}]*)\\}').exec(classic)?.[1];
+    assert.match(rule('.classic-drag'), /position: absolute;[\s\S]*top: 0;[\s\S]*left: 0;[\s\S]*right: 0;/, 'Spans the full window width');
+    assert.match(rule('.classic-drag'), /height: calc\(var\(--classic-margin\) \* 2 \+ 256px\);/, 'Margin + 256px cover + margin: ends where the details box begins');
+    assert.match(rule('.classic-drag'), /-webkit-app-region: drag;/);
+    assert.equal(/app-region/.test(rule('body.classic-mini .classic-player')), false, 'The whole player is no longer a drag region');
+    assert.equal((classic.match(/-webkit-app-region: drag/g) || []).length, 1, 'The band is the only draggable part');
+    // Interactive parts, including the history list that can cover the art, are never draggable.
+    assert.match(classic, /\.classic-btn,\n\.classic-volume-slider,\n\.classic-history,\n\.classic-controls button,\n\.classic-progress \{\n    -webkit-app-region: no-drag;/);
+    assert.match(rule('.classic-art'), /-webkit-user-drag: none;/);
+});
+
+test('the classic volume knob can be grabbed anywhere on it, and its popover follows the larger knob', t => {
+    const s = setup(t);
+    const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
+    const rule = selector => new RegExp('(?:^|\n)' + selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\{([^}]*)\\}').exec(css)?.[1];
+    const slider = rule('.classic-volume-slider');
+    const knob = rule('.classic-volume-slider::-webkit-slider-thumb');
+    const height = +/height: (\d+)px;/.exec(slider)[1];
+    const knobSize = +/height: (\d+)px;/.exec(knob)[1];
+    assert.ok(height >= knobSize + 4, `The slider box (${height}px) must be taller than the knob (${knobSize}px) or part of the knob is not clickable`);
+    assert.match(slider, /width: 64px;/);
+    assert.match(slider, /background: transparent;/, 'The thin track is drawn separately');
+    assert.match(rule('.classic-volume-slider::-webkit-slider-runnable-track'), /height: 4px;/);
+    assert.match(knob, /width: 14px;[\s\S]*height: 14px;/);
+    assert.equal(+/margin-top: (-?\d+)px;/.exec(knob)[1], (4 - knobSize) / 2, 'Knob centred on the 4px track');
+    // 18px icon + 4px gap + 64px slider still fits in the 94px column beside the centre buttons.
+    assert.ok(18 + 4 + 64 <= (256 - 68) / 2);
+
+    // The popover is placed by the knob size: 14px here, 11px for the footer slider.
+    s.enter();
+    const classic = s.node('classic-volume-slider');
+    Object.defineProperty(classic, 'offsetWidth', { value: 64 });
+    Object.defineProperty(classic, 'offsetLeft', { value: 22 });
+    const fire = (target, type) => target.dispatchEvent(new s.window.Event(type, { bubbles: true }));
+    fire(classic, 'pointerdown');
+    classic.value = '100'; fire(classic, 'input');
+    assert.equal(s.node('classic-volume-popover').style.left, `${22 + 14 / 2 + 50}px`, 'Centred on the 14px knob at 100%');
+    classic.value = '0'; fire(classic, 'input');
+    assert.equal(s.node('classic-volume-popover').style.left, `${22 + 14 / 2}px`);
+    fire(s.window.document.body, 'pointerup');
+    const footer = s.node('volume-slider');
+    Object.defineProperty(footer, 'offsetWidth', { value: 90 });
+    Object.defineProperty(footer, 'offsetLeft', { value: 10 });
+    fire(footer, 'pointerdown');
+    footer.value = '100'; fire(footer, 'input');
+    assert.equal(s.node('volume-popover').style.left, `${10 + 11 / 2 + 79}px`, 'The footer slider keeps its 11px knob');
+});
+
+test('a scrolling line rests 7 seconds, then scrolls again, and stops when its text no longer overflows', async t => {
+    const s = setup(t);
+    s.ui.update(playing);
+    s.enter();
+    await nextFrame(s);
+    const timers = [];
+    s.window.setTimeout = (fn, ms) => { timers.push({ fn, ms, live: true }); return timers.length; };
+    s.window.clearTimeout = id => { if (timers[id - 1]) timers[id - 1].live = false; };
+    const track = measure(s, 'classic-track', { text: 320 });
+    s.ui.update({ track: 'A very long song title that cannot possibly fit' });
+    await nextFrame(s);
+    const ended = (name = 'marquee-scroll') => {
+        const event = new s.window.Event('animationend', { bubbles: true });
+        Object.defineProperty(event, 'animationName', { value: name });
+        track.dispatchEvent(event);
+    };
+    const pending = () => timers.filter(timer => timer.live);
+    const fire = timer => { timer.live = false; timer.fn(); }; // a timer runs once
+    assert.equal(track.classList.contains('marquee'), true, 'First run starts (after its own short delay in CSS)');
+    assert.equal(track.classList.contains('marquee-repeat'), false);
+
+    ended('some-other-animation');
+    assert.equal(track.classList.contains('marquee'), true, 'Other animations do not count');
+    ended();
+    assert.equal(track.classList.contains('marquee'), false, 'Back at the start, resting');
+    assert.deepEqual(pending().map(timer => timer.ms), [7000], 'Rests for 7 seconds');
+    fire(pending()[0]);
+    assert.equal(track.classList.contains('marquee'), true, 'Scrolls again');
+    assert.equal(track.classList.contains('marquee-repeat'), true, 'without repeating the start delay');
+    ended();
+    assert.equal(pending().length, 1, 'and rests again');
+
+    // A different title measured during the rest cancels the pending repeat.
+    Object.defineProperty(track, 'scrollWidth', { value: 100, configurable: true });
+    s.ui.update({ track: 'Short' });
+    await nextFrame(s);
+    assert.equal(pending().length, 0, 'The old wait is cancelled');
+    assert.equal(track.classList.contains('marquee'), false);
+    assert.equal(track.classList.contains('marquee-repeat'), false);
+    ended();
+    for (const timer of pending()) fire(timer);
+    assert.equal(track.classList.contains('marquee'), false, 'A line that fits never restarts');
+
+    const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
+    assert.match(css, /\.classic-line-text\.marquee \{\n    animation: marquee-scroll var\(--marquee-duration, 8s\) linear 1;/, 'One scroll per run');
+    assert.match(css, /\.classic-line-text\.marquee\.marquee-repeat \{\n    animation-delay: 0s;/);
+    assert.match(css, /body\.mini-mode \.now-playing-title\.marquee \{\n    animation: marquee-scroll var\(--marquee-duration, 8s\) linear infinite;/,
+        'The wide mini player\u2019s marquee is unchanged');
 });

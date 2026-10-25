@@ -229,6 +229,17 @@ body.classic-mini .classic-player {
     border-radius: 12px;
     overflow: hidden;
     color: var(--text-1);
+}
+
+/* Dragging the window is limited to the album art and the margin around it: the
+   band from the top of the window to the details box. Text, progress and controls
+   below it are not draggable, so grabbing them never moves the window by accident. */
+.classic-drag {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: calc(var(--classic-margin) * 2 + 256px);
     -webkit-app-region: drag;
 }
 
@@ -256,6 +267,8 @@ body.classic-mini .classic-player {
     flex: 0 0 auto;
     width: 256px;
     height: 256px;
+    -webkit-user-drag: none;
+    user-select: none;
     object-fit: cover;
     border-radius: 8px;
     background: #282828;
@@ -292,8 +305,26 @@ body.classic-mini .classic-player {
     text-align: center;
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
+    text-overflow: clip;
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+/* Text that is too wide scrolls to its end and back, like the wide mini player
+   (checkClassicMarquee() sets the class, distance and speed). */
+.classic-line-text {
+    display: inline-block;
+    white-space: nowrap;
+}
+
+/* One scroll per run. The pause between runs (7s) is timed in renderer.js. */
+.classic-line-text.marquee {
+    animation: marquee-scroll var(--marquee-duration, 8s) linear 1;
+    animation-delay: 1.5s;
+}
+
+/* Repeat runs have already waited, so they start straight away. */
+.classic-line-text.marquee.marquee-repeat {
+    animation-delay: 0s;
 }
 
 .classic-artist,
@@ -466,21 +497,31 @@ body.mini-mode .classic-controls .play-pause-btn svg {
     color: var(--text-2);
 }
 
+/* A native slider only reacts inside its own box, so the box is taller than the thumb
+   (18px vs 14px) and the thin track is drawn separately. The whole knob can be grabbed. */
 .classic-volume-slider {
-    width: 56px;
-    height: 3px;
+    width: 64px;
+    height: 18px;
+    margin: 0;
+    padding: 0;
     -webkit-appearance: none;
     appearance: none;
-    background: rgba(255, 255, 255, 0.18);
-    border-radius: 4px;
+    background: transparent;
     cursor: pointer;
+}
+
+.classic-volume-slider::-webkit-slider-runnable-track {
+    height: 4px;
+    background: rgba(255, 255, 255, 0.18);
+    border-radius: 2px;
 }
 
 .classic-volume-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 11px;
-    height: 11px;
+    width: 14px;
+    height: 14px;
+    margin-top: -5px; /* centres the 14px knob on the 4px track */
     background: white;
     border-radius: 50%;
     cursor: pointer;

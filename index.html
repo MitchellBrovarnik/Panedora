@@ -251,14 +251,16 @@
 
     <!-- Classic mini player: shown instead of the wide mini player when "Use legacy miniplayer" is on -->
     <div class="classic-player" id="classic-player" aria-label="Mini player">
+        <!-- The only part of the classic player that drags the window: the album art and the margin around it. -->
+        <div class="classic-drag" aria-hidden="true"></div>
         <div class="classic-stage">
             <div class="classic-now" id="classic-now">
                 <img class="classic-art" id="classic-art" width="256" height="256" alt="Album art"
                     src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Crect fill='%23282828' width='256' height='256'/%3E%3C/svg%3E">
                 <div class="classic-info">
-                    <span class="classic-artist" id="classic-artist"></span>
-                    <span class="classic-track" id="classic-track">Not Playing</span>
-                    <span class="classic-album" id="classic-album"></span>
+                    <span class="classic-artist" id="classic-artist"><span class="classic-line-text"></span></span>
+                    <span class="classic-track" id="classic-track"><span class="classic-line-text">Not Playing</span></span>
+                    <span class="classic-album" id="classic-album"><span class="classic-line-text"></span></span>
                 </div>
             </div>
             <section class="classic-history" id="classic-history" aria-label="Recently played" hidden></section>

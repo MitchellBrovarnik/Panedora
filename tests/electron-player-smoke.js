@@ -502,8 +502,40 @@ app.whenReady().then(async () => {
         assert.ok(lines.artist.top >= info.top && lines.track.top >= lines.artist.bottom - 1 &&
             lines.album.top >= lines.track.bottom - 1 && lines.album.bottom <= info.bottom, 'Artist, track and album stack inside the details box');
         near(lines.artist.center, info.center, 'text is centered in the box');
-        assert.equal(await run("document.getElementById('classic-track').scrollWidth > document.getElementById('classic-track').clientWidth"),
-            true, 'A long title is truncated, not wrapped');
+        // A long title scrolls inside its box (like the wide mini player) instead of being cut off.
+        await run('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+        const marquee = await run(`(() => {
+            const info = id => { const line = document.getElementById(id), inner = line.querySelector('.classic-line-text');
+                const style = getComputedStyle(inner);
+                return { overflows: inner.scrollWidth > line.clientWidth, scrolls: inner.classList.contains('marquee'),
+                    animation: style.animationName, wraps: inner.getBoundingClientRect().height > 24,
+                    offset: inner.style.getPropertyValue('--marquee-offset') }; };
+            return { track: info('classic-track'), artist: info('classic-artist'), album: info('classic-album') };
+        })()`);
+        assert.equal(marquee.track.overflows, true, 'The long title is wider than its box');
+        assert.equal(marquee.track.scrolls, true, 'so it scrolls');
+        assert.equal(marquee.track.animation, 'marquee-scroll');
+        assert.ok(parseFloat(marquee.track.offset) < 0, 'toward its end: ' + marquee.track.offset);
+        assert.equal(marquee.track.wraps, false, 'and never wraps onto a second line');
+        assert.deepEqual([marquee.artist.scrolls, marquee.album.scrolls], [false, false], 'Lines that fit stay still');
+        // While scrolling, the box keeps clipping the text instead of letting it spill outside the details box.
+        assert.equal(await run("getComputedStyle(document.getElementById('classic-track')).overflow"), 'hidden');
+        // Only the album art and its margin drag the window: the band ends where the details box begins.
+        const dragBand = await box('.classic-drag');
+        near(dragBand.top, 0, 'drag band starts at the top of the window');
+        near(dragBand.left, 0, 'drag band starts at the left edge'); near(dragBand.width, 280, 'drag band spans the window width');
+        near(dragBand.bottom, info.top, 'drag band ends exactly where the details box begins');
+        assert.ok(dragBand.bottom >= art.bottom + 11, 'and includes the margin under the cover');
+        const regions = await run(`Object.fromEntries(['.classic-drag', '.classic-art', '.classic-info', '.classic-progress',
+            '.classic-controls button', '.classic-bottom button', '.classic-volume-slider', '.classic-player'].map(selector =>
+            [selector, getComputedStyle(document.querySelector(selector)).getPropertyValue('-webkit-app-region')]))`);
+        assert.equal(regions['.classic-drag'], 'drag');
+        for (const selector of ['.classic-info', '.classic-player']) {
+            assert.notEqual(regions[selector], 'drag', selector + ' must not drag the window');
+        }
+        for (const selector of ['.classic-progress', '.classic-controls button', '.classic-bottom button', '.classic-volume-slider']) {
+            assert.equal(regions[selector], 'no-drag', selector + ' is explicitly not draggable');
+        }
         const progress = await box('.classic-progress');
         near(progress.top - info.bottom, 12, 'margin between details and progress bar');
         near(progress.width, 256, 'progress row lines up with the cover');
@@ -559,6 +591,19 @@ app.whenReady().then(async () => {
         assert.ok(sizes.thumb > sizes.expand && sizes.thumb <= 42, 'Thumbs are larger than the other buttons, but not huge: ' + sizes.thumb);
         assert.ok(bottom.top - controls.bottom >= 12 - 1, 'Controls keep their margin above the button row');
         near(thumbs.left, 12, 'thumbs sit at the left'); near(volume.right, 268, 'volume sits at the right');
+        // The whole volume knob is clickable: points on its top and bottom edge hit the slider.
+        const knob = await run(`(() => {
+            const slider = document.getElementById('classic-volume-slider');
+            const r = slider.getBoundingClientRect();
+            const centreY = r.top + r.height / 2;
+            const knobX = r.left + 7 + (slider.value / 100) * (r.width - 14); // 14px knob
+            const hit = y => document.elementFromPoint(knobX, y) === slider;
+            return { width: r.width, height: r.height, top: hit(centreY - 6.5), bottom: hit(centreY + 6.5), centre: hit(centreY),
+                aboveBox: hit(r.top - 3) };
+        })()`);
+        assert.ok(knob.width >= 60 && knob.height >= 18 && knob.height <= 20, `The slider is larger than before, but only just taller than the knob: ${knob.width}x${knob.height}`);
+        assert.deepEqual([knob.centre, knob.top, knob.bottom], [true, true, true], 'The top and bottom of the 14px knob are inside the slider');
+        assert.equal(knob.aboveBox, false, 'but the slider does not reach far past the knob');
         near(center.center, 140, 'mini and history buttons are centered');
         // Every icon is vertically centred on the row (the mini-player icon used to sit too high).
         const iconOffsets = await run(`(() => {
