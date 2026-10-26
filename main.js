@@ -147,13 +147,7 @@ function saveClassicBoundsNow() {
 
 // Moving or resizing fires a stream of events; save once things settle.
 function scheduleClassicBoundsSave() {
-    if (!classicMiniActive || !uiWindow || uiWindow.isDestroyed()) return;
-    // Native/programmatic resize paths can bypass the interactive constraints.
-    // Keep the classic layout compact even when the window manager does so.
-    const bounds = uiWindow.getBounds();
-    if (bounds.width !== CLASSIC_MINI_WIDTH || bounds.height !== CLASSIC_MINI_HEIGHT) {
-        uiWindow.setSize(CLASSIC_MINI_WIDTH, CLASSIC_MINI_HEIGHT);
-    }
+    if (!classicMiniActive) return;
     clearTimeout(classicBoundsTimer);
     classicBoundsTimer = setTimeout(saveClassicBoundsNow, 400);
 }
@@ -188,7 +182,10 @@ ipcMain.handle('WINDOW:TOGGLE_MINI', async () => {
         }
         // Use 'screen-saver' level to stay on top of fullscreen borderless games
         uiWindow.setAlwaysOnTop(true, 'screen-saver');
-        uiWindow.setResizable(!legacy); // Wide mini player: width adjusts from 540–900px; height stays at 80px.
+        // Equal min/max dimensions lock the classic player. Keep native resize
+        // handling enabled: disabling it makes Electron rewrite the constraints
+        // on programmatic size changes (including restoring window positions).
+        uiWindow.setResizable(true);
     } else {
         // Remember the classic player's spot before the full player takes the window back.
         saveClassicBoundsNow();

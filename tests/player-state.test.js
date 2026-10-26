@@ -1359,7 +1359,7 @@ test('toggling the mini player sizes the window for the classic or wide layout a
         'The first time it opens from the full player\u2019s top-left corner');
     const max = log.find(c => c[0] === 'max');
     assert.deepEqual(max, ['max', 280, 500], 'The classic player keeps its compact dimensions');
-    assert.deepEqual(log.find(c => c[0] === 'resizable'), ['resizable', false]);
+    assert.deepEqual(log.find(c => c[0] === 'resizable'), ['resizable', true], 'Native constraints remain active');
     assert.ok(log.some(c => c[0] === 'onTop' && c[1] === true), 'Stays on top like the wide mini player');
 
     log.length = 0;

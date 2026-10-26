@@ -455,7 +455,6 @@ app.whenReady().then(async () => {
         assert.deepEqual(win.getSize(), [280, minHeight], 'The classic player opens at its minimum size');
         assert.deepEqual(win.getMinimumSize(), [280, minHeight]);
         assert.deepEqual(win.getMaximumSize(), [280, minHeight]);
-        assert.equal(win.isResizable(), false, 'The classic layout cannot be stretched into empty space');
         assert.equal(await run("document.body.classList.contains('mini-mode')"), true);
         assert.equal(await run("getComputedStyle(document.querySelector('.player-footer')).display"), 'none',
             'The wide mini player footer is replaced');
