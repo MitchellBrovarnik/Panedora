@@ -456,7 +456,7 @@ test('update banner escapes versions and leaves focus, navigation and playback a
     const s = setup(t);
     const responses = [];
     s.window.api.updates = {
-        check: async () => ({ version: '<b>1.2.0</b>', currentVersion: '1.1.3' }),
+        check: async () => ({ version: '<b>1.2.0</b>', currentVersion: '<i>1.1.3</i>' }),
         respond: async (...args) => { responses.push(args); return { success: true }; }
     };
     const previous = s.node('play-pause-btn');
@@ -465,8 +465,11 @@ test('update banner escapes versions and leaves focus, navigation and playback a
     await s.ui.checkUpdates();
     assert.equal(s.node('update-banner').hidden, false);
     assert.equal(s.node('main-header').hidden, false);
+    assert.equal(s.node('update-current-version').textContent, '<i>1.1.3</i>');
+    assert.equal(s.node('update-current-version').children.length, 0);
     assert.equal(s.node('update-available-version').textContent, '<b>1.2.0</b>');
     assert.equal(s.node('update-available-version').children.length, 0);
+    assert.equal(s.node('update-version-range').textContent, '<i>1.1.3</i> → <b>1.2.0</b>');
     assert.equal(s.window.document.activeElement, previous);
     assert.equal(s.window.document.querySelector('dialog[open]'), null);
     s.ui.render('search');
@@ -532,10 +535,13 @@ test('update banner errors are retryable, disable only its buttons and leave Esc
     await s.ui.checkUpdates();
     s.node('update-download').click();
     assert.equal(s.node('update-later').disabled, true);
+    assert.equal(s.node('update-version-range').hidden, true);
     assert.equal(s.node('play-pause-btn').disabled, false);
     await tick();
     assert.equal(s.node('update-banner').hidden, false);
     assert.equal(s.node('update-download').disabled, false);
+    assert.equal(s.node('update-version-range').hidden, false);
+    assert.equal(s.node('update-version-range').textContent, '1.1.3 → 1.2.0');
     assert.match(s.node('update-error').textContent, /Please try again/);
     fail = false;
     const escape = new s.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
