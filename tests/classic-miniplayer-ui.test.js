@@ -48,7 +48,8 @@ function setup(t, { settings = {} } = {}) {
     window.eval(fs.readFileSync(path.join(root, 'components.js'), 'utf8') + '\n' +
         fs.readFileSync(path.join(root, 'renderer.js'), 'utf8') + `
         document.removeEventListener('DOMContentLoaded', init);
-        window.testUI = { render: renderPage, update: updatePlayerUI, load: loadMiniplayerSettings, state: AppState };
+        window.testUI = { render: renderPage, update: updatePlayerUI, load: loadMiniplayerSettings, state: AppState,
+            preload: url => upcomingArtworkPreloads.get(url) };
         initEventListeners();
         initAPIListeners();
     `);
@@ -252,6 +253,80 @@ test('the classic cover loads the current artwork and is left alone when not sho
     s.ui.update({ trackToken: 'next', track: 'Next', coverArt: 'https://fixture.invalid/next.jpg',
         coverArtSources: ['https://fixture.invalid/next.jpg'] });
     assert.equal(s.node('classic-art').getAttribute('src'), 'https://fixture.invalid/next.jpg');
+});
+
+function finishArtwork(image) {
+    Object.defineProperties(image, {
+        complete: { value: true, configurable: true },
+        naturalWidth: { value: 500, configurable: true }
+    });
+    image.onload();
+}
+
+test('classic playback promotes the ready cover without loading hidden full-player artwork', t => {
+    const s = setup(t);
+    const large = s.window.document.createElement('img');
+    large.id = 'np-large-art';
+    s.body.appendChild(large);
+    s.enter();
+    const url = 'https://fixture.invalid/no-store-next.jpg';
+    s.ui.update({ ...playing, coverArt: 'https://fixture.invalid/current.jpg', upcomingArtwork: [url] });
+    const prepared = s.ui.preload(url);
+    finishArtwork(prepared);
+    const writes = [];
+    const descriptor = Object.getOwnPropertyDescriptor(s.window.HTMLImageElement.prototype, 'src');
+    Object.defineProperty(s.window.HTMLImageElement.prototype, 'src', {
+        ...descriptor,
+        set(value) { writes.push(value); descriptor.set.call(this, value); }
+    });
+    s.ui.update({ trackToken: 'next', coverArt: url, upcomingArtwork: [] });
+    assert.equal(s.node('classic-art'), prepared, 'The visible player owns the decoded image');
+    assert.equal(prepared.complete && prepared.naturalWidth > 0, true);
+    assert.equal(writes.includes(url), false, 'No other image is assigned the non-cacheable URL');
+    assert.equal(s.node('now-playing-art').getAttribute('src').includes('data:'), true);
+    assert.equal(large.getAttribute('src'), null, 'The hidden expanded artwork is not fetched either');
+    s.ui.update({ feedback: 'thumbUp' });
+    assert.equal(s.node('classic-art'), prepared, 'An ordinary state update preserves the ready image');
+});
+
+test('entering and leaving classic mode carries the loaded image and restores footer click behavior', t => {
+    const s = setup(t);
+    s.ui.update({ ...playing, coverArt: 'https://fixture.invalid/no-store-current.jpg' });
+    const ready = s.node('now-playing-art');
+    const footerClick = ready.onclick;
+    const footerClass = ready.className;
+    finishArtwork(ready);
+    for (let i = 0; i < 2; i++) {
+        s.enter();
+        assert.equal(s.node('classic-art'), ready);
+        assert.equal(ready.className, 'classic-art');
+        assert.equal(ready.getAttribute('width'), '256');
+        assert.equal(ready.onclick, null, 'The artwork is only a drag area in classic mode');
+        assert.notEqual(s.node('now-playing-art'), ready, 'The hidden footer keeps its own placeholder slot');
+        s.leave();
+        assert.equal(s.node('now-playing-art'), ready);
+        assert.equal(ready.className, footerClass);
+        assert.equal(ready.getAttribute('width'), null, 'Classic dimensions do not leak into the footer');
+        assert.equal(ready.onclick, footerClick, 'The promoted footer still opens Now Playing');
+        assert.equal(s.node('classic-art').className, 'classic-art');
+    }
+});
+
+test('a late preload replaces the pending classic cover without allowing obsolete callbacks to restore it', t => {
+    const s = setup(t);
+    s.enter();
+    const url = 'https://fixture.invalid/late-cover.jpg';
+    s.ui.update({ ...playing, upcomingArtwork: [url] });
+    const prepared = s.ui.preload(url);
+    s.ui.update({ trackToken: 'next', coverArt: url, upcomingArtwork: [] });
+    const pending = s.node('classic-art');
+    const oldError = pending.onerror;
+    assert.notEqual(pending, prepared, 'The visible image loads directly while the preload is pending');
+    finishArtwork(prepared);
+    assert.equal(s.node('classic-art'), prepared);
+    oldError();
+    assert.equal(s.node('classic-art'), prepared);
+    assert.equal(prepared.src, url);
 });
 
 test('the classic volume slider matches the footer slider, remembers the level and shows the percentage', async t => {

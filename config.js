@@ -169,7 +169,6 @@ function decryptString(str) {
 }
 
 const DEFAULT_VOLUME = 100;
-const SILENT_RESTORE_VOLUME = 25;
 
 // Whole percent from 0 to 100, or null for anything that is not a finite number.
 function clampVolume(value) {
@@ -187,9 +186,7 @@ function validBounds(bounds) {
 }
 
 function restoredVolume(value) {
-    const volume = clampVolume(value);
-    if (volume === null) return DEFAULT_VOLUME;
-    return volume === 0 ? SILENT_RESTORE_VOLUME : volume;
+    return clampVolume(value) ?? DEFAULT_VOLUME;
 }
 
 module.exports = {
@@ -233,7 +230,7 @@ module.exports = {
     setDiscordEnabled: enabled => setConfig('discordEnabled', enabled === true),
 
     // Volume memory is an installation preference (default off) and survives sign-out.
-    // A saved volume of 0 would reopen the app silent, so it is restored as 25%.
+    // A saved volume of 0 stays muted, just like every other saved level.
     getVolumeSettings: () => {
         const stored = getConfig();
         const remember = stored.rememberVolume === true;

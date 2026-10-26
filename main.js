@@ -8,9 +8,9 @@ const path = require('path');
 // A positive, effectively unbounded dimension also works with macOS window constraints.
 const MAX_WINDOW_DIMENSION = Math.floor(0x7fffffff / 10);
 // The classic mini player: 12px margins around a 256px cover need 280px of width.
-const CLASSIC_MINI_MIN_WIDTH = 280;
+const CLASSIC_MINI_WIDTH = 280;
 // Cover, song details, progress, controls and button row with 12px margins need exactly 500px.
-const CLASSIC_MINI_MIN_HEIGHT = 500;
+const CLASSIC_MINI_HEIGHT = 500;
 
 // Disable GPU caching to prevent 'Access is denied' cache_util_win errors on Windows startup
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
@@ -125,12 +125,12 @@ function createUIWindow() {
 // Classic mini player: remember where it was left
 // ----------------------------------------------------------------------------
 
-// Keep a rectangle fully on the display that matches it best (the nearest one if
-// its monitor has gone), without ever shrinking it below the classic minimum size.
+// Restore the compact size even if an older version saved an enlarged window.
+// Keep its position on the matching display (or the nearest remaining display).
 function fitBoundsToScreen(bounds) {
-    const area = screen.getDisplayMatching(bounds).workArea;
-    const width = Math.min(Math.max(bounds.width, CLASSIC_MINI_MIN_WIDTH), Math.max(area.width, CLASSIC_MINI_MIN_WIDTH));
-    const height = Math.min(Math.max(bounds.height, CLASSIC_MINI_MIN_HEIGHT), Math.max(area.height, CLASSIC_MINI_MIN_HEIGHT));
+    const width = CLASSIC_MINI_WIDTH;
+    const height = CLASSIC_MINI_HEIGHT;
+    const area = screen.getDisplayMatching({ ...bounds, width, height }).workArea;
     return {
         x: Math.min(Math.max(bounds.x, area.x), Math.max(area.x, area.x + area.width - width)),
         y: Math.min(Math.max(bounds.y, area.y), Math.max(area.y, area.y + area.height - height)),
@@ -166,13 +166,13 @@ ipcMain.handle('WINDOW:TOGGLE_MINI', async () => {
         uiWindow.setMenuBarVisibility(false);
         uiWindow.setAutoHideMenuBar(true);
         if (legacy) {
-            // Classic player: freely resizable above its minimum size. It reopens where it was
-            // last left; the first time it opens from the full player's top-left corner.
-            uiWindow.setMinimumSize(CLASSIC_MINI_MIN_WIDTH, CLASSIC_MINI_MIN_HEIGHT);
-            uiWindow.setMaximumSize(MAX_WINDOW_DIMENSION, MAX_WINDOW_DIMENSION);
+            // Keep the artwork and controls together at the designed compact size.
+            // The first time it opens from the full player's top-left corner.
+            uiWindow.setMinimumSize(CLASSIC_MINI_WIDTH, CLASSIC_MINI_HEIGHT);
+            uiWindow.setMaximumSize(CLASSIC_MINI_WIDTH, CLASSIC_MINI_HEIGHT);
             const remembered = config.getClassicMiniBounds();
             uiWindow.setBounds(fitBoundsToScreen(remembered || {
-                x: savedBounds.x, y: savedBounds.y, width: CLASSIC_MINI_MIN_WIDTH, height: CLASSIC_MINI_MIN_HEIGHT
+                x: savedBounds.x, y: savedBounds.y, width: CLASSIC_MINI_WIDTH, height: CLASSIC_MINI_HEIGHT
             }));
             classicMiniActive = true;
         } else {
@@ -182,7 +182,7 @@ ipcMain.handle('WINDOW:TOGGLE_MINI', async () => {
         }
         // Use 'screen-saver' level to stay on top of fullscreen borderless games
         uiWindow.setAlwaysOnTop(true, 'screen-saver');
-        uiWindow.setResizable(true); // Wide mini player: width adjusts from 540–900px; height stays at 80px.
+        uiWindow.setResizable(!legacy); // Wide mini player: width adjusts from 540–900px; height stays at 80px.
     } else {
         // Remember the classic player's spot before the full player takes the window back.
         saveClassicBoundsNow();

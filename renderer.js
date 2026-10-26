@@ -71,6 +71,35 @@ function isLoadedArtwork(image, key, sources) {
         sources.includes(image.getAttribute('src'));
 }
 
+// Move the decoded image, not just its URL: non-cacheable covers must not be
+// downloaded again when a song starts or the user switches player layouts.
+function promotePlayerArtwork(image, target) {
+    const copyRole = (from, to) => {
+        for (const attribute of [...to.attributes]) {
+            if (attribute.name !== 'src') to.removeAttribute(attribute.name);
+        }
+        for (const attribute of from.attributes) {
+            if (attribute.name !== 'src') to.setAttribute(attribute.name, attribute.value);
+        }
+        to.onclick = from.onclick;
+    };
+    if (image.isConnected) {
+        // Keep the hidden layout's image slot, without fetching another copy.
+        const placeholder = document.createElement('img');
+        copyRole(image, placeholder);
+        placeholder.src = PLAYER_ART_PLACEHOLDER;
+        image.replaceWith(placeholder);
+        if (DOM.nowPlayingArt === image) DOM.nowPlayingArt = placeholder;
+    }
+    cancelPlayerArtwork(target);
+    copyRole(target, image);
+    image.fetchPriority = 'auto';
+    playerArtworkLoads.get(image).preload = false;
+    target.replaceWith(image);
+    if (DOM.nowPlayingArt === target) DOM.nowPlayingArt = image;
+    target.src = '';
+}
+
 function renderPlayerArtwork() {
     const state = AppState.playerState;
     const sources = getArtworkSources(state);
@@ -79,24 +108,21 @@ function renderPlayerArtwork() {
     const key = JSON.stringify(sources);
     const trackKey = JSON.stringify([state.playbackGeneration, state.trackToken]);
     const prepared = upcomingArtworkPreloads.get(sources[0]);
-    if (prepared && isLoadedArtwork(prepared, key, sources) && !isLoadedArtwork(DOM.nowPlayingArt, key, sources)) {
-        // Move the already-loaded image into the footer/mini player. Merely
-        // assigning its URL to another image can refetch a non-cacheable cover.
-        const previous = DOM.nowPlayingArt;
-        cancelPlayerArtwork(previous);
-        for (const attribute of previous.attributes) {
-            if (attribute.name !== 'src') prepared.setAttribute(attribute.name, attribute.value);
+    const classic = document.getElementById('classic-art');
+    const target = isClassicMini() && classic ? classic : DOM.nowPlayingArt;
+    if (!isLoadedArtwork(target, key, sources)) {
+        const loaded = [prepared, DOM.nowPlayingArt, classic].find(image =>
+            image && image !== target && isLoadedArtwork(image, key, sources));
+        if (loaded) {
+            promotePlayerArtwork(loaded, target);
+            if (loaded === prepared) upcomingArtworkPreloads.delete(sources[0]);
         }
-        prepared.onclick = previous.onclick;
-        prepared.fetchPriority = 'auto';
-        playerArtworkLoads.get(prepared).preload = false;
-        previous.replaceWith(prepared);
-        DOM.nowPlayingArt = prepared;
-        previous.src = '';
-        upcomingArtworkPreloads.delete(sources[0]);
     }
-    const images = [DOM.nowPlayingArt, document.getElementById('np-large-art'),
-        isClassicMini() ? document.getElementById('classic-art') : null].filter(Boolean);
+    // Neither full-player artwork slot is visible in classic mode. Loading them
+    // here would still duplicate a no-store request despite promoting the cover.
+    const images = (isClassicMini()
+        ? [document.getElementById('classic-art')]
+        : [DOM.nowPlayingArt, document.getElementById('np-large-art')]).filter(Boolean);
     for (const image of images) {
         loadPlayerArtwork(image, sources, trackKey, images);
     }
@@ -1243,7 +1269,7 @@ function renderSettingsPage() {
         <div class="setting-row">
           <div>
             <label class="setting-label" for="remember-volume-toggle">Remember volume</label>
-            <p class="setting-help" id="remember-volume-description">Remember the chosen volume level the next time Panedora opens. If it was set to 0%, Panedora reopens at 25%.</p>
+            <p class="setting-help" id="remember-volume-description">Remember the chosen volume level the next time Panedora opens, including 0% to stay muted.</p>
           </div>
           <input class="setting-toggle" id="remember-volume-toggle" type="checkbox" role="switch" aria-describedby="remember-volume-description">
         </div>
@@ -3320,8 +3346,8 @@ function initAPIListeners() {
         updateMiniPlayerLayout();
         if (classic) {
             updateClassicPlayerUI();
-            renderPlayerArtwork();
         }
+        renderPlayerArtwork();
     });
 
     window.api.onError((data) => {

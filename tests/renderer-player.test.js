@@ -369,3 +369,12 @@ test('without a remembered volume new audio starts at full volume', () => {
     s.state({ isPlaying: true });
     assert.equal(s.audio.volume, 1);
 });
+
+test('a remembered mute is applied before the first song starts and survives track changes', () => {
+    const s = setup({ volume: 0 });
+    s.state({ isPlaying: true });
+    assert.equal(s.audio.volume, 0);
+    s.state({ audioURL: 'https://fixture.invalid/next.wav', isPlaying: true });
+    assert.equal(s.audio.volume, 0);
+    assert.equal(s.node('volume-slider').value, '0');
+});

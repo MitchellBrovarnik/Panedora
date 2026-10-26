@@ -110,7 +110,7 @@ app.whenReady().then(async () => {
             if (stalledCoverGate) await stalledCoverGate;
         }
         if (url.pathname === '/queued-stalled.svg' && queuedCoverGate) await queuedCoverGate;
-        if (url.pathname.endsWith('.svg')) artworkRequests.push(url.pathname);
+        if (url.pathname.endsWith('.svg')) artworkRequests.push(url.pathname + url.search);
         if (url.pathname.endsWith('.svg')) return new Response(
             '<svg xmlns="http://www.w3.org/2000/svg" width="500" height="500"><rect width="500" height="500" fill="#487ad9"/><circle cx="250" cy="250" r="135" fill="#202947"/><circle cx="250" cy="250" r="26" fill="#a5b9f0"/></svg>',
             { headers: { 'Content-Type': 'image/svg+xml', 'Access-Control-Allow-Origin': '*',
@@ -429,7 +429,7 @@ app.whenReady().then(async () => {
         console.log(`Mini-player layout and marquee clipping passed at 540/680/799/800/900px: wide playback centered, horizontal thumbs beside bounded text, volume expansion stable, native mini size limited to 540–900px by 80px, full size constraints restored; removing the clip reproduced ${oldOverlap} artwork pixels.`);
     }
     async function exerciseClassicMiniplayer() {
-        const minHeight = 500; // Content needs exactly 500px: 12px margins around every row.
+        const minHeight = 500; // Fixed compact size: 12px margins around every row.
         const fullSize = win.getSize();
         const saved = await run('JSON.parse(JSON.stringify(AppState.playerState))');
         const savedEffect = await run('AppState.currentEffect');
@@ -454,6 +454,8 @@ app.whenReady().then(async () => {
         await waitFor(() => run("document.body.classList.contains('classic-mini')"), 'classic mini player');
         assert.deepEqual(win.getSize(), [280, minHeight], 'The classic player opens at its minimum size');
         assert.deepEqual(win.getMinimumSize(), [280, minHeight]);
+        assert.deepEqual(win.getMaximumSize(), [280, minHeight]);
+        assert.equal(win.isResizable(), false, 'The classic layout cannot be stretched into empty space');
         assert.equal(await run("document.body.classList.contains('mini-mode')"), true);
         assert.equal(await run("getComputedStyle(document.querySelector('.player-footer')).display"), 'none',
             'The wide mini player footer is replaced');
@@ -650,16 +652,16 @@ app.whenReady().then(async () => {
         await run("document.getElementById('classic-history-btn').click()");
         assert.equal(await run("document.getElementById('classic-history').hidden"), true);
 
-        // Freely resizable above the minimum; the layout stays centered with the button row pinned low.
+        // Neither shrinking nor stretching can separate the compact artwork and controls.
         win.setSize(200, 300);
         await waitFor(() => win.getSize()[0] === 280 && win.getSize()[1] === minHeight, 'classic player cannot shrink below its minimum size');
         win.setSize(420, 760);
-        await waitFor(() => win.getSize()[0] === 420 && win.getSize()[1] === 760, 'classic player can be resized larger');
+        await waitFor(() => win.getSize()[0] === 280 && win.getSize()[1] === minHeight, 'classic player stays compact when enlarged');
         await run('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
         const wideArt = await box('#classic-art');
-        near(wideArt.width, 256, 'cover keeps its size'); near(wideArt.center, 210, 'cover stays centered');
-        near((await box('.classic-bottom')).bottom, 760 - 12, 'button row stays at the bottom margin');
-        await capture('classic-mini-large');
+        near(wideArt.width, 256, 'cover keeps its size'); near(wideArt.center, 140, 'cover stays centered');
+        near((await box('.classic-bottom')).bottom, minHeight - 12, 'button row stays beside the play controls');
+        await capture('classic-mini-resize-limited');
         win.setSize(280, minHeight);
         await waitFor(() => win.getSize()[0] === 280 && win.getSize()[1] === minHeight, 'classic minimum size');
 
@@ -678,6 +680,7 @@ app.whenReady().then(async () => {
         await waitFor(() => !win.webContents.isLoading() && win.getSize()[1] === fullSize[1], 'full-player size restored');
         assert.deepEqual(win.getSize(), fullSize);
         assert.deepEqual(win.getMinimumSize(), [900, 600]);
+        assert.equal(win.isResizable(), true, 'The full player becomes resizable again');
         await run('window.api.window.toggleMini()');
         await waitFor(() => run("document.body.classList.contains('classic-mini')"), 'classic player reopened');
         assert.deepEqual(win.getBounds(), { x: 120, y: 90, width: 280, height: minHeight }, 'The classic player reopens where it was left');
@@ -693,7 +696,7 @@ app.whenReady().then(async () => {
         assert.deepEqual(win.getSize(), [540, 80]);
         await run(`window.api.window.toggleMini(); applyBgEffect(${JSON.stringify(savedEffect)}); updatePlayerUI(${JSON.stringify(saved)})`);
         await waitFor(() => !win.webContents.isLoading() && win.getSize()[1] === fullSize[1], 'full-player size restored again');
-        console.log('Classic mini player passed: opt-in setting, 280x' + minHeight + ' minimum with free resizing, 256px cover with 12px margins, frosted centered 12pt artist/track/album box, full-player progress bar, centered controls, enlarged thumbs/history/volume row, history view, background visualizer canvas, and return to the full and wide mini players.');
+        console.log('Classic mini player passed: opt-in setting, fixed 280x' + minHeight + ' compact size, 256px cover with 12px margins, frosted centered 12pt artist/track/album box, full-player progress bar, centered controls, enlarged thumbs/history/volume row, history view, background visualizer canvas, and return to the resizable full and wide mini players.');
     }
     async function exerciseQueuedPlayback() {
         // The cover must load directly in the visible player, without waiting
@@ -775,9 +778,13 @@ app.whenReady().then(async () => {
         console.log('Direct artwork loading, queued cover prefetch/cache reuse, stalled artwork fallback, rapid skips, slow audio and playlist responses, real natural song endings, stale error recovery, first-song artwork recovery and clearing missing covers passed.');
     }
 
-    async function exerciseNaturalMiniArtwork() {
+    async function exerciseNaturalMiniArtwork(legacy = false) {
         const previousEffect = await run('AppState.currentEffect');
-        await run("renderPage('home'); applyBgEffect('reactive-wave'); window.api.window.toggleMini()");
+        const suffix = legacy ? '?classic' : '';
+        const artId = legacy ? 'classic-art' : 'now-playing-art';
+        const effect = legacy ? 'reactive-bars' : 'reactive-wave';
+        await run(`window.api.settings.setLegacyMiniplayer(${legacy})`);
+        await run(`renderPage('home'); successfulArtworkSources.clear(); applyBgEffect('${effect}'); window.api.window.toggleMini()`);
         await waitFor(() => run("document.body.classList.contains('mini-mode')"), 'mini mode for natural endings');
         let finishQueuedCover;
         let finishRefill;
@@ -785,26 +792,26 @@ app.whenReady().then(async () => {
         refillGate = new Promise(resolve => { finishRefill = resolve; });
         stressTracks = tracks.slice(0, 2).map((track, index) => ({ ...track, trackToken: 'mini-natural-' + index,
             albumArt: index === 0 ? art : [
-                { size: 1080, url: 'https://fixture.invalid/queued-stalled.svg' },
-                { size: 500, url: 'https://fixture.invalid/queued-ready.svg' }
+                { size: 1080, url: 'https://fixture.invalid/queued-stalled.svg' + suffix },
+                { size: 500, url: 'https://fixture.invalid/queued-ready.svg' + suffix }
             ] }));
         // Count the player's fallback independently of the OS media session,
         // which can fetch the primary artwork URL for its own controls.
         freshTracks = tracks.slice(0, 2).map((track, index) => ({ ...track, trackToken: 'mini-refill-' + index,
-            albumArt: [{ size: 1080, url: 'https://fixture.invalid/refill-missing.svg' },
-                { size: 500, url: 'https://fixture.invalid/refill-ready.svg' }] }));
+            albumArt: [{ size: 1080, url: 'https://fixture.invalid/refill-missing.svg' + suffix },
+                { size: 500, url: 'https://fixture.invalid/refill-ready.svg' + suffix }] }));
         await run("window.api.content.playItem({type:'station', id:'fixture-station'})");
         await waitFor(() => run("AppState.playerState.trackToken === 'mini-natural-0' && !document.querySelector('audio').paused"), 'first song plays in mini mode');
         await waitFor(() => run(`
-            window.preparedMiniCover = upcomingArtworkPreloads.get('https://fixture.invalid/queued-stalled.svg');
+            window.preparedMiniCover = upcomingArtworkPreloads.get('https://fixture.invalid/queued-stalled.svg${suffix}');
             window.preparedMiniCover?.complete && window.preparedMiniCover.naturalWidth > 0 &&
-                window.preparedMiniCover.currentSrc === 'https://fixture.invalid/queued-ready.svg';
+                window.preparedMiniCover.currentSrc === 'https://fixture.invalid/queued-ready.svg${suffix}';
         `), 'stalled queued cover recovers before the current song ends', 8000);
-        assert.equal(artworkRequests.filter(url => url === '/queued-ready.svg').length, 1);
+        assert.equal(artworkRequests.filter(url => url === '/queued-ready.svg' + suffix).length, 1);
         await run(`
             window.naturalArtworkEvents = [];
             window.captureNaturalArtwork = () => {
-                const image = document.getElementById('now-playing-art');
+                const image = document.getElementById('${artId}');
                 window.naturalArtworkEvents.push({ token: AppState.playerState.trackToken,
                     ready: image.complete && image.naturalWidth > 0,
                     source: image.currentSrc, prepared: image === window.preparedMiniCover });
@@ -818,47 +825,50 @@ app.whenReady().then(async () => {
         await endNaturally();
         await waitFor(() => run("window.naturalArtworkEvents.some(event => event.token === 'mini-natural-1')"), 'second song starts from a real ended event');
         assert.deepEqual(await run("window.naturalArtworkEvents.find(event => event.token === 'mini-natural-1')"), {
-            token: 'mini-natural-1', ready: true, source: 'https://fixture.invalid/queued-ready.svg', prepared: true
+            token: 'mini-natural-1', ready: true, source: 'https://fixture.invalid/queued-ready.svg' + suffix, prepared: true
         }, 'The recovered mini cover is already displayed when the next song starts');
-        assert.equal(artworkRequests.filter(url => url === '/queued-ready.svg').length, 1, 'Even a no-store cover is reused without a second download');
+        assert.equal(artworkRequests.filter(url => url === '/queued-ready.svg' + suffix).length, 1, 'Even a no-store cover is reused without a second download');
 
         finishRefill();
         refillGate = null;
         await waitFor(() => run(`
-            window.preparedMiniCover = upcomingArtworkPreloads.get('https://fixture.invalid/refill-missing.svg');
+            window.preparedMiniCover = upcomingArtworkPreloads.get('https://fixture.invalid/refill-missing.svg${suffix}');
             window.preparedMiniCover?.complete && window.preparedMiniCover.naturalWidth > 0 &&
-                window.preparedMiniCover.currentSrc === 'https://fixture.invalid/refill-ready.svg';
+                window.preparedMiniCover.currentSrc === 'https://fixture.invalid/refill-ready.svg${suffix}';
         `), 'refilled cover preloads before the last queued song ends');
         assert.equal(await run('AppState.playerState.trackToken'), 'mini-natural-1');
         await endNaturally();
         await waitFor(() => run("window.naturalArtworkEvents.some(event => event.token === 'mini-refill-0')"), 'refilled song starts naturally');
         assert.deepEqual(await run("window.naturalArtworkEvents.find(event => event.token === 'mini-refill-0')"), {
-            token: 'mini-refill-0', ready: true, source: 'https://fixture.invalid/refill-ready.svg', prepared: true
+            token: 'mini-refill-0', ready: true, source: 'https://fixture.invalid/refill-ready.svg' + suffix, prepared: true
         });
-        assert.equal(artworkRequests.filter(url => url === '/refill-ready.svg').length, 1);
-        assert.equal(await run("window.visualizer.isVisualizing && window.visualizer.style === 'wave'"), true,
+        assert.equal(artworkRequests.filter(url => url === '/refill-ready.svg' + suffix).length, 1);
+        assert.equal(await run(`window.visualizer.isVisualizing && window.visualizer.style === '${legacy ? 'bars' : 'wave'}'`), true,
             'Natural transitions keep the reactive mini-player background running');
         finishQueuedCover();
         queuedCoverGate = null;
-        await capture('natural-ending-mini-artwork');
-        assert.equal(await run("document.getElementById('now-playing-art').currentSrc"), 'https://fixture.invalid/refill-ready.svg', 'Late stalled artwork cannot restore an earlier song');
+        await capture(legacy ? 'natural-ending-classic-artwork' : 'natural-ending-mini-artwork');
+        assert.equal(await run(`document.getElementById('${artId}').currentSrc`), 'https://fixture.invalid/refill-ready.svg' + suffix, 'Late stalled artwork cannot restore an earlier song');
         await run("document.querySelector('audio').removeEventListener('playing', window.captureNaturalArtwork); window.api.window.toggleMini()");
+        assert.equal(await run("document.getElementById('now-playing-art') === window.preparedMiniCover"), true,
+            'Returning to the full player preserves the decoded image');
         await run("document.getElementById('now-playing-art').click()");
-        await waitFor(() => run("AppState.currentPage === 'nowplaying' && document.getElementById('np-large-art').complete && document.getElementById('np-large-art').currentSrc === 'https://fixture.invalid/refill-ready.svg'"), 'promoted cover still opens the full player');
+        await waitFor(() => run(`AppState.currentPage === 'nowplaying' && document.getElementById('np-large-art').complete && document.getElementById('np-large-art').currentSrc === 'https://fixture.invalid/refill-ready.svg${suffix}'`), 'promoted cover still opens the full player');
         await run(`applyBgEffect(${JSON.stringify(previousEffect || 'aurora')})`);
         stressTracks = freshTracks = null;
         const historyCoverReady = (token, url) => run(`(() => {
             const image = document.querySelector('.history-item[data-token="${token}"] .history-art');
             return image?.complete && image.naturalWidth > 0 && image.currentSrc === '${url}';
         })()`);
-        await waitFor(() => historyCoverReady('mini-natural-1', 'https://fixture.invalid/queued-ready.svg'),
+        await waitFor(() => historyCoverReady('mini-natural-1', 'https://fixture.invalid/queued-ready.svg' + suffix),
             'opening history reuses the cover that recovered during mini playback');
         await endNaturally();
         await waitFor(() => run("AppState.playerState.trackToken === 'mini-refill-1'"), 'next natural ending with history open');
-        await waitFor(() => historyCoverReady('mini-refill-0', 'https://fixture.invalid/refill-ready.svg'),
+        await waitFor(() => historyCoverReady('mini-refill-0', 'https://fixture.invalid/refill-ready.svg' + suffix),
             'live history uses the working fallback after a song with unavailable primary artwork ends');
-        await capture('recovered-history-artwork');
-        console.log('Natural endings in mini mode passed: stalled preload fallback, no-store image reuse at audio start, early refill artwork, late responses, full-player expansion and recovered artwork in initial/live history.');
+        await capture(legacy ? 'recovered-classic-history-artwork' : 'recovered-history-artwork');
+        await run('window.api.settings.setLegacyMiniplayer(false)');
+        console.log('Natural endings in ' + (legacy ? 'classic' : 'wide') + ' mini mode passed: stalled preload fallback, no-store image reuse at audio start, early refill artwork, late responses, full-player expansion and recovered artwork in initial/live history.');
     }
 
     async function exerciseAudioRecovery() {
@@ -1331,6 +1341,7 @@ app.whenReady().then(async () => {
     await exerciseClassicMiniplayer();
     await exerciseQueuedPlayback();
     await exerciseNaturalMiniArtwork();
+    await exerciseNaturalMiniArtwork(true);
     await exerciseAudioRecovery();
     // Real audio -> renderer -> isolated preload -> main -> actual local IPC frames.
     assert.equal(discordServer.connections.length, 0, 'Discord is opt-in throughout normal playback');

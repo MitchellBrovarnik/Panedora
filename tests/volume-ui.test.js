@@ -63,7 +63,7 @@ test('Panedora Settings is the first settings section and the volume switch is o
     assert.equal(toggle.checked, false);
     assert.equal(toggle.getAttribute('role'), 'switch');
     assert.equal(toggle.closest('.settings-section').querySelector('.section-title').textContent, 'Panedora Settings');
-    assert.match(s.node('remember-volume-description').textContent, /25%/);
+    assert.match(s.node('remember-volume-description').textContent, /0% to stay muted/);
 });
 
 test('enabling the switch saves the current volume, disabling it stops remembering', async t => {
@@ -101,6 +101,14 @@ test('a failed save puts the switch back and tells the user', async t => {
 });
 
 test('a remembered volume is restored at startup, otherwise the slider stays at 100%', async t => {
+    const muted = setup(t, { settings: { getVolume: async () => ({ remember: true, volume: 0 }) } });
+    await muted.ui.load();
+    const audio = muted.window.document.createElement('audio');
+    muted.window.document.body.appendChild(audio);
+    muted.ui.apply(Number(muted.slider.value));
+    assert.equal(muted.slider.value, '0');
+    assert.equal(audio.volume, 0, 'Restoring 0% does not unmute playback');
+
     const restored = setup(t, { settings: { getVolume: async () => ({ remember: true, volume: 25 }) } });
     await restored.ui.load();
     assert.equal(restored.slider.value, '25');

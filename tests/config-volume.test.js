@@ -46,10 +46,10 @@ test('turning it off forgets the saved level and the next launch starts at 100%'
     assert.deepEqual(settings(reopen()), { remember: true, volume: 100 }, 'No level to restore means full volume');
 });
 
-test('a saved volume of 0 is restored as 25%, and levels are clamped to whole percentages', t => {
+test('a saved volume of 0 stays muted, and levels are clamped to whole percentages', t => {
     const reopen = setup(t);
     reopen().setRememberVolume(true, 80);
-    for (const [saved, restored] of [[0, 25], [0.4, 25], [-20, 25], [250, 100], [100, 100], [1, 1], [49.5, 50]]) {
+    for (const [saved, restored] of [[0, 0], [0.4, 0], [-20, 0], [250, 100], [100, 100], [1, 1], [49.5, 50]]) {
         reopen().setVolume(saved);
         assert.equal(reopen().getVolumeSettings().volume, restored, `saved ${saved}`);
     }
