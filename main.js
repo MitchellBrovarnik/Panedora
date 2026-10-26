@@ -147,7 +147,13 @@ function saveClassicBoundsNow() {
 
 // Moving or resizing fires a stream of events; save once things settle.
 function scheduleClassicBoundsSave() {
-    if (!classicMiniActive) return;
+    if (!classicMiniActive || !uiWindow || uiWindow.isDestroyed()) return;
+    // Native/programmatic resize paths can bypass the interactive constraints.
+    // Keep the classic layout compact even when the window manager does so.
+    const bounds = uiWindow.getBounds();
+    if (bounds.width !== CLASSIC_MINI_WIDTH || bounds.height !== CLASSIC_MINI_HEIGHT) {
+        uiWindow.setSize(CLASSIC_MINI_WIDTH, CLASSIC_MINI_HEIGHT);
+    }
     clearTimeout(classicBoundsTimer);
     classicBoundsTimer = setTimeout(saveClassicBoundsNow, 400);
 }
