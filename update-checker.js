@@ -25,7 +25,8 @@ function parseVersion(value) {
     if (!match || match[0] !== value) return null;
     const parts = match.slice(1, 4).map(Number);
     if (!parts.every(Number.isSafeInteger) || match[4]?.split('.').some(part => /^0\d+$/.test(part))) return null;
-    return { parts, prerelease: !!match[4], label: value.replace(/^v/i, '') };
+    // A "-dev" suffix (e.g. 1.2.2-dev, 1.2.2-dev.3) marks a local development build.
+    return { parts, prerelease: !!match[4], dev: /^dev(?:\.|$)/i.test(match[4] || ''), label: value.replace(/^v/i, '') };
 }
 
 function isNewerRelease(latest, current) {
@@ -51,6 +52,8 @@ class UpdateChecker {
     constructor({ version, fetch, getSnooze, setSnooze, platform, arch, now = Date.now, timeoutMs = 10000,
         onNotice = () => {}, setTimer = setTimeout, clearTimer = clearTimeout }) {
         this.current = parseVersion(version);
+        // Development builds never check for updates, whatever GitHub's latest release is.
+        this.disabled = !!this.current?.dev;
         Object.assign(this, { fetch, getSnooze, setSnooze, platform, arch, now, timeoutMs, onNotice, setTimer, clearTimer });
         this.notice = null;
         this.availableNotice = null;
@@ -65,7 +68,7 @@ class UpdateChecker {
     }
 
     start() {
-        if (this.running || this.stopped || !this.current) return;
+        if (this.running || this.stopped || this.disabled || !this.current) return;
         this.running = true;
         return this.check();
     }
@@ -79,7 +82,7 @@ class UpdateChecker {
     }
 
     async check() {
-        if (this.stopped || !this.current) return null;
+        if (this.stopped || this.disabled || !this.current) return null;
         // Reloads, focus and wake events share the daily deadline and in-flight request.
         if (!this.checkPromise && this.now() >= this.nextCheckAt) {
             this.checkPromise = this._check().finally(() => { this.checkPromise = null; });

@@ -1,6 +1,6 @@
 {
     "name": "panedora",
-    "version": "1.0.7",
+    "version": "1.2.3",
     "description": "Panedora",
     "repository": "github:MitchellBrovarnik/Pandora-Glass",
     "main": "main.js",

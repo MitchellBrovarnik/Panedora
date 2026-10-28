@@ -168,6 +168,27 @@ function decryptString(str) {
     return str;
 }
 
+const DEFAULT_VOLUME = 100;
+
+// Whole percent from 0 to 100, or null for anything that is not a finite number.
+function clampVolume(value) {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+    return Math.min(100, Math.max(0, Math.round(value)));
+}
+
+// A window rectangle with whole-number, finite coordinates and a positive size, or null.
+function validBounds(bounds) {
+    if (!bounds || typeof bounds !== 'object') return null;
+    const { x, y, width, height } = bounds;
+    if (![x, y, width, height].every(value => typeof value === 'number' && Number.isFinite(value))) return null;
+    if (width <= 0 || height <= 0) return null;
+    return { x: Math.round(x), y: Math.round(y), width: Math.round(width), height: Math.round(height) };
+}
+
+function restoredVolume(value) {
+    return clampVolume(value) ?? DEFAULT_VOLUME;
+}
+
 module.exports = {
     // Credentials (encrypted at rest)
     getCredentials: () => {
@@ -207,6 +228,32 @@ module.exports = {
     // Optional sharing preference belongs to this installation; default is off.
     getDiscordEnabled: () => getConfig().discordEnabled === true,
     setDiscordEnabled: enabled => setConfig('discordEnabled', enabled === true),
+
+    // Volume memory is an installation preference (default off) and survives sign-out.
+    // A saved volume of 0 stays muted, just like every other saved level.
+    getVolumeSettings: () => {
+        const stored = getConfig();
+        const remember = stored.rememberVolume === true;
+        return { remember, volume: remember ? restoredVolume(stored.volume) : 100 };
+    },
+    setRememberVolume: (enabled, volume) => {
+        setConfig('rememberVolume', enabled === true);
+        // Turning it off forgets the saved level, so the next launch starts at 100%.
+        setConfig('volume', enabled === true ? clampVolume(volume) : null);
+    },
+    setVolume: volume => {
+        if (getConfig().rememberVolume !== true) return;
+        const value = clampVolume(volume);
+        if (value !== null) setConfig('volume', value);
+    },
+
+    // Optional classic (album-art-first) mini player; default is the wide mini player.
+    getLegacyMiniplayer: () => getConfig().legacyMiniplayer === true,
+    setLegacyMiniplayer: enabled => setConfig('legacyMiniplayer', enabled === true),
+
+    // Where the classic mini player was last left (position and size). Null until it is moved.
+    getClassicMiniBounds: () => validBounds(getConfig().classicMiniBounds),
+    setClassicMiniBounds: bounds => setConfig('classicMiniBounds', validBounds(bounds)),
 
     // Auth Token (from login response)
     getAuthToken: () => getConfig().authToken,

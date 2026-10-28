@@ -6,7 +6,7 @@ const vm = require('node:vm');
 
 // Run the actual renderer listeners with a small DOM/audio stand-in. These
 // checks verify playback ordering; native Electron fixtures cover real media.
-function setup({ deferPlay = false, withDiscord = false } = {}) {
+function setup({ deferPlay = false, withDiscord = false, volume } = {}) {
     function element() {
         const listeners = new Map();
         const classes = new Set();
@@ -80,7 +80,8 @@ function setup({ deferPlay = false, withDiscord = false } = {}) {
         reportPlayback: value => discordReports.push(value)
     };
     const source = fs.readFileSync(path.join(__dirname, '..', 'components.js'), 'utf8') + '\n' +
-        fs.readFileSync(path.join(__dirname, '..', 'renderer.js'), 'utf8') + '\ninitEventListeners(); initAPIListeners(); window.testState = AppState;';
+        fs.readFileSync(path.join(__dirname, '..', 'renderer.js'), 'utf8') + '\ninitEventListeners(); initAPIListeners(); window.testState = AppState;' +
+        (volume === undefined ? '' : `\napplyVolume(${volume});`);
     testWindow.api = api;
     vm.runInNewContext(source, {
         document, window: testWindow,
@@ -351,4 +352,29 @@ test('conflicts stop buffered audio and saved thumbs survive source and partial 
     assert.equal(s.audio.paused, false);
     assert.equal(s.node('mini-thumb-up').classList.contains('liked'), true);
     assert.equal(s.node('np-thumbup').classList.contains('liked'), true);
+});
+
+test('a remembered volume is applied to the audio element when it is created', () => {
+    const s = setup({ volume: 25 });
+    assert.equal(s.audio, undefined, 'No audio exists before the first song');
+    s.state({ isPlaying: true });
+    assert.equal(s.audio.volume, 0.25);
+    s.state({ audioURL: 'https://fixture.invalid/next.wav', isPlaying: true });
+    assert.equal(s.audio.volume, 0.25, 'Later songs keep the volume');
+    assert.equal(s.node('volume-slider').value, '25');
+});
+
+test('without a remembered volume new audio starts at full volume', () => {
+    const s = setup();
+    s.state({ isPlaying: true });
+    assert.equal(s.audio.volume, 1);
+});
+
+test('a remembered mute is applied before the first song starts and survives track changes', () => {
+    const s = setup({ volume: 0 });
+    s.state({ isPlaying: true });
+    assert.equal(s.audio.volume, 0);
+    s.state({ audioURL: 'https://fixture.invalid/next.wav', isPlaying: true });
+    assert.equal(s.audio.volume, 0);
+    assert.equal(s.node('volume-slider').value, '0');
 });
