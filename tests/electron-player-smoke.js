@@ -7,16 +7,16 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { app, BrowserWindow, session, powerMonitor } = require('electron');
+const { app, BrowserWindow, session, screen, powerMonitor } = require('electron');
 
 const testData = fs.mkdtempSync(path.join(os.tmpdir(), 'panedora-player-test-'));
 app.setPath('userData', testData);
 app.disableHardwareAcceleration();
 // Exercise the release-only update checker with intercepted network fixtures.
 Object.defineProperty(app, 'isPackaged', { value: true });
-// Allow the expanded suite's real artwork deadlines and Discord rate limits;
+// Allow the suite's window-movement debounce, real artwork deadlines and Discord rate limits;
 // each individual waitFor check still has its own short timeout.
-const deadline = setTimeout(() => { console.error('Native player test timed out'); app.exit(1); }, 120000);
+const deadline = setTimeout(() => { console.error('Native player test timed out'); app.exit(1); }, 150000);
 let discordServer;
 
 async function waitFor(check, description, timeout = 6000) {
@@ -697,6 +697,68 @@ app.whenReady().then(async () => {
         await waitFor(() => !win.webContents.isLoading() && win.getSize()[1] === fullSize[1], 'full-player size restored again');
         console.log('Classic mini player passed: opt-in setting, fixed 280x' + minHeight + ' compact size, 256px cover with 12px margins, frosted centered 12pt artist/track/album box, full-player progress bar, centered controls, enlarged thumbs/history/volume row, history view, background visualizer canvas, and return to the resizable full and wide mini players.');
     }
+    async function exerciseVolumeMemory() {
+        const initial = await run("Number(document.getElementById('volume-slider').value)");
+        await run("renderPage('settings')");
+        assert.equal(await run("document.getElementById('remember-volume-toggle') === null"), true,
+            'Volume memory has no settings toggle');
+        for (const volume of [37, 0, initial]) {
+            await run(`(() => {
+                const slider = document.getElementById('volume-slider');
+                slider.value = '${volume}';
+                slider.dispatchEvent(new Event('input', { bubbles: true }));
+                slider.dispatchEvent(new Event('change', { bubbles: true }));
+            })()`);
+            await waitFor(() => require('../config').getVolumeSettings().volume === volume,
+                'volume saved automatically: ' + volume);
+            assert.deepEqual(await run('window.api.settings.getVolume()'), { volume });
+            assert.equal(await run("Number(document.getElementById('classic-volume-slider').value)"), volume);
+        }
+        await run('new Promise(resolve => setTimeout(resolve, 750))');
+        await capture('player-settings');
+        await run("renderPage('home')");
+        console.log('Automatic volume memory passed: no toggle, saved slider changes and mute through real IPC, both sliders synchronized.');
+    }
+
+    async function exerciseMiniScreenBounds() {
+        const fullBounds = win.getBounds();
+        for (const legacy of [false, true]) {
+            await run(`window.api.settings.setLegacyMiniplayer(${legacy})`);
+            await run('window.api.window.toggleMini()');
+            await waitFor(() => run("document.body.classList.contains('mini-mode')"), 'mini mode for screen bounds');
+            if (!legacy) win.setSize(900, 80);
+            const size = win.getSize();
+            const area = screen.getDisplayMatching(win.getBounds()).workArea;
+            const maxX = area.x + area.width - size[0];
+            const maxY = area.y + area.height - size[1];
+            for (const [x, y, expectedX, expectedY] of [
+                [area.x - 64, area.y + 40, area.x, area.y + 40],
+                [maxX + 64, area.y + 40, maxX, area.y + 40],
+                [area.x + 40, maxY + 64, area.x + 40, maxY],
+                [area.x + 40, area.y - 64, area.x + 40, area.y]
+            ]) {
+                win.setPosition(x, y);
+                await waitFor(() => {
+                    const bounds = win.getBounds();
+                    return bounds.x === expectedX && bounds.y === expectedY;
+                }, `${legacy ? 'classic' : 'wide'} mini player returns fully on screen`);
+                assert.deepEqual(win.getSize(), size, 'Position correction never changes player size');
+                if (legacy) {
+                    await waitFor(() => {
+                        const saved = require('../config').getClassicMiniBounds();
+                        return saved?.x === expectedX && saved?.y === expectedY;
+                    }, 'corrected classic position saved');
+                }
+            }
+            await capture(legacy ? 'classic-mini-on-screen' : 'wide-mini-on-screen');
+            await run('window.api.window.toggleMini()');
+            await waitFor(() => run("!document.body.classList.contains('mini-mode')"), 'full player after screen bounds');
+            assert.deepEqual(win.getBounds(), fullBounds, 'The full player restores its original position and size');
+        }
+        await run('window.api.settings.setLegacyMiniplayer(false)');
+        console.log('Mini-player screen edges passed: both layouts return inside all four work-area edges without resizing; classic positions saved after correction, full bounds restored.');
+    }
+
     async function exerciseQueuedPlayback() {
         // The cover must load directly in the visible player, without waiting
         // for a hidden probe and then starting a second image load.
@@ -1336,8 +1398,10 @@ app.whenReady().then(async () => {
     await captureSite('website-downloads-mobile');
     assert.equal(calls.some(c => ['fonts.googleapis.com', 'fonts.gstatic.com', 'unpkg.com'].includes(c.host)), false, 'App and website make no external font or icon requests');
     site.close();
+    await exerciseVolumeMemory();
     await exerciseMiniMarqueeClipping();
     await exerciseClassicMiniplayer();
+    await exerciseMiniScreenBounds();
     await exerciseQueuedPlayback();
     await exerciseNaturalMiniArtwork();
     await exerciseNaturalMiniArtwork(true);

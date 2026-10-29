@@ -229,20 +229,9 @@ module.exports = {
     getDiscordEnabled: () => getConfig().discordEnabled === true,
     setDiscordEnabled: enabled => setConfig('discordEnabled', enabled === true),
 
-    // Volume memory is an installation preference (default off) and survives sign-out.
-    // A saved volume of 0 stays muted, just like every other saved level.
-    getVolumeSettings: () => {
-        const stored = getConfig();
-        const remember = stored.rememberVolume === true;
-        return { remember, volume: remember ? restoredVolume(stored.volume) : 100 };
-    },
-    setRememberVolume: (enabled, volume) => {
-        setConfig('rememberVolume', enabled === true);
-        // Turning it off forgets the saved level, so the next launch starts at 100%.
-        setConfig('volume', enabled === true ? clampVolume(volume) : null);
-    },
+    // Always remember the last volume, including mute, across restarts and sign-out.
+    getVolumeSettings: () => ({ volume: restoredVolume(getConfig().volume) }),
     setVolume: volume => {
-        if (getConfig().rememberVolume !== true) return;
         const value = clampVolume(volume);
         if (value !== null) setConfig('volume', value);
     },

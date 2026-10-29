@@ -39,7 +39,8 @@ let songHistory = []; // Track played songs for history display
 let isMiniPlayer = false;
 let savedBounds = null; // Save window position/size before entering mini mode
 let classicMiniActive = false; // True while the classic mini player is the open window
-let classicBoundsTimer = null;
+let miniBoundsTimer = null;
+let miniPlayerDragging = false;
 let savedMaximumSize = null;
 let playlistRefill = null;
 let streamReclaimed = false;
@@ -95,14 +96,22 @@ function createUIWindow() {
         uiWindow.webContents.openDevTools();
     }
 
-    // The classic mini player remembers where it was left, even across restarts.
-    uiWindow.on('move', scheduleClassicBoundsSave);
-    uiWindow.on('resize', scheduleClassicBoundsSave);
-    uiWindow.on('close', saveClassicBoundsNow);
+    uiWindow.on('move', scheduleMiniBoundsSave);
+    uiWindow.on('resize', scheduleMiniBoundsSave);
+    uiWindow.on('close', saveMiniBoundsNow);
+    if (process.platform === 'win32') {
+        // Windows supplies an end-of-drag event. Wait for release so dragging
+        // across monitors never gets interrupted by the screen-edge correction.
+        uiWindow.on('will-move', beginMiniPlayerMove);
+        uiWindow.on('moved', endMiniPlayerMove);
+    }
 
     uiWindow.on('closed', () => {
+        isMiniPlayer = false;
         classicMiniActive = false;
-        clearTimeout(classicBoundsTimer);
+        miniPlayerDragging = false;
+        clearTimeout(miniBoundsTimer);
+        miniBoundsTimer = null;
         playbackGeneration++;
         discordPresence?.setPlayerState(null);
         cancelStreamPrompt();
@@ -122,15 +131,14 @@ function createUIWindow() {
 // ============================================================================
 
 // ----------------------------------------------------------------------------
-// Classic mini player: remember where it was left
+// Mini players: stay on screen and remember the classic player's position
 // ----------------------------------------------------------------------------
 
-// Restore the compact size even if an older version saved an enlarged window.
-// Keep its position on the matching display (or the nearest remaining display).
+// Keep the current size and bring the whole window inside the matching display's
+// usable area. Negative coordinates are valid on monitors left of/above primary.
 function fitBoundsToScreen(bounds) {
-    const width = CLASSIC_MINI_WIDTH;
-    const height = CLASSIC_MINI_HEIGHT;
-    const area = screen.getDisplayMatching({ ...bounds, width, height }).workArea;
+    const { width, height } = bounds;
+    const area = screen.getDisplayMatching(bounds).workArea;
     return {
         x: Math.min(Math.max(bounds.x, area.x), Math.max(area.x, area.x + area.width - width)),
         y: Math.min(Math.max(bounds.y, area.y), Math.max(area.y, area.y + area.height - height)),
@@ -138,23 +146,49 @@ function fitBoundsToScreen(bounds) {
     };
 }
 
-function saveClassicBoundsNow() {
-    clearTimeout(classicBoundsTimer);
-    classicBoundsTimer = null;
-    if (!classicMiniActive || !uiWindow || uiWindow.isDestroyed()) return;
-    config.setClassicMiniBounds(uiWindow.getBounds());
+function keepMiniPlayerOnScreen() {
+    if (!isMiniPlayer || !uiWindow || uiWindow.isDestroyed()) return null;
+    const bounds = uiWindow.getBounds();
+    const fitted = fitBoundsToScreen(bounds);
+    if (fitted.x !== bounds.x || fitted.y !== bounds.y) uiWindow.setBounds(fitted);
+    return fitted;
+}
+
+function saveMiniBoundsNow() {
+    clearTimeout(miniBoundsTimer);
+    miniBoundsTimer = null;
+    const bounds = keepMiniPlayerOnScreen();
+    // setBounds may emit another move event. There is no further correction to
+    // schedule after this one; the next user move will start its own timer.
+    clearTimeout(miniBoundsTimer);
+    miniBoundsTimer = null;
+    if (classicMiniActive && bounds) config.setClassicMiniBounds(bounds);
 }
 
 // Moving or resizing fires a stream of events; save once things settle.
-function scheduleClassicBoundsSave() {
-    if (!classicMiniActive) return;
-    clearTimeout(classicBoundsTimer);
-    classicBoundsTimer = setTimeout(saveClassicBoundsNow, 400);
+function scheduleMiniBoundsSave() {
+    if (!isMiniPlayer || miniPlayerDragging) return;
+    clearTimeout(miniBoundsTimer);
+    miniBoundsTimer = setTimeout(saveMiniBoundsNow, 400);
+}
+
+function beginMiniPlayerMove() {
+    if (!isMiniPlayer) return;
+    miniPlayerDragging = true;
+    clearTimeout(miniBoundsTimer);
+    miniBoundsTimer = null;
+}
+
+function endMiniPlayerMove() {
+    miniPlayerDragging = false;
+    saveMiniBoundsNow();
 }
 
 ipcMain.handle('WINDOW:TOGGLE_MINI', async () => {
     if (!uiWindow) return { isMini: false };
 
+    saveMiniBoundsNow();
+    miniPlayerDragging = false;
     isMiniPlayer = !isMiniPlayer;
     // Decided once per entry so the layout and window size always agree.
     const legacy = isMiniPlayer && config.getLegacyMiniplayer();
@@ -171,8 +205,8 @@ ipcMain.handle('WINDOW:TOGGLE_MINI', async () => {
             uiWindow.setMinimumSize(CLASSIC_MINI_WIDTH, CLASSIC_MINI_HEIGHT);
             uiWindow.setMaximumSize(CLASSIC_MINI_WIDTH, CLASSIC_MINI_HEIGHT);
             const remembered = config.getClassicMiniBounds();
-            uiWindow.setBounds(fitBoundsToScreen(remembered || {
-                x: savedBounds.x, y: savedBounds.y, width: CLASSIC_MINI_WIDTH, height: CLASSIC_MINI_HEIGHT
+            uiWindow.setBounds(fitBoundsToScreen({
+                ...(remembered || savedBounds), width: CLASSIC_MINI_WIDTH, height: CLASSIC_MINI_HEIGHT
             }));
             classicMiniActive = true;
         } else {
@@ -186,9 +220,8 @@ ipcMain.handle('WINDOW:TOGGLE_MINI', async () => {
         // handling enabled: disabling it makes Electron rewrite the constraints
         // on programmatic size changes (including restoring window positions).
         uiWindow.setResizable(true);
+        keepMiniPlayerOnScreen();
     } else {
-        // Remember the classic player's spot before the full player takes the window back.
-        saveClassicBoundsNow();
         classicMiniActive = false;
         // Restore saved bounds
         uiWindow.setAlwaysOnTop(false);
@@ -926,11 +959,6 @@ ipcMain.handle('DISCORD:SET_ENABLED', (event, enabled) => {
 });
 // Volume memory (stored in the same config file as the other installation settings)
 ipcMain.handle('SETTINGS:GET_VOLUME', event => isAppRenderer(event) ? config.getVolumeSettings() : null);
-ipcMain.handle('SETTINGS:SET_REMEMBER_VOLUME', (event, enabled, volume) => {
-    if (!isAppRenderer(event) || typeof enabled !== 'boolean') return null;
-    config.setRememberVolume(enabled, volume);
-    return config.getVolumeSettings();
-});
 ipcMain.handle('SETTINGS:GET_LEGACY_MINIPLAYER', event => isAppRenderer(event) ? config.getLegacyMiniplayer() : null);
 ipcMain.handle('SETTINGS:SET_LEGACY_MINIPLAYER', (event, enabled) => {
     if (!isAppRenderer(event) || typeof enabled !== 'boolean') return null;
@@ -938,7 +966,7 @@ ipcMain.handle('SETTINGS:SET_LEGACY_MINIPLAYER', (event, enabled) => {
     return config.getLegacyMiniplayer();
 });
 ipcMain.handle('SETTINGS:SAVE_VOLUME', (event, volume) => {
-    if (!isAppRenderer(event) || typeof volume !== 'number') return false;
+    if (!isAppRenderer(event) || typeof volume !== 'number' || !Number.isFinite(volume)) return false;
     config.setVolume(volume);
     return true;
 });
