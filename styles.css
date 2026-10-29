@@ -3135,6 +3135,11 @@ body.mini-mode .waves-container {
     opacity: 0.9;
 }
 
+/* Keep waves near the controls in the taller classic player. */
+body.mini-mode.classic-mini .waves-container {
+    height: 180px;
+}
+
 /* Orbs: use small pixel sizes instead of vw/vh */
 body.mini-mode .orb {
     filter: blur(30px);
