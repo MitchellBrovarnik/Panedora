@@ -459,6 +459,9 @@ app.whenReady().then(async () => {
         assert.equal(await run("getComputedStyle(document.querySelector('.player-footer')).display"), 'none',
             'The wide mini player footer is replaced');
 
+        // The mode IPC can arrive before the native resize reaches the renderer.
+        await waitFor(() => run(`innerWidth === 280 && innerHeight === ${minHeight}`), 'classic viewport resized');
+
         // Layout at the minimum size: 12px margins, a 256px cover, frosted details, progress, controls and the button row.
         await run('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
         const near = (actual, expected, message) => assert.ok(Math.abs(actual - expected) <= 1, `${message}: ${actual} vs ${expected}`);
