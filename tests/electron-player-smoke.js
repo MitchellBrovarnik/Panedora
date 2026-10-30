@@ -1361,6 +1361,8 @@ app.whenReady().then(async () => {
     const siteRun = script => site.webContents.executeJavaScript(script);
     await waitFor(() => siteRun("document.getElementById('latest-release-label').textContent === 'Latest release: v99.1.0'"), 'website release links');
     await siteRun('document.fonts.ready');
+    // Screenshots should capture the destination, not an in-progress smooth scroll.
+    await siteRun("document.documentElement.style.scrollBehavior = 'auto'");
     assert.equal(await siteRun("document.fonts.check('16px Inter') && document.fonts.check('16px boxicons')"), true, 'Website fonts and icons load locally');
     assert.match(await siteRun("document.getElementById('download-mac').textContent"), /Apple Silicon/);
     const captureSite = async name => {
