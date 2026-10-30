@@ -1361,7 +1361,8 @@ app.whenReady().then(async () => {
     assert.equal(await siteRun("document.fonts.check('16px Inter') && document.fonts.check('16px boxicons')"), true, 'Website fonts and icons load locally');
     assert.match(await siteRun("document.getElementById('download-mac').textContent"), /Apple Silicon/);
     const captureSite = async name => {
-        await siteRun("new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
+        // Let the compositor paint the new scroll position before saving it.
+        await siteRun("new Promise(resolve => setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(resolve)), 500))");
         assert.equal(await siteRun('document.documentElement.scrollWidth <= innerWidth'), true, 'Website fits the viewport');
         await waitFor(() => siteRun('Array.from(document.images).filter(image => image.getBoundingClientRect().top < innerHeight && image.getBoundingClientRect().bottom > 0).every(image => image.complete && image.naturalWidth > 0)'),
             'visible website previews loaded');
@@ -1384,6 +1385,8 @@ app.whenReady().then(async () => {
     await captureSite('website-mobile');
     await siteRun("document.getElementById('download').scrollIntoView({behavior:'instant'})");
     await captureSite('website-downloads-mobile');
+    await siteRun("document.querySelectorAll('.install-help details').forEach(details => { details.open = true; })");
+    await captureSite('website-installation-mobile');
     assert.equal(calls.some(c => ['fonts.googleapis.com', 'fonts.gstatic.com', 'unpkg.com'].includes(c.host)), false, 'App and website make no external font or icon requests');
     site.close();
     await exerciseMiniMarqueeClipping();

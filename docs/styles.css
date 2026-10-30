@@ -65,8 +65,8 @@ a, summary { -webkit-tap-highlight-color: transparent; }
 .eyebrow { color: var(--accent); font-size: .78rem; font-weight: 550; letter-spacing: .025em; margin-bottom: 14px; }
 .section-heading > p:not(.eyebrow) { max-width: 530px; margin-top: 22px; font-size: .98rem; }
 .player-previews { display: grid; grid-template-columns: minmax(0, 1fr) 310px; gap: 65px; margin-top: 46px; align-items: center; }
-.wide-player-stage { min-height: 210px; display: flex; align-items: center; padding: 24px; background: #1a1b22; border: 1px solid var(--border); border-radius: 10px; }
-.wide-player-stage img { width: 540px; border-radius: 10px; box-shadow: 0 8px 25px #0005; }
+.wide-player-stage { min-height: 210px; display: flex; align-items: center; justify-content: center; padding: 24px; background: #1a1b22; border: 1px solid var(--border); border-radius: 10px; }
+.wide-player-stage img { width: 100%; max-width: 680px; border-radius: 10px; box-shadow: 0 8px 25px #0005; }
 .classic-player-stage { display: flex; justify-content: center; }
 .classic-player-stage img { width: 224px; border-radius: 10px; box-shadow: 0 10px 30px #0005; }
 .player-previews figcaption { margin-top: 24px; }
@@ -74,6 +74,7 @@ a, summary { -webkit-tap-highlight-color: transparent; }
 .player-details { display: flex; flex-wrap: wrap; gap: 8px 20px; list-style: none; margin: 28px 0 0; padding: 18px 0 0; border-top: 1px solid var(--border); color: var(--muted); font-size: .78rem; }
 .player-details li::before { content: '↗'; color: var(--accent); margin-right: 7px; }
 .preview-note { font-size: .73rem; margin-top: 27px; color: #9694a3; }
+.preview-label { display: inline-block; margin-left: 7px; color: var(--accent); font-size: .65rem; font-weight: 500; letter-spacing: 0; vertical-align: middle; }
 .discord-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 100px; align-items: center; }
 .discord-preview { min-width: 0; }
 .activity-card { max-width: 370px; margin-inline: auto; padding: 22px; background: #25262b; border: 1px solid #3c3d45; border-radius: 9px; box-shadow: 0 8px 28px #0003; }
