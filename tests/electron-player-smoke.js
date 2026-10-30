@@ -7,6 +7,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const { app, BrowserWindow, session, powerMonitor } = require('electron');
 
 const testData = fs.mkdtempSync(path.join(os.tmpdir(), 'panedora-player-test-'));
@@ -1314,6 +1315,44 @@ app.whenReady().then(async () => {
     assert.equal(await run("document.getElementById('update-banner').hidden"), true, 'Renderer reload respects the update choice');
     assert.equal(calls.filter(c => c.host === 'api.github.com').length, 2, 'Reloads and station changes do not bypass the daily deadline');
 
+    // Capture the real mini-player renderer with sample details for the website.
+    // A separate session keeps these previews away from the playback fixtures.
+    const previewRoot = path.join(__dirname, '..');
+    const previewFile = path.join(testData, 'website-preview.html');
+    fs.writeFileSync(previewFile, fs.readFileSync(path.join(previewRoot, 'index.html'), 'utf8')
+        .replace(/<script\b[^>]*\bsrc="[^"]*"[^>]*>\s*<\/script>/gi, '')
+        .replace('<head>', '<head><base href="' + pathToFileURL(previewRoot + path.sep).href + '">'));
+    const preview = new BrowserWindow({ width: 680, height: 80, frame: false, transparent: true,
+        backgroundColor: '#00000000', show: false,
+        webPreferences: { partition: 'website-previews', contextIsolation: true, nodeIntegration: false } });
+    try {
+        await preview.loadFile(previewFile);
+        const previewRun = script => preview.webContents.executeJavaScript(script);
+        const sampleCover = 'data:image/svg+xml,' + encodeURIComponent(fs.readFileSync(path.join(previewRoot, 'docs/assets/preview-cover.svg'), 'utf8'));
+        await previewRun("window.api = { content: {}, player: {}, window: {}, settings: {} };\n" +
+            ['components.js', 'visualizer.js', 'renderer.js'].map(file => fs.readFileSync(path.join(previewRoot, file), 'utf8')).join('\n') + `
+            document.removeEventListener('DOMContentLoaded', init);
+            AppState.isLoggedIn = true; AppState.isLoading = false;
+            applyTheme('midnight');
+            updatePlayerUI({ trackToken: 'website-preview', track: 'After Hours', artist: 'Panedora Preview',
+                album: 'Evening Mix', coverArt: ${JSON.stringify(sampleCover)}, feedback: 'thumbUp',
+                duration: 222, time: 84, isPlaying: true, history: [] });
+            renderPage('home'); applyBgEffect('static');`);
+        for (const [mode, width, height] of [['wide', 680, 80], ['classic', 280, 500]]) {
+            preview.setContentSize(width, height);
+            await waitFor(() => previewRun(`innerWidth === ${width} && innerHeight === ${height}`), 'website ' + mode + ' viewport');
+            await previewRun(`document.documentElement.classList.add('mini-mode');
+                document.body.classList.add('mini-mode');
+                document.body.classList.toggle('classic-mini', ${mode === 'classic'});
+                updateClassicPlayerUI(); renderPlayerArtwork(); updateFooterThumbVisibility(); updateMiniPlayerLayout();`);
+            const artId = mode === 'classic' ? 'classic-art' : 'now-playing-art';
+            await waitFor(() => previewRun(`document.getElementById('${artId}').naturalWidth > 0`), 'website ' + mode + ' artwork');
+            await previewRun('document.fonts.ready');
+            await previewRun('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+            fs.writeFileSync(path.join(testData, 'website-mini-' + mode + '.png'), (await preview.webContents.capturePage()).toPNG());
+        }
+    } finally { preview.close(); }
+
     const site = new BrowserWindow({ width: 1440, height: 1000, show: false, webPreferences: { contextIsolation: true, nodeIntegration: false } });
     await site.loadFile(path.join(__dirname, '..', 'docs', 'index.html'));
     const siteRun = script => site.webContents.executeJavaScript(script);
@@ -1322,17 +1361,28 @@ app.whenReady().then(async () => {
     assert.equal(await siteRun("document.fonts.check('16px Inter') && document.fonts.check('16px boxicons')"), true, 'Website fonts and icons load locally');
     assert.match(await siteRun("document.getElementById('download-mac').textContent"), /Apple Silicon/);
     const captureSite = async name => {
-        await siteRun("document.querySelectorAll('.reveal').forEach(el => el.classList.add('active')); new Promise(resolve => setTimeout(resolve, 900))");
+        await siteRun("new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
         assert.equal(await siteRun('document.documentElement.scrollWidth <= innerWidth'), true, 'Website fits the viewport');
+        await waitFor(() => siteRun('Array.from(document.images).filter(image => image.getBoundingClientRect().top < innerHeight && image.getBoundingClientRect().bottom > 0).every(image => image.complete && image.naturalWidth > 0)'),
+            'visible website previews loaded');
         fs.writeFileSync(path.join(testData, name + '.png'), (await site.webContents.capturePage()).toPNG());
     };
     await captureSite('website-desktop');
-    await siteRun("document.getElementById('features').scrollIntoView()");
+    await siteRun("document.getElementById('features').scrollIntoView({behavior:'instant'})");
     await captureSite('website-features');
+    await siteRun("document.getElementById('discord').scrollIntoView({behavior:'instant'})");
+    await captureSite('website-discord');
+    for (const width of [320, 375, 768]) {
+        site.setContentSize(width, 900);
+        await waitFor(() => siteRun(`innerWidth === ${width}`), 'website viewport ' + width);
+        await siteRun('window.scrollTo({top: 0, behavior: "instant"})');
+        await captureSite('website-width-' + width);
+    }
     site.setContentSize(430, 900);
-    await siteRun('window.scrollTo(0, 0)');
+    await waitFor(() => siteRun('innerWidth === 430'), 'website mobile viewport');
+    await siteRun('window.scrollTo({top: 0, behavior: "instant"})');
     await captureSite('website-mobile');
-    await siteRun("document.getElementById('download').scrollIntoView()");
+    await siteRun("document.getElementById('download').scrollIntoView({behavior:'instant'})");
     await captureSite('website-downloads-mobile');
     assert.equal(calls.some(c => ['fonts.googleapis.com', 'fonts.gstatic.com', 'unpkg.com'].includes(c.host)), false, 'App and website make no external font or icon requests');
     site.close();
