@@ -3180,18 +3180,7 @@ body.mini-mode .star-layer {
     inset: 0;
 }
 
-/* Synth Grid */
-body.mini-mode .synth-grid {
-    position: absolute;
-    inset: 0;
-}
-
-/* Rings */
-body.mini-mode .ring-container {
-    position: absolute;
-    inset: 0;
-}
-
+/* Keep the grid and rings' shared positioning so their centers stay aligned. */
 body.mini-mode .ring {
     border-width: 1px;
 }

@@ -224,6 +224,28 @@ app.whenReady().then(async () => {
         await run('new Promise(resolve => setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(resolve)), 500))');
         fs.writeFileSync(path.join(testData, name + '.png'), (await win.webContents.capturePage()).toPNG());
     };
+    async function exerciseBackgroundCentering(mode) {
+        const [width, height] = win.getContentSize();
+        await waitFor(() => run(`innerWidth === ${width} && innerHeight === ${height}`), mode + ' background viewport');
+        const savedEffect = await run('AppState.currentEffect');
+        for (const [effect, selector] of [['rings', '.ring-container'], ['grid', '.synth-grid']]) {
+            await run(`applyBgEffect(${JSON.stringify(effect)})`);
+            const center = await run(`(() => {
+                for (const animation of document.querySelector('#bg-effects').getAnimations({ subtree: true })) {
+                    animation.pause(); animation.currentTime = 2000;
+                }
+                const box = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();
+                return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+            })()`);
+            assert.ok(Math.abs(center.x - width / 2) < 1, `${mode}: ${effect} stays horizontally centered`);
+            if (effect === 'rings') {
+                assert.ok(Math.abs(center.y - height / 2) < 1, `${mode}: rings stay vertically centered`);
+            }
+            await capture(mode + '-' + effect);
+        }
+        await run(`applyBgEffect(${JSON.stringify(savedEffect)})`);
+        console.log(`Background centering passed in ${mode}: rings centered on both axes and grid perspective centered horizontally.`);
+    }
     async function exerciseMiniMarqueeClipping() {
         const fullSize = win.getSize();
         const saved = await run('({track: AppState.playerState.track, artist: AppState.playerState.artist})');
@@ -231,6 +253,7 @@ app.whenReady().then(async () => {
         await waitFor(() => run("document.body.classList.contains('mini-mode')"), 'mini marquee clipping');
         assert.deepEqual(win.getSize(), [540, 80], 'Mini mode opens at its minimum size');
         assert.deepEqual(win.getMaximumSize(), [900, 80], 'Mini mode has a compact maximum width and fixed height');
+        await exerciseBackgroundCentering('wide-mini');
         win.setSize(1920, 600);
         await waitFor(() => win.getSize()[0] === 900 && win.getSize()[1] === 80,
             'native constraints stop oversized mini-player resizing at 900px by 80px');
@@ -639,6 +662,7 @@ app.whenReady().then(async () => {
         const canvas = await box('#reactive-canvas');
         near(canvas.width, 280, 'visualizer canvas width'); near(canvas.height, minHeight, 'visualizer canvas height');
         await capture('classic-mini');
+        await exerciseBackgroundCentering('classic-mini');
 
         // History replaces the cover and keeps the full player's rows and thumbs.
         await run("document.getElementById('classic-history-btn').click()");
@@ -1401,6 +1425,7 @@ app.whenReady().then(async () => {
     await captureSite('website-downloads-mobile');
     assert.equal(calls.some(c => ['fonts.googleapis.com', 'fonts.gstatic.com', 'unpkg.com'].includes(c.host)), false, 'App and website make no external font or icon requests');
     site.close();
+    await exerciseBackgroundCentering('full-player');
     await exerciseVolumeMemory();
     await exerciseMiniMarqueeClipping();
     await exerciseClassicMiniplayer();

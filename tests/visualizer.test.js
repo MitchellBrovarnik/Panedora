@@ -4,12 +4,17 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-function setup() {
+function setup(classes = ['mini-mode']) {
     const frames = new Map();
     const resizeListeners = new Set();
     let nextFrame = 0;
     let clears = 0;
-    const context = new Proxy({ clearRect() { clears++; } }, {
+    const points = [];
+    const context = new Proxy({
+        clearRect() { clears++; },
+        moveTo(x, y) { points.push({ x, y }); },
+        lineTo(x, y) { points.push({ x, y }); }
+    }, {
         get: (object, key) => object[key] || (() => ({ addColorStop() {} }))
     });
     const window = {
@@ -18,7 +23,7 @@ function setup() {
         removeEventListener(name, listener) { if (name === 'resize') resizeListeners.delete(listener); }
     };
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'visualizer.js'), 'utf8'), {
-        window, document: { body: { classList: { contains: () => true } }, documentElement: {} },
+        window, document: { body: { classList: { contains: name => classes.includes(name) } }, documentElement: {} },
         getComputedStyle: () => ({ getPropertyValue: () => '#789abc' }),
         requestAnimationFrame(callback) { const id = ++nextFrame; frames.set(id, callback); return id; },
         cancelAnimationFrame: id => frames.delete(id),
@@ -32,7 +37,7 @@ function setup() {
         getFloatFrequencyData: array => array.fill(-60)
     };
     return {
-        visualizer, frames, resizeListeners, window,
+        visualizer, frames, resizeListeners, window, context, points,
         canvas: () => ({ width: 540, height: 80, getContext: () => context }),
         frame() {
             const callbacks = [...frames.values()];
@@ -79,4 +84,50 @@ test('restarting or changing reactive backgrounds before the next frame cannot r
     s.visualizer.stop();
     assert.equal(s.resizeListeners.size, 0);
     assert.equal(s.frames.size, 0);
+});
+
+test('reactive circles keep loud peaks inside both mini-player layouts', () => {
+    for (const [width, height, classes] of [
+        [540, 80, ['mini-mode']], [900, 80, ['mini-mode']],
+        [280, 500, ['mini-mode', 'classic-mini']], [1200, 800, []]
+    ]) {
+        const s = setup(classes);
+        s.visualizer.ctx = s.context;
+        for (const level of [0, 128, 255]) {
+            s.points.length = 0;
+            s.visualizer.dataArray = Uint8Array.from({ length: 128 }, (_, i) => i % 3 === 0 ? level : level / 2);
+            s.visualizer.drawCircle(128, width, height, '#789abc', 'rgba(120,154,188,0.3)');
+            const padding = s.context.lineWidth / 2 + (classes.length ? 10 : 20);
+            assert.ok(s.points.length > 100, 'The circle still draws both halves');
+            for (const { x, y } of s.points) {
+                assert.ok(x >= padding - 0.01 && x <= width - padding + 0.01, `${width}x${height}: x=${x}`);
+                assert.ok(y >= padding - 0.01 && y <= height - padding + 0.01, `${width}x${height}: y=${y}`);
+            }
+        }
+    }
+});
+
+test('reactive waves stay proportionate in the tall mini-player and recenter after resizing', () => {
+    for (const [width, height, classes, swing] of [
+        [540, 80, ['mini-mode'], 12], [900, 80, ['mini-mode'], 12],
+        [280, 500, ['mini-mode', 'classic-mini'], 42], [1200, 800, [], 64]
+    ]) {
+        const s = setup(classes);
+        s.visualizer.ctx = s.context;
+        s.visualizer.dataArray = new Uint8Array(512);
+        for (let frame = 0; frame < 120; frame++) {
+            s.points.length = 0;
+            s.visualizer.drawWave(512, width, height, '#789abc', '#789abc');
+        }
+        assert.ok(Math.abs(s.points[0].y - (height / 2 - swing)) < 0.01, `${width}x${height}: full wave swing`);
+        s.visualizer.canvas = s.canvas();
+        s.window.innerWidth = width;
+        s.window.innerHeight = height / 2;
+        s.visualizer.resize();
+        s.visualizer.dataArray.fill(128);
+        s.points.length = 0;
+        s.visualizer.drawWave(512, width, height / 2, '#789abc', '#789abc');
+        assert.equal(s.points[0].y, height / 4, 'A silent wave starts at the new center immediately');
+        assert.ok(Math.abs(s.points.at(-1).x - width) < 0.01, 'The wave still spans the full window width');
+    }
 });
