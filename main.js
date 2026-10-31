@@ -11,6 +11,7 @@ const MAX_WINDOW_DIMENSION = Math.floor(0x7fffffff / 10);
 const CLASSIC_MINI_WIDTH = 280;
 // Cover, song details, progress, controls and button row with 12px margins need exactly 500px.
 const CLASSIC_MINI_HEIGHT = 500;
+const COMPACT_MINI_HEIGHT = 72;
 
 // Disable GPU caching to prevent 'Access is denied' cache_util_win errors on Windows startup
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
@@ -210,9 +211,9 @@ ipcMain.handle('WINDOW:TOGGLE_MINI', async () => {
             }));
             classicMiniActive = true;
         } else {
-            uiWindow.setMinimumSize(540, 80);
-            uiWindow.setMaximumSize(900, 80);
-            uiWindow.setSize(540, 80);
+            uiWindow.setMinimumSize(540, COMPACT_MINI_HEIGHT);
+            uiWindow.setMaximumSize(900, COMPACT_MINI_HEIGHT);
+            uiWindow.setSize(540, COMPACT_MINI_HEIGHT);
         }
         // Use 'screen-saver' level to stay on top of fullscreen borderless games
         uiWindow.setAlwaysOnTop(true, 'screen-saver');

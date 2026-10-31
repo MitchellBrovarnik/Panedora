@@ -1374,7 +1374,7 @@ test('toggling the mini player sizes the window for the classic or wide layout a
 
     log.length = 0;
     assert.deepEqual({ ...await toggle() }, { isMini: true, legacy: false });
-    assert.deepEqual(log.filter(c => ['min', 'max', 'size'].includes(c[0])), [['min', 540, 80], ['max', 900, 80], ['size', 540, 80]]);
+    assert.deepEqual(log.filter(c => ['min', 'max', 'size'].includes(c[0])), [['min', 540, 72], ['max', 900, 72], ['size', 540, 72]]);
     assert.deepEqual(log.find(c => c[0] === 'resizable'), ['resizable', true], 'The wide mini player remains resizable');
     assert.equal(log.some(c => c[0] === 'bounds'), false, 'The wide mini player still keeps the full player\u2019s corner');
     await toggle();
@@ -1443,16 +1443,16 @@ test('mini players can move between monitors and keep valid negative coordinates
     for (const [x, y, expectedX, expectedY] of [
         [-600, -120, -600, -120],
         [-1800, -240, -1600, -200],
-        [-600, 680, -600, 620],
+        [-600, 680, -600, 628],
         [100, 100, 100, 100],
-        [100, 1000, 100, 960]
+        [100, 1000, 100, 968]
     ]) {
         state.bounds = { ...state.bounds, x, y };
         s.beginMiniPlayerMove();
         s.scheduleMiniBoundsSave();
         assert.equal(state.bounds.x, x, 'Dragging to another display is not interrupted');
         s.endMiniPlayerMove();
-        assert.deepEqual(state.bounds, { x: expectedX, y: expectedY, width: 540, height: 80 });
+        assert.deepEqual(state.bounds, { x: expectedX, y: expectedY, width: 540, height: 72 });
     }
     await toggle();
 });

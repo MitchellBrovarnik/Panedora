@@ -252,12 +252,13 @@ app.whenReady().then(async () => {
         const saved = await run('({track: AppState.playerState.track, artist: AppState.playerState.artist})');
         await run("renderPage('home'); window.api.window.toggleMini()");
         await waitFor(() => run("document.body.classList.contains('mini-mode')"), 'mini marquee clipping');
-        assert.deepEqual(win.getSize(), [540, 80], 'Mini mode opens at its minimum size');
-        assert.deepEqual(win.getMaximumSize(), [900, 80], 'Mini mode has a compact maximum width and fixed height');
+        assert.deepEqual(win.getSize(), [540, 72], 'Mini mode opens at its minimum size');
+        assert.deepEqual(win.getMinimumSize(), [540, 72], 'Compact mini mode keeps its minimum width and slimmer height');
+        assert.deepEqual(win.getMaximumSize(), [900, 72], 'Mini mode has a compact maximum width and fixed height');
         await exerciseBackgroundCentering('wide-mini');
         win.setSize(1920, 600);
-        await waitFor(() => win.getSize()[0] === 900 && win.getSize()[1] === 80,
-            'native constraints stop oversized mini-player resizing at 900px by 80px');
+        await waitFor(() => win.getSize()[0] === 900 && win.getSize()[1] === 72,
+            'native constraints stop oversized mini-player resizing at 900px by 72px');
         const paint = () => run('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
         const layout = () => run(`(() => {
             const box = selector => {
@@ -283,7 +284,7 @@ app.whenReady().then(async () => {
         for (const width of [540, 680, 799, 800, 900]) {
             let collapsedLayout;
             for (const expanded of [false, true]) {
-                win.setSize(width, 80);
+                win.setSize(width, 72);
                 win.webContents.sendInputEvent({ type: 'mouseMove', x: 0, y: 0 });
                 await run(`document.querySelector('.volume-controls').dispatchEvent(new MouseEvent('${expanded ? 'mouseenter' : 'mouseleave'}'))`);
                 await run('new Promise(resolve => setTimeout(resolve, 750))');
@@ -292,7 +293,11 @@ app.whenReady().then(async () => {
                 await paint();
                 const currentLayout = await layout();
                 assert.equal(currentLayout.width, width);
-                assert.equal(currentLayout.height, 80);
+                assert.equal(currentLayout.height, 72);
+                for (const group of ['art', 'info', 'thumbs', 'playback', 'volume']) {
+                    assert.ok(currentLayout[group].top >= 0 && currentLayout[group].top + currentLayout[group].height <= 72,
+                        'The slimmer player fits the complete ' + group + ' group');
+                }
                 assert.ok(Math.abs(currentLayout.up.top - currentLayout.down.top) < 1,
                     'Thumbs stay side by side');
                 assert.ok(currentLayout.thumbs.left - currentLayout.info.right <= 16,
@@ -415,7 +420,7 @@ app.whenReady().then(async () => {
             await run('new Promise(resolve => setTimeout(resolve, 750))');
             let previous;
             for (const width of trajectory) {
-                win.setSize(width, 80);
+                win.setSize(width, 72);
                 await paint();
                 const current = await layout();
                 assert.equal(current.width, width);
@@ -450,7 +455,7 @@ app.whenReady().then(async () => {
         await waitFor(() => win.getSize()[0] === fullSize[0] + 60 && win.getSize()[1] === fullSize[1] + 60,
             'full player can resize in both directions beyond the mini-player limits');
         win.setSize(...fullSize);
-        console.log(`Mini-player layout and marquee clipping passed at 540/680/799/800/900px: wide playback centered, horizontal thumbs beside bounded text, volume expansion stable, native mini size limited to 540–900px by 80px, full size constraints restored; removing the clip reproduced ${oldOverlap} artwork pixels.`);
+        console.log(`Mini-player layout and marquee clipping passed at 540/680/799/800/900px: wide playback centered, horizontal thumbs beside bounded text, volume expansion stable, native mini size limited to 540–900px by 72px with every control inside its height, full size constraints restored; removing the clip reproduced ${oldOverlap} artwork pixels.`);
     }
     async function exerciseClassicMiniplayer() {
         const minHeight = 500; // Fixed compact size: 12px margins around every row.
@@ -720,7 +725,7 @@ app.whenReady().then(async () => {
         await run('window.api.window.toggleMini()');
         await waitFor(() => run("document.body.classList.contains('mini-mode')"), 'wide mini player');
         assert.equal(await run("document.body.classList.contains('classic-mini')"), false);
-        assert.deepEqual(win.getSize(), [540, 80]);
+        assert.deepEqual(win.getSize(), [540, 72]);
         await run(`window.api.window.toggleMini(); applyBgEffect(${JSON.stringify(savedEffect)}); updatePlayerUI(${JSON.stringify(saved)})`);
         await waitFor(() => !win.webContents.isLoading() && win.getSize()[1] === fullSize[1], 'full-player size restored again');
         console.log('Classic mini player passed: opt-in setting, fixed 280x' + minHeight + ' compact size, 256px cover with 12px margins, frosted centered 12pt artist/track/album box, full-player progress bar, centered controls, enlarged thumbs/history/volume row, history view, background visualizer canvas, and return to the resizable full and wide mini players.');
@@ -754,7 +759,7 @@ app.whenReady().then(async () => {
             await run(`window.api.settings.setLegacyMiniplayer(${legacy})`);
             await run('window.api.window.toggleMini()');
             await waitFor(() => run("document.body.classList.contains('mini-mode')"), 'mini mode for screen bounds');
-            if (!legacy) win.setSize(900, 80);
+            if (!legacy) win.setSize(900, 72);
             const size = win.getSize();
             const area = screen.getDisplayMatching(win.getBounds()).workArea;
             const maxX = area.x + area.width - size[0];
@@ -1065,7 +1070,7 @@ app.whenReady().then(async () => {
     assert.equal(await run('AppState.playerState.isPlaying'), false);
 
     await run('window.api.window.toggleMini()');
-    assert.equal(win.getBounds().height, 80);
+    assert.equal(win.getBounds().height, 72);
     // Use the actual Play button to verify a declined conflict can be revisited.
     await run("document.getElementById('play-pause-btn').click()");
     await waitFor(() => run("document.getElementById('stream-conflict-dialog').open"), 'mini player listening choice');
@@ -1411,7 +1416,7 @@ app.whenReady().then(async () => {
     fs.writeFileSync(previewFile, fs.readFileSync(path.join(previewRoot, 'index.html'), 'utf8')
         .replace(/<script\b[^>]*\bsrc="[^"]*"[^>]*>\s*<\/script>/gi, '')
         .replace('<head>', '<head><base href="' + pathToFileURL(previewRoot + path.sep).href + '">'));
-    const preview = new BrowserWindow({ width: 680, height: 80, frame: false, transparent: true,
+    const preview = new BrowserWindow({ width: 680, height: 72, frame: false, transparent: true,
         backgroundColor: '#00000000', show: false,
         webPreferences: { partition: 'website-previews', contextIsolation: true, nodeIntegration: false } });
     try {
@@ -1427,7 +1432,7 @@ app.whenReady().then(async () => {
                 album: 'Evening Mix', coverArt: ${JSON.stringify(sampleCover)}, feedback: 'thumbUp',
                 duration: 222, time: 84, isPlaying: true, history: [] });
             renderPage('home'); applyBgEffect('static');`);
-        for (const [mode, width, height] of [['wide', 680, 80], ['classic', 280, 500]]) {
+        for (const [mode, width, height] of [['wide', 680, 72], ['wide-default', 540, 72], ['classic', 280, 500]]) {
             preview.setContentSize(width, height);
             await waitFor(() => previewRun(`innerWidth === ${width} && innerHeight === ${height}`), 'website ' + mode + ' viewport');
             await previewRun(`document.documentElement.classList.add('mini-mode');
@@ -1481,6 +1486,18 @@ app.whenReady().then(async () => {
     await captureDemo('website-demo-home');
     await demoRun("document.querySelector('#home-recent [data-id=\"focus\"]').click()");
     assert.equal(await demoRun('AppState.playerState.stationName'), 'Focus Radio');
+    await demoRun(`(() => {
+        const slider = document.getElementById('volume-slider');
+        slider.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+        slider.value = '37';
+        slider.dispatchEvent(new Event('input', { bubbles: true }));
+        slider.dispatchEvent(new Event('change', { bubbles: true }));
+    })()`);
+    assert.equal(await demoRun("document.getElementById('volume-popover').textContent"), '37%', 'The sample slider updates its percentage');
+    assert.deepEqual(await demoRun('window.api.settings.getVolume()'), { volume: 37 });
+    await captureDemo('website-demo-volume');
+    await demoRun("document.dispatchEvent(new Event('pointerup'))");
+    await waitFor(() => demoRun("!document.getElementById('volume-popover').classList.contains('visible')"), 'sample volume bubble hides after release');
     await demoRun("document.querySelector('[data-page=\"settings\"]').click()");
     assert.deepEqual(await demoRun('Object.keys(THEMES)'), await run('Object.keys(THEMES)'), 'The demo includes all app themes');
     assert.deepEqual(await demoRun('Object.keys(BG_EFFECTS)'), await run('Object.keys(BG_EFFECTS)'), 'The demo includes all app backgrounds');

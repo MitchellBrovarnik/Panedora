@@ -18,7 +18,7 @@ function setup(classes = ['mini-mode']) {
         get: (object, key) => object[key] || (() => ({ addColorStop() {} }))
     });
     const window = {
-        innerWidth: 540, innerHeight: 80,
+        innerWidth: 540, innerHeight: 72,
         addEventListener(name, listener) { if (name === 'resize') resizeListeners.add(listener); },
         removeEventListener(name, listener) { if (name === 'resize') resizeListeners.delete(listener); }
     };
@@ -38,7 +38,7 @@ function setup(classes = ['mini-mode']) {
     };
     return {
         visualizer, frames, resizeListeners, window, context, points,
-        canvas: () => ({ width: 540, height: 80, getContext: () => context }),
+        canvas: () => ({ width: 540, height: 72, getContext: () => context }),
         frame() {
             const callbacks = [...frames.values()];
             frames.clear();
@@ -88,7 +88,7 @@ test('restarting or changing reactive backgrounds before the next frame cannot r
 
 test('reactive circles keep loud peaks inside both mini-player layouts', () => {
     for (const [width, height, classes] of [
-        [540, 80, ['mini-mode']], [900, 80, ['mini-mode']],
+        [540, 72, ['mini-mode']], [900, 72, ['mini-mode']],
         [280, 500, ['mini-mode', 'classic-mini']], [1200, 800, []]
     ]) {
         const s = setup(classes);
@@ -109,7 +109,7 @@ test('reactive circles keep loud peaks inside both mini-player layouts', () => {
 
 test('reactive waves stay proportionate in the tall mini-player and recenter after resizing', () => {
     for (const [width, height, classes, swing] of [
-        [540, 80, ['mini-mode'], 12], [900, 80, ['mini-mode'], 12],
+        [540, 72, ['mini-mode'], 10.8], [900, 72, ['mini-mode'], 10.8],
         [280, 500, ['mini-mode', 'classic-mini'], 42], [1200, 800, [], 64]
     ]) {
         const s = setup(classes);
