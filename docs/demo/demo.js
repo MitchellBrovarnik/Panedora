@@ -75,7 +75,11 @@
     }
     function next(direction = 1) {
         rememberSong(); songIndex = (songIndex + direction + 3) % 3;
-        if (shuffling) stationIndex = (stationIndex + direction + stations.length) % stations.length;
+        if (shuffling && AppState.stations.length) {
+            const remaining = AppState.stations.map(station => stations.findIndex(s => s.id === station.id));
+            const index = remaining.indexOf(stationIndex);
+            stationIndex = remaining[(index + direction + remaining.length) % remaining.length];
+        }
         publishSong();
         return Promise.resolve({ success: true });
     }
@@ -96,9 +100,8 @@
         const rows = document.querySelectorAll('#search-songs .track-row');
         rows.forEach((row, i) => {
             row.tabIndex = 0; row.setAttribute('role', 'button'); row.setAttribute('aria-label', 'Preview ' + AppState.searchResults.songs[i].title);
-            const choose = () => window.api.content.playItem({ type: 'station', id: stations[AppState.searchResults.songs[i].stationIndex].id });
-            row.addEventListener('click', choose);
-            row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(); } });
+            // The renderer already binds each row to playItem with that song.
+            row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); row.click(); } });
         });
         if (!AppState.searchResults.songs.length && !AppState.searchResults.stations.length) {
             DOM.pageContent.innerHTML = createEmptyState('No sample matches', 'Try “Night”, “Focus”, or “After Hours”.');
@@ -109,12 +112,28 @@
         platform: 'demo',
         content: {
             playItem: item => {
+                const song = songs.find(s => s.id === item.trackToken || s.id === item.id);
+                if (song) { selectSong(song); return Promise.resolve({ success: true }); }
                 const index = stations.findIndex(s => s.id === item.id || s.id === item.stationId);
-                selectSong(songs.find(s => s.stationIndex === (index < 0 ? 0 : index) && s.songIndex === 0));
+                if (index < 0) return Promise.resolve({ error: 'Sample station not found' });
+                selectSong(songs.find(s => s.stationIndex === index && s.songIndex === 0));
                 return Promise.resolve({ success: true });
             }, search,
-            playShuffle: async () => { shuffling = true; playing = true; return next(); },
-            removeStation: async id => { AppState.stations = AppState.stations.filter(s => s.id !== id); return true; },
+            playShuffle: async () => {
+                if (!AppState.stations.length) return { error: 'Reset the demo to restore the sample stations.' };
+                shuffling = true; playing = true; return next();
+            },
+            removeStation: async id => {
+                AppState.stations = AppState.stations.filter(s => s.id !== id);
+                const scroll = document.getElementById('main-scroll');
+                const position = scroll.scrollTop;
+                renderStationsList();
+                if (AppState.currentPage === 'home') updateHomeGrids();
+                else if (AppState.currentPage === 'library') renderLibraryPage();
+                else if (AppState.currentPage === 'search') search(DOM.searchInput.value);
+                scroll.scrollTop = position;
+                return true;
+            },
             fetchLyrics: async () => ({ success: true, lyrics: '[00:00.00]A quiet moment, a different view\n[00:12.00]The evening finds a little room\n[00:24.00]A city painted in the light\n[00:36.00]We take the long way home tonight\n[00:48.00]These are sample lyrics for the demo\n[01:00.00]Let the colors move around you' })
         },
         player: {
@@ -139,20 +158,65 @@
     const visualizer = window.visualizer;
     visualizer.audioContext = { state: 'running', sampleRate: 44100 };
     const phase = () => performance.now() / 1000;
+    const gaussian = (hz, center, width) => Math.exp(-0.5 * ((hz - center) / width) ** 2);
+    function groove(t) {
+        const beat = t * 112 / 60;
+        const hit = (period, offset, decay) => Math.exp(-(((beat - offset) % period + period) % period) * (60 / 112) / decay);
+        return { beat, kick: hit(1, 0, .1), bass: .45 + .55 * hit(.5, .25, .18), snare: hit(2, 1, .12), hat: hit(.5, .25, .045) };
+    }
+    function noise(bin, frame) {
+        let value = Math.imul(bin + 1, 374761393) ^ Math.imul(frame, 668265263);
+        value = Math.imul(value ^ (value >>> 13), 1274126177);
+        return ((value ^ (value >>> 16)) >>> 0) / 4294967295;
+    }
+    let spectrum = null, spectrumTime = null;
+    function sampleSpectrum(length) {
+        const t = phase();
+        if (!spectrum || spectrum.length !== length) { spectrum = new Float32Array(length); spectrumTime = null; }
+        if (t === spectrumTime) return spectrum;
+        const dt = spectrumTime === null ? 0 : Math.min(.05, Math.max(0, t - spectrumTime));
+        const { beat, kick, bass, snare, hat } = groove(t);
+        const chord = [1, .89, 1.12, .94][Math.floor(beat / 8) % 4];
+        const frame = Math.floor(t * 9), fraction = t * 9 - frame;
+        const blend = fraction * fraction * (3 - 2 * fraction);
+        for (let i = 0; i < length; i++) {
+            const hz = i * visualizer.audioContext.sampleRate / visualizer.analyser.fftSize;
+            // Stationary frequency bands with independent fluctuations, rather
+            // than a phase that travels sideways through every bar.
+            const texture = .7 + .6 * (noise(i, frame) * (1 - blend) + noise(i, frame + 1) * blend);
+            const voices = gaussian(hz, 430 * chord, 140) + .8 * gaussian(hz, 1160 * chord, 260) + .65 * gaussian(hz, 2600 * chord, 500);
+            const body = (.12 + .12 * Math.exp(-hz / 8000) + .17 * voices) * texture;
+            const activity = body + .58 * kick * gaussian(hz, 95, 190) + .22 * bass * gaussian(hz, 220, 220)
+                + .4 * snare * gaussian(hz, 1800, 1500) * texture + .28 * hat * gaussian(hz, 6500, 2400) * texture;
+            const target = Math.max(.03, Math.min(.95, activity));
+            // Quick attacks and slower releases keep the percussion punchy
+            // without making the bars jitter or move in lockstep.
+            const follow = 1 - Math.exp(-dt / (target > spectrum[i] ? .025 : .16));
+            spectrum[i] = spectrumTime === null ? target : spectrum[i] + (target - spectrum[i]) * follow;
+        }
+        spectrumTime = t;
+        return spectrum;
+    }
     visualizer.analyser = {
         fftSize: 256, minDecibels: -100, maxDecibels: -20,
         get frequencyBinCount() { return this.fftSize / 2; },
         getFloatFrequencyData(array) {
-            const t = phase();
-            for (let i = 0; i < array.length; i++) array[i] = -74 + 18 * Math.sin(t * 3.2 + i * .21) + 9 * Math.sin(t * 7.1 - i * .06) + 10 * Math.exp(-i / 20);
+            const levels = sampleSpectrum(array.length);
+            for (let i = 0; i < array.length; i++) array[i] = this.minDecibels + levels[i] * (this.maxDecibels - this.minDecibels);
         },
         getByteFrequencyData(array) {
-            const t = phase();
-            for (let i = 0; i < array.length; i++) array[i] = 60 + 80 * (.5 + .5 * Math.sin(t * 3.6 + i * .14)) + 55 * (.5 + .5 * Math.sin(t * 6.4 - i * .22));
+            const levels = sampleSpectrum(array.length);
+            for (let i = 0; i < array.length; i++) array[i] = Math.round(levels[i] * 255);
         },
         getByteTimeDomainData(array) {
-            const t = phase(), strength = 27 + 13 * Math.sin(t * 2.4);
-            for (let i = 0; i < array.length; i++) array[i] = 128 + strength * Math.sin(i * .06 + t * 4) + 12 * Math.sin(i * .18 - t * 6);
+            const t = phase(), { kick, bass, snare, hat } = groove(t);
+            for (let i = 0; i < array.length; i++) {
+                const sample = t + i / visualizer.audioContext.sampleRate;
+                const low = (12 + 32 * kick + 10 * bass) * Math.sin(2 * Math.PI * 82 * sample);
+                const voice = 14 * Math.sin(2 * Math.PI * 330 * sample) + 9 * Math.sin(2 * Math.PI * 495 * sample);
+                const percussion = (18 * snare + 9 * hat) * (2 * noise(i, Math.floor(t * 60)) - 1);
+                array[i] = Math.max(0, Math.min(255, Math.round(128 + low + voice + percussion)));
+            }
         }
     };
     visualizer.init = () => {};
