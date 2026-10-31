@@ -1376,9 +1376,13 @@ app.whenReady().then(async () => {
                 animation.pause(); animation.currentTime = 2000;
             }`);
         await waitFor(() => previewRun("Array.from(document.querySelectorAll('#np-large-art, .history-art')).every(image => image.naturalWidth > 0)"), 'theme preview artwork');
-        for (const theme of ['midnight', 'ocean', 'emerald']) {
-            await previewRun(`applyTheme('${theme}'); document.fonts.ready`);
-            await previewRun('new Promise(resolve => setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(resolve)), 300))');
+        for (const theme of await previewRun('Object.keys(THEMES)')) {
+            await previewRun(`applyTheme(${JSON.stringify(theme)}); document.fonts.ready`);
+            if (theme === 'adaptive') {
+                await waitFor(() => previewRun('window._lastExtractedArt === AppState.playerState.coverArt'),
+                    'Adaptive preview uses the sample artwork color');
+            }
+            await previewRun('new Promise(resolve => setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(resolve)), 500))');
             fs.writeFileSync(path.join(testData, 'website-theme-' + theme + '.png'), (await preview.webContents.capturePage()).toPNG());
         }
     } finally { preview.close(); }
