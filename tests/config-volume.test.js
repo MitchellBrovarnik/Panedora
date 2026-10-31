@@ -18,37 +18,35 @@ function setup(t) {
 }
 const settings = config => ({ ...config.getVolumeSettings() });
 
-test('remembering volume is opt-in and ignores volume changes until enabled', t => {
+test('volume is remembered automatically without enabling a setting', t => {
     const reopen = setup(t);
-    assert.deepEqual(settings(reopen()), { remember: false, volume: 100 });
-    const config = reopen();
-    config.setVolume(40);
-    assert.deepEqual(settings(reopen()), { remember: false, volume: 100 });
-    assert.equal(fs.existsSync(reopen.file), false, 'Nothing is written while the setting is off');
+    assert.deepEqual(settings(reopen()), { volume: 100 });
+    reopen().setVolume(40);
+    assert.deepEqual(settings(reopen()), { volume: 40 });
 });
 
-test('an enabled setting saves the current level and keeps following the slider across restarts', t => {
+test('volume keeps following the slider across restarts', t => {
     const reopen = setup(t);
-    reopen().setRememberVolume(true, 40);
-    assert.deepEqual(settings(reopen()), { remember: true, volume: 40 });
+    reopen().setVolume(40);
+    assert.deepEqual(settings(reopen()), { volume: 40 });
     reopen().setVolume(63.6);
-    assert.deepEqual(settings(reopen()), { remember: true, volume: 64 });
+    assert.deepEqual(settings(reopen()), { volume: 64 });
 });
 
-test('turning it off forgets the saved level and the next launch starts at 100%', t => {
+test('old remember-volume preferences cannot disable volume memory', t => {
     const reopen = setup(t);
-    const config = reopen();
-    config.setRememberVolume(true, 40);
-    config.setRememberVolume(false, 40);
-    assert.deepEqual(settings(reopen()), { remember: false, volume: 100 });
-    assert.equal(JSON.parse(fs.readFileSync(reopen.file, 'utf8')).volume, null);
-    reopen().setRememberVolume(true, undefined);
-    assert.deepEqual(settings(reopen()), { remember: true, volume: 100 }, 'No level to restore means full volume');
+    for (const oldPreference of [false, true, 'false', undefined]) {
+        fs.writeFileSync(reopen.file, JSON.stringify({ rememberVolume: oldPreference, volume: 40 }));
+        assert.deepEqual(settings(reopen()), { volume: 40 });
+        reopen().setVolume(0);
+        assert.deepEqual(settings(reopen()), { volume: 0 });
+    }
+    fs.writeFileSync(reopen.file, JSON.stringify({ rememberVolume: false, volume: null }));
+    assert.deepEqual(settings(reopen()), { volume: 100 }, 'An old disabled setting may have erased the saved level');
 });
 
 test('a saved volume of 0 stays muted, and levels are clamped to whole percentages', t => {
     const reopen = setup(t);
-    reopen().setRememberVolume(true, 80);
     for (const [saved, restored] of [[0, 0], [0.4, 0], [-20, 0], [250, 100], [100, 100], [1, 1], [49.5, 50]]) {
         reopen().setVolume(saved);
         assert.equal(reopen().getVolumeSettings().volume, restored, `saved ${saved}`);
@@ -57,31 +55,24 @@ test('a saved volume of 0 stays muted, and levels are clamped to whole percentag
 
 test('invalid levels are ignored on save and fall back to 100% when the file holds one', t => {
     const reopen = setup(t);
-    reopen().setRememberVolume(true, 70);
+    reopen().setVolume(70);
     for (const value of ['50', null, undefined, NaN, Infinity, {}, []]) reopen().setVolume(value);
     assert.equal(reopen().getVolumeSettings().volume, 70);
     const stored = JSON.parse(fs.readFileSync(reopen.file, 'utf8'));
     for (const bad of ['abc', null, {}, NaN, [], true]) {
         fs.writeFileSync(reopen.file, JSON.stringify({ ...stored, volume: bad }));
-        assert.deepEqual(settings(reopen()), { remember: true, volume: 100 }, JSON.stringify(bad));
+        assert.deepEqual(settings(reopen()), { volume: 100 }, JSON.stringify(bad));
     }
-    // Only a literal true enables the setting.
-    fs.writeFileSync(reopen.file, JSON.stringify({ rememberVolume: 'true', volume: 30 }));
-    assert.deepEqual(settings(reopen()), { remember: false, volume: 100 });
-    reopen().setRememberVolume('true', 30);
-    assert.equal(reopen().getVolumeSettings().remember, false);
 });
 
-test('the volume preference lives with the other installation settings and survives sign-out', t => {
+test('the last volume survives sign-out', t => {
     const reopen = setup(t);
     const config = reopen();
     config.setCredentials('listener@example.invalid', 'fixture-password');
-    config.setRememberVolume(true, 35);
+    config.setVolume(35);
     config.clearAll();
-    assert.deepEqual(settings(reopen()), { remember: true, volume: 35 });
-    const stored = JSON.parse(fs.readFileSync(reopen.file, 'utf8'));
-    assert.equal(stored.rememberVolume, true);
-    assert.equal(stored.volume, 35);
+    assert.deepEqual(settings(reopen()), { volume: 35 });
+    assert.equal(JSON.parse(fs.readFileSync(reopen.file, 'utf8')).volume, 35);
 });
 
 test('the legacy miniplayer is opt-in, strictly boolean, and survives sign-out', t => {
@@ -99,9 +90,9 @@ test('the legacy miniplayer is opt-in, strictly boolean, and survives sign-out',
     assert.equal(reopen().getLegacyMiniplayer(), false);
     assert.equal(JSON.parse(fs.readFileSync(reopen.file, 'utf8')).legacyMiniplayer, false);
     // Independent of the volume preference stored beside it.
-    reopen().setRememberVolume(true, 40);
+    reopen().setVolume(40);
     reopen().setLegacyMiniplayer(true);
-    assert.deepEqual(settings(reopen()), { remember: true, volume: 40 });
+    assert.deepEqual(settings(reopen()), { volume: 40 });
     assert.equal(reopen().getLegacyMiniplayer(), true);
 });
 

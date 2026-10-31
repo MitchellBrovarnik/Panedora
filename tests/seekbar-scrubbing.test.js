@@ -17,7 +17,7 @@ function setup(t, { audio = false } = {}) {
         player: { setVolume() {}, seek: async seconds => { seeks.push(seconds); return { success: true }; } },
         window: {}, content: {},
         discord: { onStatus() {}, getStatus: async () => ({ enabled: false, configured: true, status: 'disabled' }), reportPlayback() {} },
-        settings: { getVolume: async () => ({ remember: false, volume: 100 }), getLegacyMiniplayer: async () => false,
+        settings: { getVolume: async () => ({ volume: 100 }), getLegacyMiniplayer: async () => false,
             saveVolume: async () => true }
     };
     for (const name of ['State', 'Collection', 'SearchResults', 'LoginStatus', 'MiniMode', 'Error', 'UpdateNotice']) {

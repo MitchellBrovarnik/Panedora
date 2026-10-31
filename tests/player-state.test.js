@@ -17,7 +17,7 @@ function modes(currentModeId = 0) {
     ] };
 }
 
-function setup(config = { getRememberedShuffle: () => null, rememberShuffle() {} }) {
+function setup(config = { getRememberedShuffle: () => null, rememberShuffle() {} }, timers = { setTimeout, clearTimeout }) {
     config = { getStationRecency: () => ({}), rememberStationPlayed() {}, forgetStationRecency() {},
         getClassicMiniBounds: () => null, setClassicMiniBounds() {}, ...config };
     const handlers = new Map();
@@ -58,6 +58,7 @@ function setup(config = { getRememberedShuffle: () => null, rememberShuffle() {}
         uiWindow = testWindow;
         currentStations = [{stationId:'station-1'}, {stationId:'station-2'}];
         module.exports = { loadStations, playStation, showStreamConflict, getCurrentState, thumbUp, thumbDown, pausePlayer, resumePlayer, loadStationModes, changeStationMode, skipTrack,
+            saveMiniBoundsNow, scheduleMiniBoundsSave, beginMiniPlayerMove, endMiniPlayerMove,
             seedUpdateChecker: checker => { updateChecker = checker; },
             seedDiscord: presence => { discordPresence = presence; discordPresence.setPlayerState(getCurrentState()); },
             seed: (tracks, station = {}) => { currentStations[0] = { ...currentStations[0], ...station }; currentStation = currentStations[0]; currentPlaylist = tracks; currentTrackIndex = 0; isPaused = false; tracks.forEach(rememberTrack); }
@@ -78,7 +79,7 @@ function setup(config = { getRememberedShuffle: () => null, rememberShuffle() {}
             return require(name);
         },
         __dirname: path.join(__dirname, '..'), process,
-        setTimeout, clearTimeout,
+        setTimeout: timers.setTimeout, clearTimeout: timers.clearTimeout,
         console: { log() {}, error() {} }
     });
     return { ...module.exports, api, handlers, prompts, window, messages, calls, started, playlists, electron };
@@ -1293,22 +1294,22 @@ test('passing the current song token behaves like the normal thumb, including th
 test('volume settings IPC only answers the app window and validates its inputs', async () => {
     const saved = [];
     const s = setup({
-        getVolumeSettings: () => ({ remember: true, volume: 42 }),
-        setRememberVolume: (enabled, volume) => saved.push(['remember', enabled, volume]),
+        getVolumeSettings: () => ({ volume: 42 }),
         setVolume: volume => saved.push(['volume', volume])
     });
     const app = { sender: s.window.webContents };
     const stranger = { sender: {} };
     const call = (name, event, ...args) => s.handlers.get(name)(event, ...args);
-    assert.deepEqual({ ...await call('SETTINGS:GET_VOLUME', app) }, { remember: true, volume: 42 });
+    assert.deepEqual({ ...await call('SETTINGS:GET_VOLUME', app) }, { volume: 42 });
     assert.equal(await call('SETTINGS:GET_VOLUME', stranger), null);
-    assert.deepEqual({ ...await call('SETTINGS:SET_REMEMBER_VOLUME', app, true, 55) }, { remember: true, volume: 42 });
-    assert.equal(await call('SETTINGS:SET_REMEMBER_VOLUME', app, 'yes', 55), null);
-    assert.equal(await call('SETTINGS:SET_REMEMBER_VOLUME', stranger, true, 55), null);
+    assert.equal(s.handlers.has('SETTINGS:SET_REMEMBER_VOLUME'), false, 'Volume memory cannot be disabled');
     assert.equal(await call('SETTINGS:SAVE_VOLUME', app, 61), true);
     assert.equal(await call('SETTINGS:SAVE_VOLUME', app, '61'), false);
+    assert.equal(await call('SETTINGS:SAVE_VOLUME', app, NaN), false);
+    assert.equal(await call('SETTINGS:SAVE_VOLUME', app, Infinity), false);
+    assert.equal(await call('SETTINGS:SAVE_VOLUME', app, 0), true);
     assert.equal(await call('SETTINGS:SAVE_VOLUME', stranger, 61), false);
-    assert.deepEqual(saved, [['remember', true, 55], ['volume', 61]]);
+    assert.deepEqual(saved, [['volume', 61], ['volume', 0]]);
 });
 
 test('legacy miniplayer IPC only answers the app window and accepts only booleans', async () => {
@@ -1335,12 +1336,12 @@ function miniWindow(s) {
     const state = { bounds: { x: 10, y: 20, width: 1200, height: 800 } };
     Object.assign(s.window, {
         getBounds: () => state.bounds, getMaximumSize: () => [0, 0],
-        setBounds: value => log.push(['bounds', { ...value }]),
+        setBounds: value => { state.bounds = { ...value }; log.push(['bounds', { ...value }]); },
         setMenuBarVisibility() {}, setAutoHideMenuBar() {}, setResizable: value => log.push(['resizable', value]),
         setAlwaysOnTop: (...args) => log.push(['onTop', ...args]),
         setMinimumSize: (...size) => log.push(['min', ...size]),
         setMaximumSize: (...size) => log.push(['max', ...size]),
-        setSize: (...size) => log.push(['size', ...size])
+        setSize: (width, height) => { state.bounds = { ...state.bounds, width, height }; log.push(['size', width, height]); }
     });
     return { log, state, toggle: () => s.handlers.get('WINDOW:TOGGLE_MINI')({}) };
 }
@@ -1404,4 +1405,95 @@ test('the classic mini player reopens where it was left, kept fully on screen', 
     assert.deepEqual(await opened(), { x: 50, y: 60, width: 280, height: 500 });
     remembered.value = { x: 0, y: 0, width: 3000, height: 3000 };
     assert.deepEqual(await opened(), { x: 0, y: 0, width: 280, height: 500 });
+});
+
+for (const legacy of [false, true]) {
+    test(`${legacy ? 'classic' : 'wide'} mini player returns inside every screen edge after moving`, async () => {
+        const saved = [];
+        const s = setup({ getLegacyMiniplayer: () => legacy, setClassicMiniBounds: bounds => saved.push({ ...bounds }) });
+        const { state, toggle } = miniWindow(s);
+        const fullBounds = { ...state.bounds };
+        await toggle();
+        const { width, height } = state.bounds;
+        for (const [x, y, expectedX, expectedY] of [
+            [-80, 200, 0, 200],
+            [1920 - width + 80, 200, 1920 - width, 200],
+            [100, -50, 100, 0],
+            [100, 1080 - height + 50, 100, 1080 - height],
+            [-900, -700, 0, 0]
+        ]) {
+            state.bounds = { x, y, width, height };
+            s.endMiniPlayerMove();
+            assert.deepEqual(state.bounds, { x: expectedX, y: expectedY, width, height });
+            if (legacy) assert.deepEqual(saved.at(-1), state.bounds, 'Only the corrected position is saved');
+        }
+        await toggle();
+        assert.deepEqual(state.bounds, fullBounds, 'Returning to the full player restores its original bounds');
+        if (!legacy) assert.deepEqual(saved, [], 'The wide player does not overwrite the classic position');
+    });
+}
+
+test('mini players can move between monitors and keep valid negative coordinates', async () => {
+    const s = setup({ getLegacyMiniplayer: () => false });
+    const { state, toggle } = miniWindow(s);
+    const left = { x: -1600, y: -200, width: 1600, height: 900 };
+    const primary = { x: 0, y: 0, width: 1920, height: 1040 };
+    s.electron.screen.getDisplayMatching = bounds => ({ workArea: bounds.x + bounds.width / 2 < 0 ? left : primary });
+    await toggle();
+    for (const [x, y, expectedX, expectedY] of [
+        [-600, -120, -600, -120],
+        [-1800, -240, -1600, -200],
+        [-600, 680, -600, 620],
+        [100, 100, 100, 100],
+        [100, 1000, 100, 960]
+    ]) {
+        state.bounds = { ...state.bounds, x, y };
+        s.beginMiniPlayerMove();
+        s.scheduleMiniBoundsSave();
+        assert.equal(state.bounds.x, x, 'Dragging to another display is not interrupted');
+        s.endMiniPlayerMove();
+        assert.deepEqual(state.bounds, { x: expectedX, y: expectedY, width: 540, height: 80 });
+    }
+    await toggle();
+});
+
+test('screen correction waits for drag release or a settled move and never moves the full player', async () => {
+    const pending = new Map();
+    let nextTimer = 0;
+    const timers = {
+        setTimeout: (callback, delay) => { pending.set(++nextTimer, { callback, delay }); return nextTimer; },
+        clearTimeout: id => pending.delete(id)
+    };
+    const s = setup({ getLegacyMiniplayer: () => false }, timers);
+    const { state, toggle } = miniWindow(s);
+    const fullBounds = { ...state.bounds };
+    await toggle();
+    state.bounds.x = -80;
+    s.scheduleMiniBoundsSave();
+    assert.equal(pending.size, 1);
+    s.beginMiniPlayerMove();
+    assert.equal(pending.size, 0, 'Starting a Windows drag cancels the earlier deadline');
+    s.scheduleMiniBoundsSave();
+    assert.equal(pending.size, 0, 'A held drag cannot trigger a correction');
+    s.endMiniPlayerMove();
+    assert.equal(state.bounds.x, 0, 'Release applies the correction immediately');
+
+    state.bounds.x = -50;
+    s.scheduleMiniBoundsSave();
+    s.scheduleMiniBoundsSave();
+    assert.equal(pending.size, 1, 'Other platforms use one debounced correction');
+    const timer = [...pending.values()][0];
+    assert.equal(timer.delay, 400);
+    assert.equal(state.bounds.x, -50, 'The window is not moved while events are still arriving');
+    timer.callback();
+    assert.equal(state.bounds.x, 0);
+    assert.equal(pending.size, 0);
+
+    s.scheduleMiniBoundsSave();
+    const lateCallback = [...pending.values()][0].callback;
+    await toggle();
+    assert.equal(pending.size, 0, 'Leaving mini mode cancels the pending correction');
+    state.bounds = { ...fullBounds, x: -300, y: -50 };
+    lateCallback();
+    assert.deepEqual(state.bounds, { ...fullBounds, x: -300, y: -50 });
 });

@@ -136,6 +136,7 @@ class AudioVisualizer {
     if (!this.canvas) return;
     this.canvas.width = window.innerWidth;
     this.canvas.height = window.innerHeight;
+    this.previousWaveHeights = null;
   }
 
   draw() {
@@ -244,19 +245,28 @@ class AudioVisualizer {
     this.ctx.shadowBlur = isMini ? 10 : 20;
     this.ctx.shadowColor = glowColor;
 
+    const validDataLength = Math.floor(bufferLength * 0.7); // Discard the usually empty highest frequencies
+    let peak = 0;
+    for (let i = 0; i < validDataLength; i++) {
+      peak = Math.max(peak, this.dataArray[i] / 255);
+    }
+    // Fit the whole outline, including its stroke and glow, on narrow windows.
+    // Scale all ripples together so loud peaks keep their shape.
+    const peakRadius = dynamicRadius + Math.pow(peak, 1.8) * maxRipple;
+    const availableRadius = Math.max(0, Math.min(width, height) / 2 - this.ctx.lineWidth / 2 - this.ctx.shadowBlur);
+    const radiusScale = peakRadius > 0 ? Math.min(1, availableRadius / peakRadius) : 1;
+
     // Optionally fill it with a soft glow
     this.ctx.fillStyle = glowColor.replace('0.3', '0.1').replace('0.4', '0.1');
 
     this.ctx.beginPath();
-
-    const validDataLength = Math.floor(bufferLength * 0.7); // Discard the usually empty highest frequencies
 
     // Draw symmetrically
     for (let i = 0; i < validDataLength; i++) {
       const normalized = this.dataArray[i] / 255;
       // Very soft curve for smooth ripples
       const ripple = Math.pow(normalized, 1.8) * maxRipple;
-      const r = dynamicRadius + ripple;
+      const r = (dynamicRadius + ripple) * radiusScale;
 
       // 0 to PI (Right half)
       const angle = (i / (validDataLength - 1)) * Math.PI - (Math.PI / 2);
@@ -271,7 +281,7 @@ class AudioVisualizer {
     for (let i = validDataLength - 1; i >= 0; i--) {
       const normalized = this.dataArray[i] / 255;
       const ripple = Math.pow(normalized, 1.8) * maxRipple;
-      const r = dynamicRadius + ripple;
+      const r = (dynamicRadius + ripple) * radiusScale;
 
       // PI to 2PI (Left half)
       const angle = Math.PI + ((validDataLength - 1 - i) / (validDataLength - 1)) * Math.PI - (Math.PI / 2);
@@ -301,7 +311,8 @@ class AudioVisualizer {
 
     const isMini = document.body.classList.contains('mini-mode');
     // Visually limit the wave bounce. Time-domain PCM data gets very loud and jarring.
-    const maxSwing = height * (isMini ? 0.15 : 0.08); // Even smaller now!
+    const swingSize = isMini ? Math.min(width, height) : height;
+    const maxSwing = swingSize * (isMini ? 0.15 : 0.08);
 
     // Massive 25-point moving average to completely iron out all static noise
     const smoothedData = new Float32Array(bufferLength);
@@ -319,7 +330,7 @@ class AudioVisualizer {
       smoothedData[i] = sum / count;
     }
 
-    // Initialize state tracker for lerping if it doesn't exist or dimensions changed
+    // Resizing clears the previous positions so they start at the new center.
     if (!this.previousWaveHeights || this.previousWaveHeights.length !== bufferLength) {
       this.previousWaveHeights = new Float32Array(bufferLength);
       for (let i = 0; i < bufferLength; i++) this.previousWaveHeights[i] = height / 2;

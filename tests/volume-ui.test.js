@@ -19,14 +19,12 @@ function setup(t, { settings = {} } = {}) {
     window.setTimeout = (callback, delay) => { timers.set(++nextTimer, { callback, delay }); return nextTimer; };
     window.clearTimeout = id => timers.delete(id);
     const saves = [];
-    const remembered = [];
     const api = {
         player: { setVolume: () => {} },
         window: {}, content: {},
         discord: { onStatus() {}, getStatus: async () => ({ enabled: false, configured: true, status: 'disabled' }), reportPlayback() {} },
         settings: {
-            getVolume: async () => ({ remember: false, volume: 100 }),
-            setRememberVolume: async (enabled, volume) => { remembered.push([enabled, volume]); return { remember: enabled, volume }; },
+            getVolume: async () => ({ volume: 100 }),
             saveVolume: async volume => { saves.push(volume); return true; },
             ...settings
         }
@@ -50,58 +48,31 @@ function setup(t, { settings = {} } = {}) {
     const slider = node('volume-slider');
     const popover = node('volume-popover');
     const drag = value => { slider.value = String(value); fire(slider, 'input'); };
-    return { window, ui: window.testUI, api, saves, remembered, timers, node, fire, runTimers, slider, popover, drag,
+    return { window, ui: window.testUI, api, saves, timers, node, fire, runTimers, slider, popover, drag,
         visible: () => popover.classList.contains('visible') };
 }
 
-test('Panedora Settings is the first settings section and the volume switch is off by default', t => {
+test('Panedora Settings has no volume-memory toggle', t => {
     const s = setup(t);
     s.ui.render('settings');
     const titles = [...s.window.document.querySelectorAll('.section-title')].map(el => el.textContent);
     assert.deepEqual(titles.slice(0, 2), ['Panedora Settings', 'Discord']);
-    const toggle = s.node('remember-volume-toggle');
-    assert.equal(toggle.checked, false);
-    assert.equal(toggle.getAttribute('role'), 'switch');
-    assert.equal(toggle.closest('.settings-section').querySelector('.section-title').textContent, 'Panedora Settings');
-    assert.match(s.node('remember-volume-description').textContent, /0% to stay muted/);
+    assert.equal(s.node('remember-volume-toggle'), null);
+    assert.equal(s.node('remember-volume-description'), null);
+    assert.equal(s.window.document.querySelector('.settings-section .setting-label').textContent, 'Use legacy miniplayer');
 });
 
-test('enabling the switch saves the current volume, disabling it stops remembering', async t => {
+test('slider changes are always remembered, including mute', async t => {
     const s = setup(t);
-    s.ui.apply(35);
-    s.ui.render('settings');
-    const toggle = s.node('remember-volume-toggle');
-    toggle.click(); await tick();
-    assert.deepEqual(s.remembered, [[true, 35]]);
-    assert.equal(toggle.checked, true);
-    assert.equal(toggle.disabled, false);
+    s.drag(35); s.fire(s.slider, 'change'); await tick();
+    assert.deepEqual(s.saves, [35]);
     s.drag(50); s.fire(s.slider, 'change'); await tick();
-    assert.deepEqual(s.saves, [50]);
-    toggle.click(); await tick();
-    assert.deepEqual(s.remembered.at(-1), [false, 50]);
-    assert.equal(toggle.checked, false);
-    s.drag(20); s.fire(s.slider, 'change'); await tick();
-    assert.deepEqual(s.saves, [50], 'Changes are not saved while the setting is off');
-    // The switch reflects the saved state when the page is opened again.
-    toggle.click(); await tick();
-    s.ui.render('settings');
-    assert.equal(s.node('remember-volume-toggle').checked, true);
-});
-
-test('a failed save puts the switch back and tells the user', async t => {
-    for (const failure of [async () => null, async () => { throw new Error('IPC failed'); }]) {
-        const s = setup(t, { settings: { setRememberVolume: failure } });
-        s.ui.render('settings');
-        const toggle = s.node('remember-volume-toggle');
-        toggle.click(); await tick();
-        assert.equal(toggle.checked, false);
-        assert.equal(toggle.disabled, false);
-        assert.match(s.window.document.body.textContent, /Could not save the volume setting/);
-    }
+    s.drag(0); s.fire(s.slider, 'change'); await tick();
+    assert.deepEqual(s.saves, [35, 50, 0]);
 });
 
 test('a remembered volume is restored at startup, otherwise the slider stays at 100%', async t => {
-    const muted = setup(t, { settings: { getVolume: async () => ({ remember: true, volume: 0 }) } });
+    const muted = setup(t, { settings: { getVolume: async () => ({ volume: 0 }) } });
     await muted.ui.load();
     const audio = muted.window.document.createElement('audio');
     muted.window.document.body.appendChild(audio);
@@ -109,17 +80,17 @@ test('a remembered volume is restored at startup, otherwise the slider stays at 
     assert.equal(muted.slider.value, '0');
     assert.equal(audio.volume, 0, 'Restoring 0% does not unmute playback');
 
-    const restored = setup(t, { settings: { getVolume: async () => ({ remember: true, volume: 25 }) } });
+    const restored = setup(t, { settings: { getVolume: async () => ({ volume: 25 }) } });
     await restored.ui.load();
     assert.equal(restored.slider.value, '25');
     assert.equal(restored.visible(), false, 'Restoring does not pop the percentage up');
     restored.ui.render('settings');
-    assert.equal(restored.node('remember-volume-toggle').checked, true);
+    assert.equal(restored.node('remember-volume-toggle'), null);
     restored.drag(60); restored.fire(restored.slider, 'change'); await tick();
     assert.deepEqual(restored.saves, [60]);
 
     for (const settings of [
-        { getVolume: async () => ({ remember: false, volume: 100 }) },
+        { getVolume: async () => ({ volume: 100 }) },
         { getVolume: async () => null },
         { getVolume: async () => { throw new Error('IPC failed'); } },
         { getVolume: undefined }
@@ -127,6 +98,8 @@ test('a remembered volume is restored at startup, otherwise the slider stays at 
         const s = setup(t, { settings });
         await s.ui.load();
         assert.equal(s.slider.value, '100');
+        s.drag(15); s.fire(s.slider, 'change'); await tick();
+        assert.deepEqual(s.saves, [15], 'A failed startup read does not disable future saves');
     }
 });
 

@@ -1268,13 +1268,6 @@ function renderSettingsPage() {
         <h2 class="section-title">Panedora Settings</h2>
         <div class="setting-row">
           <div>
-            <label class="setting-label" for="remember-volume-toggle">Remember volume</label>
-            <p class="setting-help" id="remember-volume-description">Remember the chosen volume level the next time Panedora opens, including 0% to stay muted.</p>
-          </div>
-          <input class="setting-toggle" id="remember-volume-toggle" type="checkbox" role="switch" aria-describedby="remember-volume-description">
-        </div>
-        <div class="setting-row">
-          <div>
             <label class="setting-label" for="legacy-miniplayer-toggle">Use legacy miniplayer</label>
             <p class="setting-help" id="legacy-miniplayer-description">Open the mini player as a compact, album-art-first window in the style of the original Pandora desktop player. Takes effect the next time you open the mini player.</p>
           </div>
@@ -1324,25 +1317,6 @@ function renderSettingsPage() {
         <div class="theme-grid" style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));">${lyricsStyleButtons}</div>
       </section>
     </div>`;
-
-    const rememberToggle = document.getElementById('remember-volume-toggle');
-    rememberToggle.checked = rememberVolume;
-    rememberToggle.addEventListener('change', async event => {
-        if (volumeSettingPending) { event.target.checked = rememberVolume; return; }
-        volumeSettingPending = true;
-        rememberToggle.disabled = true;
-        try {
-            const saved = await window.api.settings.setRememberVolume(event.target.checked, currentVolume);
-            if (!saved) throw new Error('Volume setting was not saved');
-            rememberVolume = saved.remember === true;
-        } catch {
-            showErrorToast('Could not save the volume setting. Please try again.');
-        } finally {
-            volumeSettingPending = false;
-            rememberToggle.checked = rememberVolume;
-            rememberToggle.disabled = false;
-        }
-    });
 
     const legacyToggle = document.getElementById('legacy-miniplayer-toggle');
     legacyToggle.checked = useLegacyMiniplayer;
@@ -2503,8 +2477,6 @@ const CLASSIC_VOLUME_THUMB_PX = 14; // matches .classic-volume-slider::-webkit-s
 const VOLUME_POPOVER_LINGER_MS = 700;
 const VOLUME_POPOVER_RELEASE_MS = 250;
 let currentVolume = 100;
-let rememberVolume = false;
-let volumeSettingPending = false;
 
 function clampVolumePercent(value) {
     const percent = Math.round(Number(value));
@@ -2528,7 +2500,6 @@ function applyVolume(percent, audioEl = document.querySelector('audio')) {
 }
 
 function saveVolume() {
-    if (!rememberVolume) return;
     try {
         Promise.resolve(window.api.settings?.saveVolume(currentVolume)).catch(() => {});
     } catch { /* A missed save only means the last level is not remembered. */ }
@@ -2539,8 +2510,7 @@ function saveVolume() {
 async function loadVolumeSettings() {
     try {
         const saved = await window.api.settings?.getVolume();
-        if (saved?.remember === true) {
-            rememberVolume = true;
+        if (Number.isFinite(saved?.volume)) {
             applyVolume(saved.volume);
         }
     } catch (error) {

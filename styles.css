@@ -3135,6 +3135,11 @@ body.mini-mode .waves-container {
     opacity: 0.9;
 }
 
+/* Keep waves near the controls in the taller classic player. */
+body.mini-mode.classic-mini .waves-container {
+    height: 180px;
+}
+
 /* Orbs: use small pixel sizes instead of vw/vh */
 body.mini-mode .orb {
     filter: blur(30px);
@@ -3175,18 +3180,7 @@ body.mini-mode .star-layer {
     inset: 0;
 }
 
-/* Synth Grid */
-body.mini-mode .synth-grid {
-    position: absolute;
-    inset: 0;
-}
-
-/* Rings */
-body.mini-mode .ring-container {
-    position: absolute;
-    inset: 0;
-}
-
+/* Keep the grid and rings' shared positioning so their centers stay aligned. */
 body.mini-mode .ring {
     border-width: 1px;
 }

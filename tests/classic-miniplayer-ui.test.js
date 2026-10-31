@@ -33,10 +33,9 @@ function setup(t, { settings = {} } = {}) {
         window: { toggleMini: async () => { calls.push(['toggleMini']); } },
         discord: { onStatus() {}, getStatus: async () => ({ enabled: false, configured: true, status: 'disabled' }), reportPlayback() {} },
         settings: {
-            getVolume: async () => ({ remember: false, volume: 100 }),
+            getVolume: async () => ({ volume: 100 }),
             getLegacyMiniplayer: async () => false,
             setLegacyMiniplayer: async enabled => { calls.push(['legacy', enabled]); return enabled; },
-            setRememberVolume: async (enabled, volume) => ({ remember: enabled, volume }),
             saveVolume: async () => true,
             ...settings
         }
@@ -78,7 +77,7 @@ test('the Use legacy miniplayer switch sits with the other Panedora settings and
     s.ui.render('settings');
     const section = s.node('legacy-miniplayer-toggle').closest('.settings-section');
     assert.equal(section.querySelector('.section-title').textContent, 'Panedora Settings');
-    assert.equal(section, s.node('remember-volume-toggle').closest('.settings-section'));
+    assert.equal(s.node('remember-volume-toggle'), null);
     assert.equal(s.node('legacy-miniplayer-toggle').checked, false);
     assert.equal(s.node('legacy-miniplayer-toggle').getAttribute('role'), 'switch');
     assert.match(s.window.document.querySelector('label[for="legacy-miniplayer-toggle"]').textContent, /Use legacy miniplayer/);
@@ -339,11 +338,15 @@ test('the classic volume slider matches the footer slider, remembers the level a
     assert.equal(popover.classList.contains('visible'), false);
     fire(slider, 'pointerdown');
     slider.value = '35'; fire(slider, 'input');
+    fire(slider, 'change'); await tick();
+    assert.deepEqual(saves, [35], 'The classic slider saves automatically');
     assert.equal(popover.textContent, '35%');
     assert.equal(popover.classList.contains('visible'), true);
     assert.equal(s.node('volume-slider').value, '35', 'Both sliders show the same level');
     fire(s.window.document.body, 'pointerup');
     s.node('volume-slider').value = '80'; fire(s.node('volume-slider'), 'input');
+    fire(s.node('volume-slider'), 'change'); await tick();
+    assert.deepEqual(saves, [35, 80], 'The footer slider uses the same automatic memory');
     assert.equal(slider.value, '80');
 });
 
