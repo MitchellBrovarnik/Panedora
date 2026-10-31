@@ -7,6 +7,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const { app, BrowserWindow, session, screen, powerMonitor } = require('electron');
 
 const testData = fs.mkdtempSync(path.join(os.tmpdir(), 'panedora-player-test-'));
@@ -1403,26 +1404,131 @@ app.whenReady().then(async () => {
     assert.equal(await run("document.getElementById('update-banner').hidden"), true, 'Renderer reload respects the update choice');
     assert.equal(calls.filter(c => c.host === 'api.github.com').length, 2, 'Reloads and station changes do not bypass the daily deadline');
 
+    // Capture the real mini-player renderer with sample details for the website.
+    // A separate session keeps these previews away from the playback fixtures.
+    const previewRoot = path.join(__dirname, '..');
+    const previewFile = path.join(testData, 'website-preview.html');
+    fs.writeFileSync(previewFile, fs.readFileSync(path.join(previewRoot, 'index.html'), 'utf8')
+        .replace(/<script\b[^>]*\bsrc="[^"]*"[^>]*>\s*<\/script>/gi, '')
+        .replace('<head>', '<head><base href="' + pathToFileURL(previewRoot + path.sep).href + '">'));
+    const preview = new BrowserWindow({ width: 680, height: 80, frame: false, transparent: true,
+        backgroundColor: '#00000000', show: false,
+        webPreferences: { partition: 'website-previews', contextIsolation: true, nodeIntegration: false } });
+    const previewThemes = [];
+    try {
+        await preview.loadFile(previewFile);
+        const previewRun = script => preview.webContents.executeJavaScript(script);
+        const sampleCover = 'data:image/svg+xml,' + encodeURIComponent(fs.readFileSync(path.join(previewRoot, 'docs/assets/preview-cover.svg'), 'utf8'));
+        await previewRun("window.api = { content: {}, player: {}, window: {}, settings: {} };\n" +
+            ['components.js', 'visualizer.js', 'renderer.js'].map(file => fs.readFileSync(path.join(previewRoot, file), 'utf8')).join('\n') + `
+            document.removeEventListener('DOMContentLoaded', init);
+            AppState.isLoggedIn = true; AppState.isLoading = false;
+            applyTheme('midnight');
+            updatePlayerUI({ trackToken: 'website-preview', track: 'After Hours', artist: 'Panedora Preview',
+                album: 'Evening Mix', coverArt: ${JSON.stringify(sampleCover)}, feedback: 'thumbUp',
+                duration: 222, time: 84, isPlaying: true, history: [] });
+            renderPage('home'); applyBgEffect('static');`);
+        for (const [mode, width, height] of [['wide', 680, 80], ['classic', 280, 500]]) {
+            preview.setContentSize(width, height);
+            await waitFor(() => previewRun(`innerWidth === ${width} && innerHeight === ${height}`), 'website ' + mode + ' viewport');
+            await previewRun(`document.documentElement.classList.add('mini-mode');
+                document.body.classList.add('mini-mode');
+                document.body.classList.toggle('classic-mini', ${mode === 'classic'});
+                updateClassicPlayerUI(); renderPlayerArtwork(); updateFooterThumbVisibility(); updateMiniPlayerLayout();`);
+            const artId = mode === 'classic' ? 'classic-art' : 'now-playing-art';
+            await waitFor(() => previewRun(`document.getElementById('${artId}').naturalWidth > 0`), 'website ' + mode + ' artwork');
+            await previewRun('document.fonts.ready');
+            await previewRun('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+            fs.writeFileSync(path.join(testData, 'website-mini-' + mode + '.png'), (await preview.webContents.capturePage()).toPNG());
+        }
+        // Use the same view and sample songs so only the theme changes.
+        preview.setContentSize(1000, 700);
+        await waitFor(() => previewRun('innerWidth === 1000 && innerHeight === 700'), 'theme preview viewport');
+        await previewRun(`document.documentElement.classList.remove('mini-mode');
+            document.body.classList.remove('mini-mode', 'classic-mini');
+            AppState.stations = [{ id: 'website-station', name: 'Evening Mix Radio', type: 'station' }];
+            renderStationsList();
+            window.api.player.getStationModes = async () => ({});
+            updatePlayerUI({ stationId: 'website-station', stationName: 'Evening Mix Radio',
+                stationModes: { status: 'ready', available: true, currentModeId: 2, modes: [
+                    { id: 0, name: 'My Station', available: true },
+                    { id: 2, name: 'Discovery', available: true },
+                    { id: 3, name: 'Deep Cuts', available: true }
+                ] }, history: ['Last Light', 'Slow Motion', 'Daybreak'].map((songTitle, i) => ({
+                    trackToken: 'website-history-' + i, songTitle, artistName: 'Panedora Preview',
+                    coverArt: ${JSON.stringify(sampleCover)}, feedback: i === 1 ? 'liked' : null
+                })) });
+            renderPage('nowplaying'); applyBgEffect('waves');
+            for (const animation of document.getElementById('bg-effects').getAnimations({subtree:true})) {
+                animation.pause(); animation.currentTime = 2000;
+            }`);
+        await waitFor(() => previewRun("Array.from(document.querySelectorAll('#np-large-art, .history-art')).every(image => image.naturalWidth > 0)"), 'theme preview artwork');
+        previewThemes.push(...await previewRun('Object.entries(THEMES).map(([id, theme]) => ({ id, name: theme.name }))'));
+        for (const { id: theme } of previewThemes) {
+            await previewRun(`applyTheme(${JSON.stringify(theme)}); document.fonts.ready`);
+            if (theme === 'adaptive') {
+                await waitFor(() => previewRun('window._lastExtractedArt === AppState.playerState.coverArt'),
+                    'Adaptive preview uses the sample artwork color');
+            }
+            await previewRun('new Promise(resolve => setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(resolve)), 500))');
+            fs.writeFileSync(path.join(testData, 'website-theme-' + theme + '.png'), (await preview.webContents.capturePage()).toPNG());
+        }
+    } finally { preview.close(); }
+
     const site = new BrowserWindow({ width: 1440, height: 1000, show: false, webPreferences: { contextIsolation: true, nodeIntegration: false } });
     await site.loadFile(path.join(__dirname, '..', 'docs', 'index.html'));
     const siteRun = script => site.webContents.executeJavaScript(script);
     await waitFor(() => siteRun("document.getElementById('latest-release-label').textContent === 'Latest release: v99.1.0'"), 'website release links');
     await siteRun('document.fonts.ready');
+    // Screenshots should capture the destination, not an in-progress smooth scroll.
+    await siteRun("document.documentElement.style.scrollBehavior = 'auto'");
     assert.equal(await siteRun("document.fonts.check('16px Inter') && document.fonts.check('16px boxicons')"), true, 'Website fonts and icons load locally');
     assert.match(await siteRun("document.getElementById('download-mac').textContent"), /Apple Silicon/);
     const captureSite = async name => {
-        await siteRun("document.querySelectorAll('.reveal').forEach(el => el.classList.add('active')); new Promise(resolve => setTimeout(resolve, 900))");
+        // Let the compositor paint the new scroll position before saving it.
+        await siteRun("new Promise(resolve => setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(resolve)), 500))");
         assert.equal(await siteRun('document.documentElement.scrollWidth <= innerWidth'), true, 'Website fits the viewport');
+        await waitFor(() => siteRun('Array.from(document.images).filter(image => image.getBoundingClientRect().top < innerHeight && image.getBoundingClientRect().bottom > 0).every(image => image.complete && image.naturalWidth > 0)'),
+            'visible website previews loaded');
         fs.writeFileSync(path.join(testData, name + '.png'), (await site.webContents.capturePage()).toPNG());
     };
     await captureSite('website-desktop');
-    await siteRun("document.getElementById('features').scrollIntoView()");
+    await siteRun("document.getElementById('features').scrollIntoView({behavior:'instant'})");
     await captureSite('website-features');
+    await siteRun("document.getElementById('discord').scrollIntoView({behavior:'instant'})");
+    await captureSite('website-discord');
+    await siteRun("document.getElementById('customization').scrollIntoView({behavior:'instant'})");
+    assert.deepEqual(await siteRun("Array.from(document.querySelectorAll('input[name=\"theme-preview\"]'), choice => ({ id: choice.value, name: choice.labels[0].textContent.trim() }))"),
+        previewThemes, 'Website previews include every app theme in the same order');
+    const themeImageHeight = await siteRun("document.querySelector('[data-theme-preview=midnight] img').getBoundingClientRect().height");
+    for (const { id: theme } of previewThemes) {
+        await siteRun(`document.querySelector('input[name="theme-preview"][value="${theme}"]').click()`);
+        assert.equal(await siteRun(`document.querySelector('[data-theme-preview="${theme}"]').hidden`), false,
+            'The selected theme is shown');
+        assert.equal(await siteRun("Array.from(document.querySelectorAll('[data-theme-preview]')).filter(panel => !panel.hidden).length"), 1,
+            'Only one app preview is visible');
+        await captureSite('website-themes-' + theme);
+        assert.ok(Math.abs(await siteRun(`document.querySelector('[data-theme-preview="${theme}"] img').getBoundingClientRect().height`) - themeImageHeight) < 1,
+            'Choosing a theme keeps the layout still');
+    }
+    for (const width of [320, 375, 768]) {
+        site.setContentSize(width, 900);
+        await waitFor(() => siteRun(`innerWidth === ${width}`), 'website viewport ' + width);
+        await siteRun('window.scrollTo({top: 0, behavior: "instant"})');
+        await captureSite('website-width-' + width);
+        await siteRun("document.getElementById('customization').scrollIntoView({behavior:'instant'})");
+        await captureSite('website-themes-width-' + width);
+    }
     site.setContentSize(430, 900);
-    await siteRun('window.scrollTo(0, 0)');
+    await waitFor(() => siteRun('innerWidth === 430'), 'website mobile viewport');
+    await siteRun('window.scrollTo({top: 0, behavior: "instant"})');
     await captureSite('website-mobile');
-    await siteRun("document.getElementById('download').scrollIntoView()");
+    await siteRun("document.getElementById('customization').scrollIntoView({behavior:'instant'})");
+    await captureSite('website-themes-mobile');
+    await siteRun("document.getElementById('download').scrollIntoView({behavior:'instant'})");
     await captureSite('website-downloads-mobile');
+    await siteRun("document.querySelectorAll('.install-help details').forEach(details => { details.open = true; })");
+    await captureSite('website-installation-mobile');
     assert.equal(calls.some(c => ['fonts.googleapis.com', 'fonts.gstatic.com', 'unpkg.com'].includes(c.host)), false, 'App and website make no external font or icon requests');
     site.close();
     await exerciseBackgroundCentering('full-player');
