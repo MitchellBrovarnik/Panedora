@@ -69,8 +69,11 @@ html, body { min-width: 0; width: 100%; height: 100%; color-scheme: dark; }
     .np-track { font-size: 23px; }
     .np-artist { font-size: 14px; }
     .history-item { min-width: 0; }
-    .track-row { grid-template-columns: 20px 36px minmax(0, 1fr) !important; gap: 8px; padding: 10px 5px; }
-    .track-row > :last-child:not(.track-info) { display: none; }
+    .track-row { grid-template-columns: 20px minmax(0, 1fr); gap: 8px; padding: 10px 5px; }
+    .track-info { gap: 8px; }
+    .track-art { width: 36px; height: 36px; }
+    .track-details { flex: 1; }
+    .track-duration { display: none; }
 }
 @media (max-width: 430px) {
     .titlebar-drag { display: none; }
