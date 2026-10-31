@@ -18,7 +18,7 @@
     <link rel="apple-touch-icon" href="favicon.png">
     <link rel="preload" href="assets/InterVariable.woff2" as="font" type="font/woff2" crossorigin>
     <link href="assets/boxicons.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css?v=5">
+    <link rel="stylesheet" href="styles.css?v=6">
 </head>
 <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -54,18 +54,18 @@
         </section>
         <section id="features" class="section container" aria-labelledby="players-title">
             <div class="section-heading">
-                <p class="eyebrow">Mini-players</p><h2 id="players-title">Keep your music close.</h2>
+                <p class="eyebrow">Mini-players</p><h2 id="players-title">Two mini-player layouts.</h2>
                 <p>Keep the music above your other windows with the compact bar. The classic layout preview adds a bigger cover and your recently played songs.</p>
             </div>
             <div class="player-previews">
                 <figure class="wide-player-preview">
-                    <div class="wide-player-stage"><img src="assets/mini-wide.png" alt="The wide Panedora mini-player, with artwork, song details, thumbs, playback controls, and volume" width="680" height="80" loading="lazy"></div>
                     <figcaption><h3>The compact bar</h3><p>Just the essentials, with room left for everything else on your screen.</p></figcaption>
+                    <div class="wide-player-stage"><img src="assets/mini-wide.png" alt="The wide Panedora mini-player, with artwork, song details, thumbs, playback controls, and volume" width="680" height="80" loading="lazy"></div>
                     <ul class="player-details"><li>Always on top</li><li>Quick thumbs up and down</li><li>Playback and volume controls</li></ul>
                 </figure>
                 <figure class="classic-player-preview">
-                    <div class="classic-player-stage"><img src="assets/mini-classic.png" alt="The classic Panedora mini-player, with a large cover, song details, seek bar, playback controls, and history button" width="280" height="500" loading="lazy"></div>
                     <figcaption><h3>The classic layout <span class="preview-label">Preview</span></h3><p>More room for the artwork, plus a recently played view. Shown from the current development build.</p></figcaption>
+                    <div class="classic-player-stage"><img src="assets/mini-classic.png" alt="The classic Panedora mini-player, with a large cover, song details, seek bar, playback controls, and history button" width="280" height="500" loading="lazy"></div>
                 </figure>
             </div>
             <p class="preview-note">Mini-player previews use sample song details.</p>
@@ -73,7 +73,7 @@
         <section id="discord" class="section section-tint" aria-labelledby="discord-title">
             <div class="container discord-layout">
                 <div class="section-heading">
-                    <p class="eyebrow">Discord Rich Presence</p><h2 id="discord-title">Share what’s<br>on repeat.</h2>
+                    <p class="eyebrow">Discord Rich Presence</p><h2 id="discord-title">Show what’s playing.</h2>
                     <p>Show the song, artist, album artwork, and playback progress in your Discord listening activity.</p>
                     <p>Sharing is off by default. Turn it on in Panedora’s Discord settings, with the Discord desktop app running and activity sharing enabled.</p>
                 </div>
@@ -89,12 +89,41 @@
             </div>
         </section>
         <section id="customization" class="section container" aria-labelledby="customization-title">
-            <div class="section-heading"><p class="eyebrow">Make it yours</p><h2 id="customization-title">Your stations.<br>Your kind of player.</h2><p>A few useful extras, all in the same app.</p></div>
+            <div class="section-heading"><p class="eyebrow">Features</p><h2 id="customization-title">Themes, lyrics,<br>and station tuning.</h2><p>Choose your colors, follow the lyrics, and adjust your station’s mix.</p></div>
+            <div class="customization-content">
+            <div class="theme-comparison" aria-labelledby="theme-preview-title">
+                <div class="theme-preview-heading">
+                    <h3 id="theme-preview-title">See the themes in the app</h3>
+                    <p>Three of Panedora’s built-in themes, shown in the same player view.</p>
+                </div>
+                <fieldset class="theme-picker" hidden>
+                    <legend class="sr-only">Choose a theme preview</legend>
+                    <label><input type="radio" name="theme-preview" value="midnight" aria-controls="theme-preview-midnight" checked><span class="theme-color theme-midnight" aria-hidden="true"></span> Midnight Violet</label>
+                    <label><input type="radio" name="theme-preview" value="ocean" aria-controls="theme-preview-ocean"><span class="theme-color theme-ocean" aria-hidden="true"></span> Deep Ocean</label>
+                    <label><input type="radio" name="theme-preview" value="emerald" aria-controls="theme-preview-emerald"><span class="theme-color theme-emerald" aria-hidden="true"></span> Emerald Forest</label>
+                </fieldset>
+                <div class="theme-panels">
+                    <figure class="theme-panel" id="theme-preview-midnight" data-theme-preview="midnight">
+                        <img src="assets/theme-midnight.png" alt="Panedora’s Now Playing view in Midnight Violet, with purple accents and the Waves background" width="1000" height="700" loading="lazy">
+                        <figcaption><span>Midnight Violet</span><span>Now Playing</span></figcaption>
+                    </figure>
+                    <figure class="theme-panel" id="theme-preview-ocean" data-theme-preview="ocean">
+                        <img src="assets/theme-ocean.png" alt="The same Panedora player in Deep Ocean, with blue accents and waves" width="1000" height="700" loading="lazy">
+                        <figcaption><span>Deep Ocean</span><span>Now Playing</span></figcaption>
+                    </figure>
+                    <figure class="theme-panel" id="theme-preview-emerald" data-theme-preview="emerald">
+                        <img src="assets/theme-emerald.png" alt="The same Panedora player in Emerald Forest, with green accents and waves" width="1000" height="700" loading="lazy">
+                        <figcaption><span>Emerald Forest</span><span>Now Playing</span></figcaption>
+                    </figure>
+                </div>
+                <p class="preview-note">App previews use sample song details. Adaptive can also choose colors from your album artwork.</p>
+            </div>
             <div class="feature-list">
                 <article><span class="feature-number" aria-hidden="true">01</span><h3>Tune Your Station</h3><p>Switch to available Pandora modes like Discovery or Deep Cuts from Now Playing.</p></article>
                 <article><span class="feature-number" aria-hidden="true">02</span><h3>Thumbs up and down</h3><p>Shape your stations as you listen, and see your feedback alongside recently played songs.</p></article>
                 <article><span class="feature-number" aria-hidden="true">03</span><h3>Lyrics as you listen</h3><p>Follow the current song, with line highlighting when synchronized lyrics are available.</p></article>
                 <article><span class="feature-number" aria-hidden="true">04</span><h3>Themes and backgrounds</h3><p>Choose a color theme, or let Adaptive pick colors from the album artwork. Add waves, particles, or a background that reacts to the music.</p></article>
+            </div>
             </div>
         </section>
         <section id="about" class="section section-tint" aria-labelledby="about-title">
@@ -133,6 +162,6 @@
             <p class="legal-note">Panedora is a source-available, unofficial third-party client created for personal, non-commercial use and educational purposes. It is not affiliated with, endorsed by, or sponsored by Pandora Media, LLC or Sirius XM Holdings Inc. “Pandora” is a registered trademark of Pandora Media, LLC. No proprietary Pandora assets or code are included in this repository. The developer takes no responsibility for any actions taken against your account by using this unofficial software.</p>
         </div>
     </footer>
-    <script src="script.js?v=4"></script>
+    <script src="script.js?v=5"></script>
 </body>
 </html>

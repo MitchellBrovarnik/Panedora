@@ -52,6 +52,28 @@ test('multiple macOS builds link to the release page so users can choose their a
     assert.match(s.node('download-mac').textContent, /Choose a macOS build/);
 });
 
+test('theme choices reveal the matching app preview and leave downloads working', async t => {
+    const s = await setup(t, () => ({ ok: true, json: async () => ({
+        tag_name: 'v1.2.0', draft: false, prerelease: false, assets: [asset('Panedora.exe')]
+    }) }));
+    const document = s.window.document;
+    assert.equal(document.querySelector('.theme-picker').hidden, false);
+    const visible = () => [...document.querySelectorAll('[data-theme-preview]')]
+        .filter(panel => !panel.hidden).map(panel => panel.dataset.themePreview);
+    assert.deepEqual(visible(), ['midnight']);
+    for (const value of ['ocean', 'emerald', 'midnight']) {
+        const choice = document.querySelector(`input[name="theme-preview"][value="${value}"]`);
+        choice.checked = true;
+        choice.dispatchEvent(new s.window.Event('change', { bubbles: true }));
+        assert.deepEqual(visible(), [value]);
+        const image = document.querySelector(`[data-theme-preview="${value}"] img`);
+        assert.equal(new URL(image.src).origin, 'https://panedora.app', 'Previews use local assets');
+        assert.equal(choice.getAttribute('aria-controls'), image.parentElement.id);
+    }
+    assert.equal(s.requests.length, 1, 'Switching previews makes no service requests');
+    assert.equal(s.node('download-win').href, asset('Panedora.exe').browser_download_url);
+});
+
 test('release failures, preview releases and foreign asset URLs keep safe download links', async t => {
     for (const response of [
         () => { throw new Error('Offline'); }, () => ({ ok: false }),
