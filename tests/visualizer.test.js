@@ -18,7 +18,7 @@ function setup(classes = ['mini-mode']) {
         get: (object, key) => object[key] || (() => ({ addColorStop() {} }))
     });
     const window = {
-        innerWidth: 540, innerHeight: 80,
+        innerWidth: 540, innerHeight: 72,
         addEventListener(name, listener) { if (name === 'resize') resizeListeners.add(listener); },
         removeEventListener(name, listener) { if (name === 'resize') resizeListeners.delete(listener); }
     };
@@ -38,7 +38,7 @@ function setup(classes = ['mini-mode']) {
     };
     return {
         visualizer, frames, resizeListeners, window, context, points,
-        canvas: () => ({ width: 540, height: 80, getContext: () => context }),
+        canvas: () => ({ width: 540, height: 72, getContext: () => context }),
         frame() {
             const callbacks = [...frames.values()];
             frames.clear();
