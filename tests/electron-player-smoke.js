@@ -1501,22 +1501,30 @@ app.whenReady().then(async () => {
             await captureDemo('website-demo-' + effect);
         } else assert.equal(await demoRun('window.visualizer.isVisualizing'), false);
     }
-    await demoRun("document.getElementById('demo-reset').click(); document.querySelector('[data-page=\"search\"]').click(); document.getElementById('search-input').value='Quiet'; document.getElementById('search-input').dispatchEvent(new Event('input',{bubbles:true}))");
+    await demoRun("document.getElementById('demo-reset').click(); document.querySelector('[data-page=\"search\"]').click(); document.getElementById('search-input').value='Soft'; document.getElementById('search-input').dispatchEvent(new Event('input',{bubbles:true}))");
     await waitFor(() => demoRun("document.querySelectorAll('#search-songs .track-row').length===1"), 'demo search results');
     await captureDemo('website-demo-search');
     await demoRun("document.querySelector('#search-songs .track-row').click(); document.getElementById('now-playing-art').click()");
     assert.equal(await demoRun('AppState.playerState.stationName'), 'Focus Radio');
+    assert.equal(await demoRun('AppState.playerState.track'), 'Soft Focus', 'A search selection plays that exact sample song');
     await captureDemo('website-demo-now-playing');
     await demoRun("document.getElementById('play-pause-btn').click()");
     assert.equal(await demoRun('AppState.playerState.isPlaying'), false);
     await demoRun("document.getElementById('play-pause-btn').click(); document.getElementById('np-thumbup').click()");
     await waitFor(() => demoRun("AppState.playerState.feedback==='thumbUp'"), 'demo thumbs');
     await demoRun("document.getElementById('next-btn').click()");
-    await waitFor(() => demoRun("AppState.playerState.track==='Soft Focus'"), 'demo next song');
+    await waitFor(() => demoRun("AppState.playerState.track==='Small Hours'"), 'demo next song');
+    await demoRun("renderPage('library'); document.querySelector('#library-cards [data-id=\"evening-mix\"] .card-remove-button').click(); document.getElementById('station-remove-confirm').click()");
+    await waitFor(() => demoRun("!document.getElementById('station-remove-dialog').open"), 'demo library removal confirmed');
+    assert.equal(await demoRun("!!document.querySelector('#library-cards [data-id=\"evening-mix\"], #stations-list [data-id=\"evening-mix\"]')"), false, 'Library and sidebar update immediately');
+    await demoRun("renderPage('home'); document.querySelector('#stations-list [data-id=\"focus\"] .delete-btn').click(); document.getElementById('station-remove-confirm').click()");
+    await waitFor(() => demoRun("!document.getElementById('station-remove-dialog').open"), 'demo sidebar removal confirmed');
+    assert.equal(await demoRun("!!document.querySelector('#home-recent [data-id=\"focus\"], #stations-list [data-id=\"focus\"]')"), false, 'Sidebar removal also updates Home immediately');
+    await captureDemo('website-demo-station-removed');
     await demoRun("applyBgEffect('reactive-bars'); document.getElementById('demo-motion').click()");
     assert.equal(await demoRun('window.visualizer.isVisualizing'), false, 'Pause motion stops the simulated renderer');
     await demoRun("document.getElementById('demo-reset').click()");
-    console.log('Interactive website demo passed: six sample stations, Home/Search/Library/Settings, all nine themes and ten backgrounds, real reactive drawing with no audio, sample search, playback, thumbs and motion controls.');
+    console.log('Interactive website demo passed: six sample stations, Home/Search/Library/Settings, all nine themes and ten backgrounds, real reactive drawing with no audio, exact sample song selection, immediate library/sidebar removal, playback, thumbs and motion controls.');
     for (const width of [320, 375, 768]) {
         site.setContentSize(width, 900);
         await waitFor(() => siteRun(`innerWidth === ${width}`), 'website viewport ' + width);

@@ -19,6 +19,8 @@ async function setup(t, reduced = false) {
     w.cancelAnimationFrame = value => frames.delete(value);
     w.matchMedia = () => ({ matches: reduced, addEventListener() {} });
     w.ResizeObserver = class { observe() {} };
+    w.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+    w.HTMLDialogElement.prototype.close = function () { this.open = false; };
     w.Element.prototype.getAnimations = () => [];
     const forbiddenCall = () => { forbidden++; throw new Error('The demo must stay local and silent'); };
     w.fetch = forbiddenCall; w.XMLHttpRequest = forbiddenCall; w.WebSocket = forbiddenCall; w.AudioContext = forbiddenCall; w.Audio = forbiddenCall;
@@ -69,6 +71,7 @@ test('sample stations, library filtering, search and reset work without services
     assert.equal(d.querySelectorAll('#search-songs .track-row').length, 1);
     d.querySelector('#search-songs .track-row').click();
     assert.equal(s.state.stationName, 'Night Drive Radio', 'A song result starts its related sample station');
+    assert.equal(s.state.track, 'Last Train', 'The selected song plays, rather than the station’s first song');
     await s.w.api.content.search('no-such-song');
     assert.match(d.getElementById('page-content').textContent, /No sample matches/);
     s.api.renderPage('settings');
@@ -79,6 +82,61 @@ test('sample stations, library filtering, search and reset work without services
     assert.equal(s.app.stations.length, 6);
     assert.equal(s.app.currentTheme, 'midnight');
     assert.equal(s.app.currentEffect, 'waves');
+    assert.equal(s.forbidden(), 0);
+});
+
+test('each search result starts that exact sample song once, with mouse or keyboard', async t => {
+    const s = await setup(t), d = s.document;
+    s.api.renderPage('search');
+    const titles = Array.from(d.querySelectorAll('#search-songs .track-row'), row => row.querySelector('.track-title').textContent);
+    assert.equal(titles.length, 18);
+    for (const [index, title] of titles.entries()) {
+        const row = d.querySelectorAll('#search-songs .track-row')[index];
+        const generation = s.state.playbackGeneration;
+        if (index % 3 === 0) row.click();
+        else row.dispatchEvent(new s.w.KeyboardEvent('keydown', { key: index % 3 === 1 ? 'Enter' : ' ', bubbles: true }));
+        assert.equal(s.state.track, title);
+        assert.equal(s.state.playbackGeneration, generation + 1, 'A selection must not start playback twice');
+    }
+    assert.equal(s.forbidden(), 0);
+});
+
+test('confirmed station removal immediately updates Library, Home, Search and the sidebar', async t => {
+    const s = await setup(t), d = s.document;
+    const confirm = async button => {
+        button.click();
+        assert.equal(d.getElementById('station-remove-dialog').open, true);
+        d.getElementById('station-remove-confirm').click(); await tick();
+        assert.equal(d.getElementById('station-remove-dialog').open, false);
+    };
+    s.api.renderPage('library');
+    s.app.libraryFilter = 'Radio'; s.api.renderPage('library');
+    d.getElementById('main-scroll').scrollTop = 77;
+    await confirm(d.querySelector('#library-cards [data-id="evening-mix"] .card-remove-button'));
+    assert.equal(d.querySelector('#library-cards [data-id="evening-mix"]'), null);
+    assert.equal(d.querySelector('#stations-list [data-id="evening-mix"]'), null);
+    assert.equal(d.getElementById('library-filter').value, 'Radio');
+    assert.equal(d.querySelector('.library-count').textContent, '5 of 5 stations');
+    assert.equal(d.getElementById('main-scroll').scrollTop, 77);
+    s.api.renderPage('home');
+    assert.equal(d.querySelector('#home-recent [data-id="evening-mix"]'), null);
+    await confirm(d.querySelector('#stations-list [data-id="focus"] .delete-btn'));
+    assert.equal(d.querySelector('#home-recent [data-id="focus"]'), null);
+    assert.equal(d.querySelector('#stations-list [data-id="focus"]'), null);
+    s.api.renderPage('search');
+    d.getElementById('search-input').value = 'Coastline';
+    await s.w.api.content.search('Coastline');
+    assert.equal(d.querySelectorAll('#search-stations .card').length, 1);
+    await confirm(d.querySelector('#stations-list [data-id="coastline"] .delete-btn'));
+    assert.equal(d.querySelectorAll('#search-stations .card').length, 0);
+    await s.w.api.content.playShuffle();
+    for (let i = 0; i < 6; i++) {
+        assert.ok(!['Paper Skies', 'Stillwater', 'Coastline Club'].includes(s.state.artist), 'Shuffle excludes removed stations');
+        await s.w.api.player.next();
+    }
+    d.getElementById('demo-reset').click();
+    assert.equal(d.querySelectorAll('#home-recent .card').length, 6);
+    assert.equal(d.querySelectorAll('#stations-list .station-item:not(.special-action)').length, 6);
     assert.equal(s.forbidden(), 0);
 });
 
