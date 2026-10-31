@@ -1354,6 +1354,31 @@ app.whenReady().then(async () => {
             await previewRun('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
             fs.writeFileSync(path.join(testData, 'website-mini-' + mode + '.png'), (await preview.webContents.capturePage()).toPNG());
         }
+        // Use the same view and sample songs so only the theme changes.
+        preview.setContentSize(1000, 700);
+        await waitFor(() => previewRun('innerWidth === 1000 && innerHeight === 700'), 'theme preview viewport');
+        await previewRun(`document.documentElement.classList.remove('mini-mode');
+            document.body.classList.remove('mini-mode', 'classic-mini');
+            window.api.player.getStationModes = async () => ({});
+            updatePlayerUI({ stationId: 'website-station', stationName: 'Evening Mix Radio',
+                stationModes: { status: 'ready', available: true, currentModeId: 2, modes: [
+                    { id: 0, name: 'My Station', available: true },
+                    { id: 2, name: 'Discovery', available: true },
+                    { id: 3, name: 'Deep Cuts', available: true }
+                ] }, history: ['Last Light', 'Slow Motion', 'Daybreak'].map((songTitle, i) => ({
+                    trackToken: 'website-history-' + i, songTitle, artistName: 'Panedora Preview',
+                    coverArt: ${JSON.stringify(sampleCover)}, feedback: i === 1 ? 'liked' : null
+                })) });
+            renderPage('nowplaying'); applyBgEffect('waves');
+            for (const animation of document.getElementById('bg-effects').getAnimations({subtree:true})) {
+                animation.pause(); animation.currentTime = 2000;
+            }`);
+        await waitFor(() => previewRun("Array.from(document.querySelectorAll('#np-large-art, .history-art')).every(image => image.naturalWidth > 0)"), 'theme preview artwork');
+        for (const theme of ['midnight', 'ocean', 'emerald']) {
+            await previewRun(`applyTheme('${theme}'); document.fonts.ready`);
+            await previewRun('new Promise(resolve => setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(resolve)), 300))');
+            fs.writeFileSync(path.join(testData, 'website-theme-' + theme + '.png'), (await preview.webContents.capturePage()).toPNG());
+        }
     } finally { preview.close(); }
 
     const site = new BrowserWindow({ width: 1440, height: 1000, show: false, webPreferences: { contextIsolation: true, nodeIntegration: false } });
