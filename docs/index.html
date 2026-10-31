@@ -18,7 +18,7 @@
     <link rel="apple-touch-icon" href="assets/panedora-mark.png">
     <link rel="preload" href="assets/InterVariable.woff2" as="font" type="font/woff2" crossorigin>
     <link href="assets/boxicons.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css?v=7">
+    <link rel="stylesheet" href="styles.css?v=8">
 </head>
 <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -26,7 +26,7 @@
         <nav class="container nav-container" aria-label="Main navigation">
             <a href="#top" class="logo" aria-label="Panedora home"><img src="assets/panedora-mark.png" alt="" width="34" height="34"><span>Panedora</span></a>
             <div class="nav-links">
-                <a href="#features">Features</a><a href="#customization">Themes</a><a href="#privacy">Privacy</a>
+                <a href="#features">Features</a><a href="#demo-frame">Demo</a><a href="#privacy">Privacy</a>
                 <a href="https://github.com/MitchellBrovarnik/Panedora" target="_blank" rel="noreferrer" class="nav-github">GitHub <i class="bx bx-link-external" aria-hidden="true"></i></a>
                 <a href="#download" class="btn btn-small">Download</a>
             </div>
@@ -48,8 +48,11 @@
                 </div>
             </div>
             <figure class="app-preview">
-                <img src="screenshot.png" alt="Panedora's desktop app showing stations, album artwork, and playback controls" width="1639" height="975" fetchpriority="high">
-                <figcaption><span>Your stations, without another browser tab.</span><a href="#features">Take a closer look <span aria-hidden="true">↓</span></a></figcaption>
+                <div class="demo-frame" id="demo-frame" aria-busy="true">
+                    <img id="demo-fallback" src="screenshot.png" alt="Panedora's desktop app showing stations, album artwork, and playback controls" width="1639" height="975" fetchpriority="high">
+                    <iframe id="panedora-demo" data-src="demo/index.html" title="Interactive Panedora demo with sample stations and no audio" sandbox="allow-scripts allow-same-origin" referrerpolicy="no-referrer" hidden></iframe>
+                </div>
+                <figcaption><span>Interactive demo · Sample stations · No audio</span><span>Explore the sidebar. Themes and effects are in Settings.</span></figcaption>
             </figure>
         </section>
         <section id="features" class="section container" aria-labelledby="players-title">
@@ -90,70 +93,11 @@
         </section>
         <section id="customization" class="section container" aria-labelledby="customization-title">
             <div class="section-heading"><p class="eyebrow">Features</p><h2 id="customization-title">Themes, lyrics,<br>and station tuning.</h2><p>Choose your colors, follow the lyrics, and adjust your station’s mix.</p></div>
-            <div class="customization-content">
-            <div class="theme-comparison" aria-labelledby="theme-preview-title">
-                <div class="theme-preview-heading">
-                    <h3 id="theme-preview-title">See the themes in the app</h3>
-                    <p>All nine built-in themes, shown in the same player view.</p>
-                </div>
-                <fieldset class="theme-picker" hidden>
-                    <legend class="sr-only">Choose a theme preview</legend>
-                    <label><input type="radio" name="theme-preview" value="midnight" aria-controls="theme-preview-midnight" checked><span class="theme-color theme-midnight" aria-hidden="true"></span> Midnight Violet</label>
-                    <label><input type="radio" name="theme-preview" value="ocean" aria-controls="theme-preview-ocean"><span class="theme-color theme-ocean" aria-hidden="true"></span> Deep Ocean</label>
-                    <label><input type="radio" name="theme-preview" value="emerald" aria-controls="theme-preview-emerald"><span class="theme-color theme-emerald" aria-hidden="true"></span> Emerald Forest</label>
-                    <label><input type="radio" name="theme-preview" value="sunset" aria-controls="theme-preview-sunset"><span class="theme-color theme-sunset" aria-hidden="true"></span> Sunset Blaze</label>
-                    <label><input type="radio" name="theme-preview" value="rose" aria-controls="theme-preview-rose"><span class="theme-color theme-rose" aria-hidden="true"></span> Rose Quartz</label>
-                    <label><input type="radio" name="theme-preview" value="arctic" aria-controls="theme-preview-arctic"><span class="theme-color theme-arctic" aria-hidden="true"></span> Arctic Frost</label>
-                    <label><input type="radio" name="theme-preview" value="neon" aria-controls="theme-preview-neon"><span class="theme-color theme-neon" aria-hidden="true"></span> Neon Cyber</label>
-                    <label><input type="radio" name="theme-preview" value="classic" aria-controls="theme-preview-classic"><span class="theme-color theme-classic" aria-hidden="true"></span> Classic Dark</label>
-                    <label><input type="radio" name="theme-preview" value="adaptive" aria-controls="theme-preview-adaptive"><span class="theme-color theme-adaptive" aria-hidden="true"></span> Adaptive (Dynamic)</label>
-                </fieldset>
-                <div class="theme-panels">
-                    <figure class="theme-panel" id="theme-preview-midnight" data-theme-preview="midnight">
-                        <img src="assets/theme-midnight.png" alt="Panedora’s Now Playing view in Midnight Violet, with purple accents and the Waves background" width="1000" height="700" loading="lazy">
-                        <figcaption><span>Midnight Violet</span><span>Now Playing</span></figcaption>
-                    </figure>
-                    <figure class="theme-panel" id="theme-preview-ocean" data-theme-preview="ocean">
-                        <img src="assets/theme-ocean.png" alt="The same Panedora player in Deep Ocean, with blue accents and waves" width="1000" height="700" loading="lazy">
-                        <figcaption><span>Deep Ocean</span><span>Now Playing</span></figcaption>
-                    </figure>
-                    <figure class="theme-panel" id="theme-preview-emerald" data-theme-preview="emerald">
-                        <img src="assets/theme-emerald.png" alt="The same Panedora player in Emerald Forest, with green accents and waves" width="1000" height="700" loading="lazy">
-                        <figcaption><span>Emerald Forest</span><span>Now Playing</span></figcaption>
-                    </figure>
-                    <figure class="theme-panel" id="theme-preview-sunset" data-theme-preview="sunset">
-                        <img src="assets/theme-sunset.png" alt="The same Panedora player in Sunset Blaze, with orange accents and waves" width="1000" height="700" loading="lazy">
-                        <figcaption><span>Sunset Blaze</span><span>Now Playing</span></figcaption>
-                    </figure>
-                    <figure class="theme-panel" id="theme-preview-rose" data-theme-preview="rose">
-                        <img src="assets/theme-rose.png" alt="The same Panedora player in Rose Quartz, with pink accents and waves" width="1000" height="700" loading="lazy">
-                        <figcaption><span>Rose Quartz</span><span>Now Playing</span></figcaption>
-                    </figure>
-                    <figure class="theme-panel" id="theme-preview-arctic" data-theme-preview="arctic">
-                        <img src="assets/theme-arctic.png" alt="The same Panedora player in Arctic Frost, with icy blue accents and waves" width="1000" height="700" loading="lazy">
-                        <figcaption><span>Arctic Frost</span><span>Now Playing</span></figcaption>
-                    </figure>
-                    <figure class="theme-panel" id="theme-preview-neon" data-theme-preview="neon">
-                        <img src="assets/theme-neon.png" alt="The same Panedora player in Neon Cyber, with cyan accents and purple waves" width="1000" height="700" loading="lazy">
-                        <figcaption><span>Neon Cyber</span><span>Now Playing</span></figcaption>
-                    </figure>
-                    <figure class="theme-panel" id="theme-preview-classic" data-theme-preview="classic">
-                        <img src="assets/theme-classic.png" alt="The same Panedora player in Classic Dark, with a charcoal background and green accents" width="1000" height="700" loading="lazy">
-                        <figcaption><span>Classic Dark</span><span>Now Playing</span></figcaption>
-                    </figure>
-                    <figure class="theme-panel" id="theme-preview-adaptive" data-theme-preview="adaptive">
-                        <img src="assets/theme-adaptive.png" alt="The same Panedora player in Adaptive, with its blue accent taken from the sample album cover" width="1000" height="700" loading="lazy">
-                        <figcaption><span>Adaptive (Dynamic)</span><span>From album art</span></figcaption>
-                    </figure>
-                </div>
-                <p class="preview-note">App previews use sample song details. Adaptive takes its accent color from the album artwork; this example uses the cover shown.</p>
-            </div>
             <div class="feature-list">
                 <article><span class="feature-number" aria-hidden="true">01</span><h3>Tune Your Station</h3><p>Switch to available Pandora modes like Discovery or Deep Cuts from Now Playing.</p></article>
                 <article><span class="feature-number" aria-hidden="true">02</span><h3>Thumbs up and down</h3><p>Shape your stations as you listen, and see your feedback alongside recently played songs.</p></article>
                 <article><span class="feature-number" aria-hidden="true">03</span><h3>Lyrics as you listen</h3><p>Follow the current song, with line highlighting when synchronized lyrics are available.</p></article>
                 <article><span class="feature-number" aria-hidden="true">04</span><h3>Themes and backgrounds</h3><p>Choose a color theme, or let Adaptive pick colors from the album artwork. Add waves, particles, or a background that reacts to the music.</p></article>
-            </div>
             </div>
         </section>
         <section id="about" class="section section-tint" aria-labelledby="about-title">
@@ -192,6 +136,6 @@
             <p class="legal-note">Panedora is a source-available, unofficial third-party client created for personal, non-commercial use and educational purposes. It is not affiliated with, endorsed by, or sponsored by Pandora Media, LLC or Sirius XM Holdings Inc. “Pandora” is a registered trademark of Pandora Media, LLC. No proprietary Pandora assets or code are included in this repository. The developer takes no responsibility for any actions taken against your account by using this unofficial software.</p>
         </div>
     </footer>
-    <script src="script.js?v=5"></script>
+    <script src="script.js?v=6"></script>
 </body>
 </html>

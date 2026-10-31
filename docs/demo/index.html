@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en" style="background: transparent !important;">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+    <title>Panedora interactive demo — no audio</title>
+    <link rel="stylesheet" href="app.css?v=c7514ed66d">
+    <link rel="stylesheet" href="demo.css?v=c7514ed66d">
+</head>
+
+<body style="background: transparent !important;">
+    <!-- Custom Title Bar (frameless window) -->
+    <div class="custom-titlebar" id="custom-titlebar">
+        <div class="titlebar-drag">
+            <span class="titlebar-title">Panedora</span>
+        </div>
+        <div class="demo-toolbar"><span>Demo · No audio</span><button id="demo-motion" type="button" aria-pressed="false">Pause motion</button><button id="demo-reset" type="button">Reset</button></div></div><div id="bg-effects"></div>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <button class="sidebar-logo" id="demo-menu" type="button" aria-label="Expand navigation" aria-expanded="false">
+                <img src="../assets/panedora-mark.png" alt="Panedora logo" />
+                <h1>Panedora</h1>
+            </button>
+
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" data-page="home">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+                    </svg>
+                    <span>Home</span>
+                </a>
+                <a href="#" class="nav-item" data-page="search">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                            d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+                    </svg>
+                    <span>Search</span>
+                </a>
+                <a href="#" class="nav-item" data-page="library">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                            d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9h-4v4h-2v-4H9V9h4V5h2v4h4v2z" />
+                    </svg>
+                    <span>Your Library</span>
+                </a>
+                <a href="#" class="nav-item" data-page="settings">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                            d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 00-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1115.6 12 3.611 3.611 0 0112 15.6z" />
+                    </svg>
+                    <span>Settings</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-divider"></div>
+
+            <h2 class="sidebar-section-title">Your Stations</h2>
+            <div class="sidebar-stations" id="stations-list">
+                <!-- Stations populated dynamically -->
+                <div class="loading-container">
+                    <div class="loading-spinner"></div>
+                    <p>Loading stations...</p>
+                </div>
+            </div>
+
+            <div class="sidebar-footer">
+                <button id="logout-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                        <polyline points="16 17 21 12 16 7"></polyline>
+                        <line x1="21" y1="12" x2="9" y2="12"></line>
+                    </svg>
+                    <span>Sign Out</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="main-header" id="main-header" hidden>
+                <div class="header-nav">
+                    <button class="header-nav-btn" id="nav-back" aria-label="Go back">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+                        </svg>
+                    </button>
+                    <button class="header-nav-btn" id="nav-forward" aria-label="Go forward">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z" />
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="search-container" id="search-container" style="display: none;">
+                    <span class="search-icon">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path
+                                d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+                        </svg>
+                    </span>
+                    <input type="text" class="search-input" id="search-input"
+                        placeholder="What do you want to listen to?">
+                </div>
+
+                <aside class="update-banner" id="update-banner" aria-label="Panedora update" hidden>
+                    <div class="update-banner-row">
+                        <p class="update-banner-message" id="update-message" role="status" aria-live="polite" aria-atomic="true">
+                            <span id="update-label">Update available</span>
+                            <span class="update-banner-version" id="update-version-range"><span id="update-current-version"></span> → <span id="update-available-version"></span></span>
+                        </p>
+                        <button class="update-banner-download" id="update-download" type="button">Download update</button>
+                        <button class="update-banner-later" id="update-later" type="button" title="Remind me again after 24 hours">Later</button>
+                    </div>
+                    <p class="update-banner-error" id="update-error" role="alert" hidden></p>
+                </aside>
+            </header>
+
+            <div class="main-scroll" id="main-scroll">
+                <!-- Dynamic content rendered here -->
+                <div id="page-content">
+                    <div class="welcome-container">
+                        <h1 class="welcome-title">Welcome to Panedora</h1>
+                        <p class="welcome-subtitle">Connecting to Pandora...</p>
+                        <div class="loading-spinner"></div>
+                    </div>
+                </div>
+
+                <div class="lyrics-overlay" id="lyrics-overlay">
+                    <div class="lyrics-content" id="lyrics-content">
+                        <div class="lyrics-loading">Loading lyrics...</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Player Footer -->
+        <footer class="player-footer">
+            <div class="now-playing">
+                <img class="now-playing-art" id="now-playing-art"
+                    src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56'%3E%3Crect fill='%23282828' width='56' height='56'/%3E%3C/svg%3E"
+                    alt="Album art">
+                <div class="now-playing-info">
+                    <span class="now-playing-title" id="now-playing-title">Not Playing</span>
+                    <span class="now-playing-artist" id="now-playing-artist">--</span>
+                </div>
+                <div class="mini-thumbs" id="mini-thumbs">
+                    <button class="mini-thumb-btn" id="mini-thumb-up" aria-label="Thumb Up" title="Thumb Up">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14"
+                            height="14">
+                            <path
+                                d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+                        </svg>
+                    </button>
+                    <button class="mini-thumb-btn" id="mini-thumb-down" aria-label="Thumb Down" title="Thumb Down">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14"
+                            height="14">
+                            <path
+                                d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17" />
+                        </svg>
+                    </button>
+                </div>
+                <button class="now-playing-heart" id="heart-btn" aria-label="Save to Your Library">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                        <path
+                            d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="player-controls">
+                <div class="control-buttons">
+                    <!-- shuffle removed -->
+                    <button class="control-btn" id="prev-btn" aria-label="Previous">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+                        </svg>
+                    </button>
+                    <button class="play-pause-btn" id="play-pause-btn" aria-label="Play">
+                        <svg viewBox="0 0 24 24" fill="currentColor" id="play-icon">
+                            <path d="M8 5v14l11-7z" />
+                        </svg>
+                    </button>
+                    <button class="control-btn" id="next-btn" aria-label="Next">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+                        </svg>
+                    </button>
+                    <!-- repeat removed -->
+                </div>
+
+                <div class="progress-container">
+                    <span class="progress-time" id="current-time">0:00</span>
+                    <div class="progress-bar" id="progress-bar" role="slider" aria-label="Sample song position" aria-valuenow="0" aria-valuemin="0"
+                        aria-valuemax="100">
+                        <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+                    </div>
+                    <span class="progress-time" id="total-time">0:00</span>
+                </div>
+            </div>
+
+            <div class="volume-controls">
+                <button class="volume-btn control-btn" id="lyrics-btn" aria-label="Lyrics" title="Toggle Lyrics"
+                    style="margin-right: 8px;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                        <line x1="9" y1="10" x2="15" y2="10"></line>
+                        <line x1="9" y1="14" x2="15" y2="14"></line>
+                    </svg>
+                </button>
+                <button class="volume-btn control-btn" id="mini-player-btn" aria-label="Mini Player" title="Mini Player"
+                    style="margin-right: 8px;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                        <rect x="12" y="10" width="8" height="6" rx="1" ry="1" fill="currentColor" opacity="0.4"></rect>
+                    </svg>
+                </button>
+                <button class="volume-btn" id="volume-btn" aria-label="Volume">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                            d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
+                    </svg>
+                </button>
+                <div class="volume-popover" id="volume-popover" aria-hidden="true">100%</div>
+                <input type="range" class="volume-slider" id="volume-slider" min="0" max="100" value="100">
+            </div>
+        </footer>
+    </div>
+
+    <!-- Classic mini player: shown instead of the wide mini player when "Use legacy miniplayer" is on -->
+    <div class="classic-player" id="classic-player" aria-label="Mini player">
+        <!-- The only part of the classic player that drags the window: the album art and the margin around it. -->
+        <div class="classic-drag" aria-hidden="true"></div>
+        <div class="classic-stage">
+            <div class="classic-now" id="classic-now">
+                <img class="classic-art" id="classic-art" width="256" height="256" alt="Album art"
+                    src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Crect fill='%23282828' width='256' height='256'/%3E%3C/svg%3E">
+                <div class="classic-info">
+                    <span class="classic-artist" id="classic-artist"><span class="classic-line-text"></span></span>
+                    <span class="classic-track" id="classic-track"><span class="classic-line-text">Not Playing</span></span>
+                    <span class="classic-album" id="classic-album"><span class="classic-line-text"></span></span>
+                </div>
+            </div>
+            <section class="classic-history" id="classic-history" aria-label="Recently played" hidden></section>
+        </div>
+
+        <div class="classic-progress">
+            <span class="progress-time" id="classic-current-time">0:00</span>
+            <div class="progress-bar" id="classic-progress-bar" role="slider" aria-label="Sample song position" aria-label="Song progress"
+                aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                <div class="progress-fill" id="classic-progress-fill" style="width: 0%"></div>
+            </div>
+            <span class="progress-time" id="classic-total-time">0:00</span>
+        </div>
+
+        <div class="classic-controls">
+            <!-- Same control styles as the full player, so they follow the color theme -->
+            <button class="control-btn" id="classic-prev" aria-label="Previous">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" /></svg>
+            </button>
+            <button class="play-pause-btn" id="classic-play" aria-label="Play">
+                <svg viewBox="0 0 24 24" fill="currentColor" id="classic-play-icon"><path d="M8 5v14l11-7z" /></svg>
+            </button>
+            <button class="control-btn" id="classic-next" aria-label="Next">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" /></svg>
+            </button>
+        </div>
+
+        <div class="classic-bottom">
+            <div class="classic-thumbs">
+                <button class="classic-btn classic-thumb" id="classic-thumb-up" aria-label="Thumb Up" title="Thumb Up">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                        <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+                    </svg>
+                </button>
+                <button class="classic-btn classic-thumb" id="classic-thumb-down" aria-label="Thumb Down" title="Thumb Down">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                        <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17" />
+                    </svg>
+                </button>
+            </div>
+            <div class="classic-center">
+                <button class="classic-btn" id="classic-expand" aria-label="Back to full player" title="Back to full player">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                        <rect x="2" y="5" width="20" height="14" rx="2" ry="2"></rect>
+                        <rect x="12" y="12" width="8" height="6" rx="1" ry="1" fill="currentColor" opacity="0.4"></rect>
+                    </svg>
+                </button>
+                <button class="classic-btn" id="classic-history-btn" aria-label="Show song history" aria-expanded="false"
+                    aria-controls="classic-history" title="History">
+                    <!-- Clock whose rim is an arrow running backwards in time -->
+                    <svg class="classic-history-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" width="18" height="18" aria-hidden="true">
+                        <path d="M5.07 16A8 8 0 1 0 5.07 8" />
+                        <path d="M8.3 6.8 5.07 8 4.5 4.65" />
+                        <path d="M12 8v4h3.5" />
+                        <path d="M4.1 10.6h.01M4.1 13.4h.01" stroke-width="2.4" />
+                    </svg>
+                </button>
+            </div>
+            <div class="classic-volume">
+                <svg class="classic-volume-icon" viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true">
+                    <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
+                </svg>
+                <div class="volume-popover" id="classic-volume-popover" aria-hidden="true">100%</div>
+                <input type="range" class="classic-volume-slider" id="classic-volume-slider" aria-label="Volume" min="0" max="100" value="100">
+            </div>
+        </div>
+    </div>
+
+    <dialog class="stream-dialog" id="stream-conflict-dialog" aria-labelledby="stream-dialog-title" aria-describedby="stream-dialog-description">
+        <button class="stream-dialog-close" id="stream-dialog-close" type="button" aria-label="Keep Panedora paused">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+        </button>
+        <div class="stream-dialog-copy">
+            <h2 id="stream-dialog-title">Playing on another device</h2>
+            <p id="stream-dialog-description">Switch playback to this device?</p>
+            <p class="stream-dialog-status" id="stream-dialog-status" role="status" hidden>Switching playback to Panedora…</p>
+        </div>
+        <div class="stream-dialog-actions">
+            <button class="stream-dialog-secondary" id="stream-keep-listening" type="button" autofocus>Let them listen</button>
+            <button class="stream-dialog-primary" id="stream-take-over" type="button">Let me listen</button>
+        </div>
+    </dialog>
+
+    <dialog class="stream-dialog station-remove-dialog" id="station-remove-dialog" aria-labelledby="station-remove-title" aria-describedby="station-remove-description">
+        <button class="stream-dialog-close" id="station-remove-close" type="button" aria-label="Cancel station removal">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+        </button>
+        <div class="stream-dialog-copy">
+            <h2 id="station-remove-title">Remove this station?</h2>
+            <p id="station-remove-description">Remove <strong id="station-remove-name"></strong> from your Pandora collection?</p>
+            <p class="station-remove-error" id="station-remove-error" role="alert" hidden></p>
+            <p class="stream-dialog-status" id="station-remove-status" role="status" hidden>Removing station…</p>
+        </div>
+        <div class="stream-dialog-actions">
+            <button class="stream-dialog-secondary" id="station-remove-cancel" type="button" autofocus>Cancel</button>
+            <button class="station-remove-confirm" id="station-remove-confirm" type="button">Remove station</button>
+        </div>
+    </dialog>
+
+
+
+
+<script src="app.js?v=c7514ed66d" defer></script>
+    <script src="demo.js?v=c7514ed66d" defer></script>
+</body>
+
+</html>

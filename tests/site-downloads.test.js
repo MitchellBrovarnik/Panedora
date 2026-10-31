@@ -52,27 +52,26 @@ test('multiple macOS builds link to the release page so users can choose their a
     assert.match(s.node('download-mac').textContent, /Choose a macOS build/);
 });
 
-test('theme choices reveal the matching app preview and leave downloads working', async t => {
+test('the local interactive demo activates only after its own ready message', async t => {
     const s = await setup(t, () => ({ ok: true, json: async () => ({
         tag_name: 'v1.2.0', draft: false, prerelease: false, assets: [asset('Panedora.exe')]
     }) }));
     const document = s.window.document;
-    assert.equal(document.querySelector('.theme-picker').hidden, false);
-    const visible = () => [...document.querySelectorAll('[data-theme-preview]')]
-        .filter(panel => !panel.hidden).map(panel => panel.dataset.themePreview);
-    assert.deepEqual(visible(), ['midnight']);
-    const choices = [...document.querySelectorAll('input[name="theme-preview"]')];
-    assert.equal(choices.length, 9, 'All eight fixed themes and Adaptive have previews');
-    for (const choice of [...choices.slice(1), choices[0]]) {
-        const value = choice.value;
-        choice.checked = true;
-        choice.dispatchEvent(new s.window.Event('change', { bubbles: true }));
-        assert.deepEqual(visible(), [value]);
-        const image = document.querySelector(`[data-theme-preview="${value}"] img`);
-        assert.equal(new URL(image.src).origin, 'https://panedora.app', 'Previews use local assets');
-        assert.equal(choice.getAttribute('aria-controls'), image.parentElement.id);
-    }
-    assert.equal(s.requests.length, 1, 'Switching previews makes no service requests');
+    const demo = document.getElementById('panedora-demo');
+    assert.equal(demo.src, 'https://panedora.app/demo/index.html');
+    assert.equal(demo.hidden, true);
+    assert.equal(document.getElementById('demo-fallback').hidden, false);
+    const send = (source, origin) => s.window.dispatchEvent(new s.window.MessageEvent('message', {
+        source, origin, data: { type: 'panedora-demo-ready' }
+    }));
+    send(s.window, 'https://panedora.app');
+    send(demo.contentWindow, 'https://untrusted.invalid');
+    assert.equal(demo.hidden, true, 'Unrelated windows cannot activate the preview');
+    send(demo.contentWindow, 'https://panedora.app');
+    assert.equal(demo.hidden, false);
+    assert.equal(document.getElementById('demo-fallback').hidden, true);
+    assert.equal(document.getElementById('demo-frame').getAttribute('aria-busy'), 'false');
+    assert.equal(s.requests.length, 1, 'Only the normal release lookup makes a service request');
     assert.equal(s.node('download-win').href, asset('Panedora.exe').browser_download_url);
 });
 

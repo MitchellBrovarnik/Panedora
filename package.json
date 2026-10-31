@@ -8,6 +8,7 @@
         "test": "node --test tests/*.test.js",
         "test:electron": "electron tests/electron-verification-smoke.js",
         "test:electron:player": "electron tests/electron-player-smoke.js",
+        "build:site-demo": "node scripts/build-site-demo.js",
         "start": "electron .",
         "dev": "electron . --dev",
         "prepare-dist": "node build.js",

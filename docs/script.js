@@ -1,18 +1,26 @@
 // Download links fall back to the release page when GitHub is unavailable.
 document.addEventListener('DOMContentLoaded', () => {
-    const themePicker = document.querySelector('.theme-picker');
-    const themePanels = [...document.querySelectorAll('[data-theme-preview]')];
-    if (themePicker && themePanels.length) {
-        const choices = [...themePicker.querySelectorAll('input[name="theme-preview"]')];
-        const showTheme = value => {
-            if (!themePanels.some(panel => panel.dataset.themePreview === value)) return;
-            for (const panel of themePanels) panel.hidden = panel.dataset.themePreview !== value;
-        };
-        for (const choice of choices) {
-            choice.addEventListener('change', () => { if (choice.checked) showTheme(choice.value); });
+    const demo = document.getElementById('panedora-demo');
+    if (demo) {
+        let inView = true;
+        const tellVisibility = () => demo.contentWindow?.postMessage({
+            type: 'panedora-demo-visibility', visible: inView && !document.hidden
+        }, location.protocol === 'file:' ? '*' : location.origin);
+        window.addEventListener('message', event => {
+            const originMatches = event.origin === location.origin || (location.protocol === 'file:' && ['null', 'file://'].includes(event.origin));
+            if (event.source !== demo.contentWindow || !originMatches || event.data?.type !== 'panedora-demo-ready') return;
+            demo.hidden = false;
+            document.getElementById('demo-fallback').hidden = true;
+            document.getElementById('demo-frame').setAttribute('aria-busy', 'false');
+            tellVisibility();
+        });
+        demo.addEventListener('load', tellVisibility);
+        document.addEventListener('visibilitychange', tellVisibility);
+        if (typeof IntersectionObserver !== 'undefined') {
+            new IntersectionObserver(entries => { inView = entries[0].isIntersecting; tellVisibility(); }, { threshold: .01 })
+                .observe(document.getElementById('demo-frame'));
         }
-        showTheme(choices.find(choice => choice.checked)?.value);
-        themePicker.hidden = false;
+        demo.src = demo.dataset.src;
     }
 
     // Fetch latest release and update download links
