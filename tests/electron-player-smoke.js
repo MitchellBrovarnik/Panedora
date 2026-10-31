@@ -1525,6 +1525,24 @@ app.whenReady().then(async () => {
     assert.equal(await demoRun('window.visualizer.isVisualizing'), false, 'Pause motion stops the simulated renderer');
     await demoRun("document.getElementById('demo-reset').click()");
     console.log('Interactive website demo passed: six sample stations, Home/Search/Library/Settings, all nine themes and ten backgrounds, real reactive drawing with no audio, exact sample song selection, immediate library/sidebar removal, playback, thumbs and motion controls.');
+    const checkDemoSearchLayout = async width => {
+        await demoRun("document.getElementById('search-input').value=''; renderPage('search')");
+        const rows = await demoRun(`Array.from(document.querySelectorAll('#search-songs .track-row'), row => {
+            const art = row.querySelector('.track-art').getBoundingClientRect();
+            const title = row.querySelector('.track-title').getBoundingClientRect();
+            const artist = row.querySelector('.track-artist').getBoundingClientRect();
+            const bounds = row.getBoundingClientRect();
+            return { title: row.querySelector('.track-title').textContent, readable: title.width >= 48 && title.height > 0 && artist.width >= 48 && artist.height > 0,
+                fits: title.left >= art.right + 6 && artist.left >= art.right + 6 && title.right <= bounds.right && artist.right <= bounds.right };
+        })`);
+        assert.equal(rows.length, 18, 'All sample songs appear in mobile Search');
+        for (const row of rows) {
+            assert.equal(row.readable, true, `${row.title}: title and artist have readable space at ${width}px`);
+            assert.equal(row.fits, true, `${row.title}: artwork and text fit without overlap at ${width}px`);
+        }
+        await captureDemo('website-demo-search-width-' + width);
+        await demoRun("renderPage('home')");
+    };
     for (const width of [320, 375, 768]) {
         site.setContentSize(width, 900);
         await waitFor(() => siteRun(`innerWidth === ${width}`), 'website viewport ' + width);
@@ -1532,6 +1550,7 @@ app.whenReady().then(async () => {
         await captureSite('website-width-' + width);
         await siteRun("document.getElementById('demo-frame').scrollIntoView({behavior:'instant'})");
         await captureDemo('website-demo-width-' + width);
+        await checkDemoSearchLayout(width);
     }
     site.setContentSize(430, 900);
     await waitFor(() => siteRun('innerWidth === 430'), 'website mobile viewport');
@@ -1539,6 +1558,8 @@ app.whenReady().then(async () => {
     await captureSite('website-mobile');
     await siteRun("document.getElementById('demo-frame').scrollIntoView({behavior:'instant'})");
     await captureDemo('website-demo-mobile');
+    await checkDemoSearchLayout(430);
+    console.log('Website demo Search titles and artists fit beside artwork at 320/375/430/768px.');
     await siteRun("document.getElementById('download').scrollIntoView({behavior:'instant'})");
     await captureSite('website-downloads-mobile');
     await siteRun("document.querySelectorAll('.install-help details').forEach(details => { details.open = true; })");
