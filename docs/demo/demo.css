@@ -1,0 +1,88 @@
+/* Website-only framing and touch layouts around the real desktop interface. */
+:root { --titlebar-h: 42px; }
+html, body { min-width: 0; width: 100%; height: 100%; color-scheme: dark; }
+.custom-titlebar { height: 42px; min-height: 42px; }
+.demo-toolbar { display: flex; align-items: center; gap: 10px; padding-inline: 12px; font-size: 11px; color: var(--text-2); }
+.demo-toolbar button { min-height: 34px; padding: 4px 9px; border-radius: 5px; border: 1px solid var(--glass-border); color: var(--text-1); font: inherit; }
+.demo-toolbar button:hover { background: var(--glass-hover); }
+.demo-toolbar button:focus-visible, .sidebar-logo:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+.sidebar-logo { text-align: left; flex-shrink: 0; cursor: pointer; }
+.sidebar-logo img { flex-shrink: 0; }
+.sidebar:has(:focus-visible), .sidebar.demo-nav-open { width: var(--sidebar-expanded); }
+.sidebar:is(:has(:focus-visible), .demo-nav-open) :is(.sidebar-logo h1, .nav-item span, .sidebar-section-title, .sidebar-stations) { opacity: 1; visibility: visible; }
+.sidebar:is(:has(:focus-visible), .demo-nav-open) .station-item { opacity: 1; }
+.sidebar:is(:has(:focus-visible), .demo-nav-open) .sidebar-stations { overflow-y: auto; }
+.sidebar.demo-nav-dismissed { width: var(--sidebar-collapsed); transition: none; }
+.sidebar.demo-nav-dismissed :is(.sidebar-logo h1, .nav-item span, .sidebar-section-title, .station-item) { opacity: 0; }
+#logout-btn, #mini-player-btn, .titlebar-controls, .settings-section[hidden] { display: none !important; }
+.demo-motion-paused #bg-effects * { animation-play-state: paused !important; }
+.main-content { min-width: 0; }
+.theme-swatch { min-width: 0; }
+.theme-swatch:focus-visible, .card:focus-visible, .nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.player-controls, .now-playing, .volume-controls { min-width: 0; }
+.card-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.card { padding: 12px; }
+.card-title { overflow-wrap: anywhere; }
+.main-header[hidden] { display: none; }
+@media (max-width: 700px) {
+    :root { --sidebar-collapsed: 54px; --sidebar-expanded: 220px; --gap: 8px; --r-lg: 14px; --player-h: 114px; }
+    .sidebar-logo { padding: 14px 10px; }
+    .sidebar-logo img { width: 30px; height: 30px; }
+    .sidebar:not(.demo-nav-open):not(:has(:focus-visible)) { width: var(--sidebar-collapsed); }
+    .sidebar:not(.demo-nav-open):not(:has(:focus-visible)) :is(.sidebar-logo h1, .nav-item span, .sidebar-section-title, .station-item) { opacity: 0; }
+    .sidebar-nav { padding-inline: 6px; }
+    .nav-item { padding-inline: 10px; min-height: 44px; }
+    .main-scroll { padding: 20px 16px; }
+    .main-header { padding: 10px 14px; }
+    .main-header .header-nav { display: none; }
+    .search-container { width: 100%; }
+    .search-input { font-size: 16px; }
+    .home-greeting { font-size: 24px; margin-bottom: 22px; }
+    .section-title { font-size: 17px; }
+    .card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .card { padding: 9px; border-radius: 10px; }
+    .card-title { font-size: 12px; }
+    .card-subtitle { font-size: 10px; }
+    .theme-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px; }
+    .swatch-label { font-size: 11px; padding-inline: 8px; }
+    .swatch-preview { height: 64px; }
+    .theme-swatch { overflow-wrap: anywhere; }
+    .settings-description { font-size: 12px; }
+    .settings-section { min-width: 0; }
+    .player-footer { grid-template-columns: 1fr auto; grid-template-rows: 1fr auto; padding: 10px 12px; row-gap: 7px; }
+    .now-playing { grid-column: 1; grid-row: 1; }
+    .now-playing-art { width: 36px; height: 36px; }
+    .now-playing-info { max-width: 170px; }
+    .now-playing-title { font-size: 12px; }
+    .now-playing-artist { font-size: 10px; }
+    .mini-thumbs, #heart-btn { display: none; }
+    .player-controls { display: contents; }
+    .control-buttons { grid-column: 2; grid-row: 1; gap: 3px; }
+    .control-btn { width: 28px; height: 34px; }
+    .play-pause-btn { width: 34px; height: 34px; }
+    .progress-container { grid-column: 1 / -1; grid-row: 2; gap: 7px; }
+    .volume-controls { display: none; }
+    .progress-bar { touch-action: none; }
+    .np-content { gap: 20px; }
+    .np-left, .np-right { flex-basis: 100%; min-width: 0; }
+    .np-artwork { width: min(230px, 100%); height: auto; aspect-ratio: 1; margin-inline: auto; }
+    .np-track { font-size: 23px; }
+    .np-artist { font-size: 14px; }
+    .history-item { min-width: 0; }
+    .track-row { grid-template-columns: 20px 36px minmax(0, 1fr) !important; gap: 8px; padding: 10px 5px; }
+    .track-row > :last-child:not(.track-info) { display: none; }
+}
+@media (max-width: 430px) {
+    .titlebar-drag { display: none; }
+    .demo-toolbar { width: 100%; justify-content: space-between; padding-inline: 10px; gap: 5px; }
+    .now-playing-info { max-width: 105px; }
+    .now-playing { gap: 7px; }
+    .main-scroll { padding: 18px 10px; }
+    .card-grid { gap: 7px; }
+    .card { padding-inline: 7px; }
+    .theme-grid:has([data-effect]), .theme-grid:has([data-lyrics-style]) { grid-template-columns: 1fr !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .sidebar, .card { transition: none; }
+    .fade-in { animation: none; }
+}

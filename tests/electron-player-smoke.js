@@ -15,9 +15,9 @@ app.setPath('userData', testData);
 app.disableHardwareAcceleration();
 // Exercise the release-only update checker with intercepted network fixtures.
 Object.defineProperty(app, 'isPackaged', { value: true });
-// Allow the suite's window-movement debounce, real artwork deadlines and Discord rate limits;
+// Allow the interactive website demo, window movement, artwork deadlines and Discord rate limits;
 // each individual waitFor check still has its own short timeout.
-const deadline = setTimeout(() => { console.error('Native player test timed out'); app.exit(1); }, 150000);
+const deadline = setTimeout(() => { console.error('Native player test timed out'); app.exit(1); }, 180000);
 let discordServer;
 
 async function waitFor(check, description, timeout = 6000) {
@@ -1414,7 +1414,6 @@ app.whenReady().then(async () => {
     const preview = new BrowserWindow({ width: 680, height: 80, frame: false, transparent: true,
         backgroundColor: '#00000000', show: false,
         webPreferences: { partition: 'website-previews', contextIsolation: true, nodeIntegration: false } });
-    const previewThemes = [];
     try {
         await preview.loadFile(previewFile);
         const previewRun = script => preview.webContents.executeJavaScript(script);
@@ -1441,38 +1440,6 @@ app.whenReady().then(async () => {
             await previewRun('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
             fs.writeFileSync(path.join(testData, 'website-mini-' + mode + '.png'), (await preview.webContents.capturePage()).toPNG());
         }
-        // Use the same view and sample songs so only the theme changes.
-        preview.setContentSize(1000, 700);
-        await waitFor(() => previewRun('innerWidth === 1000 && innerHeight === 700'), 'theme preview viewport');
-        await previewRun(`document.documentElement.classList.remove('mini-mode');
-            document.body.classList.remove('mini-mode', 'classic-mini');
-            AppState.stations = [{ id: 'website-station', name: 'Evening Mix Radio', type: 'station' }];
-            renderStationsList();
-            window.api.player.getStationModes = async () => ({});
-            updatePlayerUI({ stationId: 'website-station', stationName: 'Evening Mix Radio',
-                stationModes: { status: 'ready', available: true, currentModeId: 2, modes: [
-                    { id: 0, name: 'My Station', available: true },
-                    { id: 2, name: 'Discovery', available: true },
-                    { id: 3, name: 'Deep Cuts', available: true }
-                ] }, history: ['Last Light', 'Slow Motion', 'Daybreak'].map((songTitle, i) => ({
-                    trackToken: 'website-history-' + i, songTitle, artistName: 'Panedora Preview',
-                    coverArt: ${JSON.stringify(sampleCover)}, feedback: i === 1 ? 'liked' : null
-                })) });
-            renderPage('nowplaying'); applyBgEffect('waves');
-            for (const animation of document.getElementById('bg-effects').getAnimations({subtree:true})) {
-                animation.pause(); animation.currentTime = 2000;
-            }`);
-        await waitFor(() => previewRun("Array.from(document.querySelectorAll('#np-large-art, .history-art')).every(image => image.naturalWidth > 0)"), 'theme preview artwork');
-        previewThemes.push(...await previewRun('Object.entries(THEMES).map(([id, theme]) => ({ id, name: theme.name }))'));
-        for (const { id: theme } of previewThemes) {
-            await previewRun(`applyTheme(${JSON.stringify(theme)}); document.fonts.ready`);
-            if (theme === 'adaptive') {
-                await waitFor(() => previewRun('window._lastExtractedArt === AppState.playerState.coverArt'),
-                    'Adaptive preview uses the sample artwork color');
-            }
-            await previewRun('new Promise(resolve => setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(resolve)), 500))');
-            fs.writeFileSync(path.join(testData, 'website-theme-' + theme + '.png'), (await preview.webContents.capturePage()).toPNG());
-        }
     } finally { preview.close(); }
 
     const site = new BrowserWindow({ width: 1440, height: 1000, show: false, webPreferences: { contextIsolation: true, nodeIntegration: false } });
@@ -1497,34 +1464,73 @@ app.whenReady().then(async () => {
     await captureSite('website-features');
     await siteRun("document.getElementById('discord').scrollIntoView({behavior:'instant'})");
     await captureSite('website-discord');
-    await siteRun("document.getElementById('customization').scrollIntoView({behavior:'instant'})");
-    assert.deepEqual(await siteRun("Array.from(document.querySelectorAll('input[name=\"theme-preview\"]'), choice => ({ id: choice.value, name: choice.labels[0].textContent.trim() }))"),
-        previewThemes, 'Website previews include every app theme in the same order');
-    const themeImageHeight = await siteRun("document.querySelector('[data-theme-preview=midnight] img').getBoundingClientRect().height");
-    for (const { id: theme } of previewThemes) {
-        await siteRun(`document.querySelector('input[name="theme-preview"][value="${theme}"]').click()`);
-        assert.equal(await siteRun(`document.querySelector('[data-theme-preview="${theme}"]').hidden`), false,
-            'The selected theme is shown');
-        assert.equal(await siteRun("Array.from(document.querySelectorAll('[data-theme-preview]')).filter(panel => !panel.hidden).length"), 1,
-            'Only one app preview is visible');
-        await captureSite('website-themes-' + theme);
-        assert.ok(Math.abs(await siteRun(`document.querySelector('[data-theme-preview="${theme}"] img').getBoundingClientRect().height`) - themeImageHeight) < 1,
-            'Choosing a theme keeps the layout still');
+    // The site embeds the same renderer with a local, silent sample session.
+    site.showInactive();
+    await waitFor(() => siteRun("!document.getElementById('panedora-demo').hidden"), 'interactive website demo ready');
+    const demoFrame = () => site.webContents.mainFrame.framesInSubtree.find(frame => frame.url.includes('/docs/demo/index.html'));
+    await waitFor(() => !!demoFrame(), 'website demo frame');
+    const demoRun = code => demoFrame().executeJavaScript(code);
+    await siteRun("document.getElementById('demo-frame').scrollIntoView({behavior:'instant'})");
+    await demoRun('document.fonts.ready');
+    const captureDemo = async name => {
+        assert.equal(await demoRun('document.documentElement.scrollWidth <= innerWidth'), true, 'Demo fits its frame');
+        assert.equal(await demoRun('document.querySelectorAll("audio").length'), 0, 'The preview never creates audio');
+        await captureSite(name);
+    };
+    assert.equal(await demoRun("document.querySelectorAll('#home-recent .card').length"), 6);
+    await captureDemo('website-demo-home');
+    await demoRun("document.querySelector('#home-recent [data-id=\"focus\"]').click()");
+    assert.equal(await demoRun('AppState.playerState.stationName'), 'Focus Radio');
+    await demoRun("document.querySelector('[data-page=\"settings\"]').click()");
+    assert.deepEqual(await demoRun('Object.keys(THEMES)'), await run('Object.keys(THEMES)'), 'The demo includes all app themes');
+    assert.deepEqual(await demoRun('Object.keys(BG_EFFECTS)'), await run('Object.keys(BG_EFFECTS)'), 'The demo includes all app backgrounds');
+    for (const theme of await demoRun('Object.keys(THEMES)')) {
+        await demoRun(`document.querySelector('[data-theme="${theme}"]').click()`);
+        assert.equal(await demoRun('AppState.currentTheme'), theme);
+        if (theme === 'adaptive') await waitFor(() => demoRun('window._lastExtractedArt === AppState.playerState.coverArt'), 'demo Adaptive color');
+        else assert.equal(await demoRun("document.documentElement.style.getPropertyValue('--accent')"), await demoRun(`THEMES['${theme}'].vars['--accent']`));
     }
+    await captureDemo('website-demo-settings');
+    for (const effect of await demoRun('Object.keys(BG_EFFECTS)')) {
+        await demoRun(`renderPage('settings'); document.querySelector('[data-effect="${effect}"]').click()`);
+        assert.equal(await demoRun('AppState.currentEffect'), effect);
+        if (effect.startsWith('reactive-')) {
+            await demoRun("renderPage('home')");
+            await waitFor(() => demoRun('window.visualizer.isVisualizing'), 'simulated ' + effect);
+            await waitFor(() => demoRun("Array.from(document.getElementById('reactive-canvas').getContext('2d').getImageData(0,0,innerWidth,innerHeight).data).some((value,i)=>i%4===3&&value>0)"), effect + ' draws visible pixels');
+            await captureDemo('website-demo-' + effect);
+        } else assert.equal(await demoRun('window.visualizer.isVisualizing'), false);
+    }
+    await demoRun("document.getElementById('demo-reset').click(); document.querySelector('[data-page=\"search\"]').click(); document.getElementById('search-input').value='Quiet'; document.getElementById('search-input').dispatchEvent(new Event('input',{bubbles:true}))");
+    await waitFor(() => demoRun("document.querySelectorAll('#search-songs .track-row').length===1"), 'demo search results');
+    await captureDemo('website-demo-search');
+    await demoRun("document.querySelector('#search-songs .track-row').click(); document.getElementById('now-playing-art').click()");
+    assert.equal(await demoRun('AppState.playerState.stationName'), 'Focus Radio');
+    await captureDemo('website-demo-now-playing');
+    await demoRun("document.getElementById('play-pause-btn').click()");
+    assert.equal(await demoRun('AppState.playerState.isPlaying'), false);
+    await demoRun("document.getElementById('play-pause-btn').click(); document.getElementById('mini-thumb-up').click()");
+    await waitFor(() => demoRun("AppState.playerState.feedback==='thumbUp'"), 'demo thumbs');
+    await demoRun("document.getElementById('next-btn').click()");
+    await waitFor(() => demoRun("AppState.playerState.track==='Soft Focus'"), 'demo next song');
+    await demoRun("applyBgEffect('reactive-bars'); document.getElementById('demo-motion').click()");
+    assert.equal(await demoRun('window.visualizer.isVisualizing'), false, 'Pause motion stops the simulated renderer');
+    await demoRun("document.getElementById('demo-reset').click()");
+    console.log('Interactive website demo passed: six sample stations, Home/Search/Library/Settings, all nine themes and ten backgrounds, real reactive drawing with no audio, sample search, playback, thumbs and motion controls.');
     for (const width of [320, 375, 768]) {
         site.setContentSize(width, 900);
         await waitFor(() => siteRun(`innerWidth === ${width}`), 'website viewport ' + width);
         await siteRun('window.scrollTo({top: 0, behavior: "instant"})');
         await captureSite('website-width-' + width);
-        await siteRun("document.getElementById('customization').scrollIntoView({behavior:'instant'})");
-        await captureSite('website-themes-width-' + width);
+        await siteRun("document.getElementById('demo-frame').scrollIntoView({behavior:'instant'})");
+        await captureDemo('website-demo-width-' + width);
     }
     site.setContentSize(430, 900);
     await waitFor(() => siteRun('innerWidth === 430'), 'website mobile viewport');
     await siteRun('window.scrollTo({top: 0, behavior: "instant"})');
     await captureSite('website-mobile');
-    await siteRun("document.getElementById('customization').scrollIntoView({behavior:'instant'})");
-    await captureSite('website-themes-mobile');
+    await siteRun("document.getElementById('demo-frame').scrollIntoView({behavior:'instant'})");
+    await captureDemo('website-demo-mobile');
     await siteRun("document.getElementById('download').scrollIntoView({behavior:'instant'})");
     await captureSite('website-downloads-mobile');
     await siteRun("document.querySelectorAll('.install-help details').forEach(details => { details.open = true; })");
