@@ -71,6 +71,9 @@ test('sample stations, library filtering, search and reset work without services
     assert.equal(s.state.stationName, 'Night Drive Radio', 'A song result starts its related sample station');
     await s.w.api.content.search('no-such-song');
     assert.match(d.getElementById('page-content').textContent, /No sample matches/);
+    s.api.renderPage('settings');
+    await s.w.api.content.search('After Hours');
+    assert.ok(d.querySelector('[data-theme]'), 'A late search result cannot replace the page after navigation');
     d.getElementById('demo-reset').click();
     assert.equal(s.app.currentPage, 'home');
     assert.equal(s.app.stations.length, 6);

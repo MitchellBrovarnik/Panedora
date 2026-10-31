@@ -91,6 +91,7 @@
             songs: songs.filter(s => !q || [s.title, s.artist, s.album].some(t => t.toLowerCase().includes(q))),
             artists: [], stations: AppState.stations.filter(s => !q || s.name.toLowerCase().includes(q))
         };
+        if (AppState.currentPage !== 'search') return Promise.resolve();
         renderSearchPage();
         const rows = document.querySelectorAll('#search-songs .track-row');
         rows.forEach((row, i) => {

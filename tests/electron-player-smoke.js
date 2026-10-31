@@ -1509,7 +1509,7 @@ app.whenReady().then(async () => {
     await captureDemo('website-demo-now-playing');
     await demoRun("document.getElementById('play-pause-btn').click()");
     assert.equal(await demoRun('AppState.playerState.isPlaying'), false);
-    await demoRun("document.getElementById('play-pause-btn').click(); document.getElementById('mini-thumb-up').click()");
+    await demoRun("document.getElementById('play-pause-btn').click(); document.getElementById('np-thumbup').click()");
     await waitFor(() => demoRun("AppState.playerState.feedback==='thumbUp'"), 'demo thumbs');
     await demoRun("document.getElementById('next-btn').click()");
     await waitFor(() => demoRun("AppState.playerState.track==='Soft Focus'"), 'demo next song');
