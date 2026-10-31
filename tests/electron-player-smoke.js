@@ -17,7 +17,7 @@ app.disableHardwareAcceleration();
 Object.defineProperty(app, 'isPackaged', { value: true });
 // Allow the expanded suite's real artwork deadlines and Discord rate limits;
 // each individual waitFor check still has its own short timeout.
-const deadline = setTimeout(() => { console.error('Native player test timed out'); app.exit(1); }, 120000);
+const deadline = setTimeout(() => { console.error('Native player test timed out'); app.exit(1); }, 150000);
 let discordServer;
 
 async function waitFor(check, description, timeout = 6000) {
@@ -1359,6 +1359,8 @@ app.whenReady().then(async () => {
         await waitFor(() => previewRun('innerWidth === 1000 && innerHeight === 700'), 'theme preview viewport');
         await previewRun(`document.documentElement.classList.remove('mini-mode');
             document.body.classList.remove('mini-mode', 'classic-mini');
+            AppState.stations = [{ id: 'website-station', name: 'Evening Mix Radio', type: 'station' }];
+            renderStationsList();
             window.api.player.getStationModes = async () => ({});
             updatePlayerUI({ stationId: 'website-station', stationName: 'Evening Mix Radio',
                 stationModes: { status: 'ready', available: true, currentModeId: 2, modes: [
@@ -1403,6 +1405,18 @@ app.whenReady().then(async () => {
     await captureSite('website-features');
     await siteRun("document.getElementById('discord').scrollIntoView({behavior:'instant'})");
     await captureSite('website-discord');
+    await siteRun("document.getElementById('customization').scrollIntoView({behavior:'instant'})");
+    const themeImageHeight = await siteRun("document.querySelector('[data-theme-preview=midnight] img').getBoundingClientRect().height");
+    for (const theme of ['midnight', 'ocean', 'emerald']) {
+        await siteRun(`document.querySelector('input[name="theme-preview"][value="${theme}"]').click()`);
+        assert.equal(await siteRun(`document.querySelector('[data-theme-preview="${theme}"]').hidden`), false,
+            'The selected theme is shown');
+        assert.equal(await siteRun("Array.from(document.querySelectorAll('[data-theme-preview]')).filter(panel => !panel.hidden).length"), 1,
+            'Only one app preview is visible');
+        await captureSite('website-themes-' + theme);
+        assert.ok(Math.abs(await siteRun(`document.querySelector('[data-theme-preview="${theme}"] img').getBoundingClientRect().height`) - themeImageHeight) < 1,
+            'Choosing a theme keeps the layout still');
+    }
     for (const width of [320, 375, 768]) {
         site.setContentSize(width, 900);
         await waitFor(() => siteRun(`innerWidth === ${width}`), 'website viewport ' + width);
@@ -1413,6 +1427,8 @@ app.whenReady().then(async () => {
     await waitFor(() => siteRun('innerWidth === 430'), 'website mobile viewport');
     await siteRun('window.scrollTo({top: 0, behavior: "instant"})');
     await captureSite('website-mobile');
+    await siteRun("document.getElementById('customization').scrollIntoView({behavior:'instant'})");
+    await captureSite('website-themes-mobile');
     await siteRun("document.getElementById('download').scrollIntoView({behavior:'instant'})");
     await captureSite('website-downloads-mobile');
     await siteRun("document.querySelectorAll('.install-help details').forEach(details => { details.open = true; })");

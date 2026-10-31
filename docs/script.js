@@ -1,5 +1,20 @@
 // Download links fall back to the release page when GitHub is unavailable.
 document.addEventListener('DOMContentLoaded', () => {
+    const themePicker = document.querySelector('.theme-picker');
+    const themePanels = [...document.querySelectorAll('[data-theme-preview]')];
+    if (themePicker && themePanels.length) {
+        const choices = [...themePicker.querySelectorAll('input[name="theme-preview"]')];
+        const showTheme = value => {
+            if (!themePanels.some(panel => panel.dataset.themePreview === value)) return;
+            for (const panel of themePanels) panel.hidden = panel.dataset.themePreview !== value;
+        };
+        for (const choice of choices) {
+            choice.addEventListener('change', () => { if (choice.checked) showTheme(choice.value); });
+        }
+        showTheme(choices.find(choice => choice.checked)?.value);
+        themePicker.hidden = false;
+    }
+
     // Fetch latest release and update download links
     const releasePage = 'https://github.com/MitchellBrovarnik/Panedora/releases/latest';
     const isDownload = asset => typeof asset?.browser_download_url === 'string' &&
