@@ -94,7 +94,7 @@ a, summary, label { -webkit-tap-highlight-color: transparent; }
 .customization-content { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(260px, .85fr); gap: 48px; margin-top: 34px; align-items: start; }
 .theme-comparison { min-width: 0; }
 .theme-preview-heading p { margin-top: 9px; font-size: .9rem; }
-.theme-picker { display: flex; flex-wrap: wrap; gap: 10px; padding: 0; margin: 22px 0; border: 0; }
+.theme-picker { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 0; margin: 22px 0; border: 0; }
 .theme-picker[hidden], .theme-panel[hidden] { display: none; }
 .theme-picker label { position: relative; display: inline-flex; align-items: center; gap: 9px; min-height: 44px; padding: 9px 14px; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); font-size: .83rem; cursor: pointer; }
 .theme-picker label:has(input:checked) { border-color: var(--accent); color: var(--text); background: #b4a8f00c; }
@@ -104,6 +104,12 @@ a, summary, label { -webkit-tap-highlight-color: transparent; }
 .theme-midnight { background: #7c5bf5; }
 .theme-ocean { background: #3b82f6; }
 .theme-emerald { background: #10b981; }
+.theme-sunset { background: #f97316; }
+.theme-rose { background: #ec4899; }
+.theme-arctic { background: #67e8f9; }
+.theme-neon { background: #22d3ee; }
+.theme-classic { background: #1db954; }
+.theme-adaptive { background: conic-gradient(#f97316, #ec4899, #3b82f6, #10b981, #f97316); }
 .theme-panel { margin-top: 22px; }
 .theme-panel > img { width: 100%; border: 1px solid var(--border); border-radius: 9px; }
 .theme-panel > figcaption { display: flex; justify-content: space-between; gap: 16px; padding-top: 11px; color: var(--muted); font-size: .79rem; }
@@ -184,7 +190,7 @@ code { background: #ffffff08; color: #d8d2e8; border-radius: 3px; padding: 2px 5
     .discord-layout, .about-layout, .privacy-layout { grid-template-columns: 1fr; gap: 35px; }
     .activity-card { max-width: 370px; padding: 20px; }
     .feature-list { grid-template-columns: 1fr; margin-top: 30px; }
-    .theme-picker { gap: 8px; }
+    .theme-picker { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
     .theme-picker label { padding-inline: 11px; font-size: .76rem; }
     .theme-panel > img { border-radius: 6px; }
     .feature-list article { padding-block: 24px; }
