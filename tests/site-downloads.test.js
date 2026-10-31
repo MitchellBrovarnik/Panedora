@@ -61,8 +61,10 @@ test('theme choices reveal the matching app preview and leave downloads working'
     const visible = () => [...document.querySelectorAll('[data-theme-preview]')]
         .filter(panel => !panel.hidden).map(panel => panel.dataset.themePreview);
     assert.deepEqual(visible(), ['midnight']);
-    for (const value of ['ocean', 'emerald', 'midnight']) {
-        const choice = document.querySelector(`input[name="theme-preview"][value="${value}"]`);
+    const choices = [...document.querySelectorAll('input[name="theme-preview"]')];
+    assert.equal(choices.length, 9, 'All eight fixed themes and Adaptive have previews');
+    for (const choice of [...choices.slice(1), choices[0]]) {
+        const value = choice.value;
         choice.checked = true;
         choice.dispatchEvent(new s.window.Event('change', { bubbles: true }));
         assert.deepEqual(visible(), [value]);

@@ -1328,6 +1328,7 @@ app.whenReady().then(async () => {
     const preview = new BrowserWindow({ width: 680, height: 80, frame: false, transparent: true,
         backgroundColor: '#00000000', show: false,
         webPreferences: { partition: 'website-previews', contextIsolation: true, nodeIntegration: false } });
+    const previewThemes = [];
     try {
         await preview.loadFile(previewFile);
         const previewRun = script => preview.webContents.executeJavaScript(script);
@@ -1376,7 +1377,8 @@ app.whenReady().then(async () => {
                 animation.pause(); animation.currentTime = 2000;
             }`);
         await waitFor(() => previewRun("Array.from(document.querySelectorAll('#np-large-art, .history-art')).every(image => image.naturalWidth > 0)"), 'theme preview artwork');
-        for (const theme of await previewRun('Object.keys(THEMES)')) {
+        previewThemes.push(...await previewRun('Object.entries(THEMES).map(([id, theme]) => ({ id, name: theme.name }))'));
+        for (const { id: theme } of previewThemes) {
             await previewRun(`applyTheme(${JSON.stringify(theme)}); document.fonts.ready`);
             if (theme === 'adaptive') {
                 await waitFor(() => previewRun('window._lastExtractedArt === AppState.playerState.coverArt'),
@@ -1410,8 +1412,10 @@ app.whenReady().then(async () => {
     await siteRun("document.getElementById('discord').scrollIntoView({behavior:'instant'})");
     await captureSite('website-discord');
     await siteRun("document.getElementById('customization').scrollIntoView({behavior:'instant'})");
+    assert.deepEqual(await siteRun("Array.from(document.querySelectorAll('input[name=\"theme-preview\"]'), choice => ({ id: choice.value, name: choice.labels[0].textContent.trim() }))"),
+        previewThemes, 'Website previews include every app theme in the same order');
     const themeImageHeight = await siteRun("document.querySelector('[data-theme-preview=midnight] img').getBoundingClientRect().height");
-    for (const theme of ['midnight', 'ocean', 'emerald']) {
+    for (const { id: theme } of previewThemes) {
         await siteRun(`document.querySelector('input[name="theme-preview"][value="${theme}"]').click()`);
         assert.equal(await siteRun(`document.querySelector('[data-theme-preview="${theme}"]').hidden`), false,
             'The selected theme is shown');
@@ -1426,6 +1430,8 @@ app.whenReady().then(async () => {
         await waitFor(() => siteRun(`innerWidth === ${width}`), 'website viewport ' + width);
         await siteRun('window.scrollTo({top: 0, behavior: "instant"})');
         await captureSite('website-width-' + width);
+        await siteRun("document.getElementById('customization').scrollIntoView({behavior:'instant'})");
+        await captureSite('website-themes-width-' + width);
     }
     site.setContentSize(430, 900);
     await waitFor(() => siteRun('innerWidth === 430'), 'website mobile viewport');

@@ -18,7 +18,7 @@
     <link rel="apple-touch-icon" href="favicon.png">
     <link rel="preload" href="assets/InterVariable.woff2" as="font" type="font/woff2" crossorigin>
     <link href="assets/boxicons.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css?v=6">
+    <link rel="stylesheet" href="styles.css?v=7">
 </head>
 <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -94,13 +94,19 @@
             <div class="theme-comparison" aria-labelledby="theme-preview-title">
                 <div class="theme-preview-heading">
                     <h3 id="theme-preview-title">See the themes in the app</h3>
-                    <p>Three of Panedora’s built-in themes, shown in the same player view.</p>
+                    <p>All nine built-in themes, shown in the same player view.</p>
                 </div>
                 <fieldset class="theme-picker" hidden>
                     <legend class="sr-only">Choose a theme preview</legend>
                     <label><input type="radio" name="theme-preview" value="midnight" aria-controls="theme-preview-midnight" checked><span class="theme-color theme-midnight" aria-hidden="true"></span> Midnight Violet</label>
                     <label><input type="radio" name="theme-preview" value="ocean" aria-controls="theme-preview-ocean"><span class="theme-color theme-ocean" aria-hidden="true"></span> Deep Ocean</label>
                     <label><input type="radio" name="theme-preview" value="emerald" aria-controls="theme-preview-emerald"><span class="theme-color theme-emerald" aria-hidden="true"></span> Emerald Forest</label>
+                    <label><input type="radio" name="theme-preview" value="sunset" aria-controls="theme-preview-sunset"><span class="theme-color theme-sunset" aria-hidden="true"></span> Sunset Blaze</label>
+                    <label><input type="radio" name="theme-preview" value="rose" aria-controls="theme-preview-rose"><span class="theme-color theme-rose" aria-hidden="true"></span> Rose Quartz</label>
+                    <label><input type="radio" name="theme-preview" value="arctic" aria-controls="theme-preview-arctic"><span class="theme-color theme-arctic" aria-hidden="true"></span> Arctic Frost</label>
+                    <label><input type="radio" name="theme-preview" value="neon" aria-controls="theme-preview-neon"><span class="theme-color theme-neon" aria-hidden="true"></span> Neon Cyber</label>
+                    <label><input type="radio" name="theme-preview" value="classic" aria-controls="theme-preview-classic"><span class="theme-color theme-classic" aria-hidden="true"></span> Classic Dark</label>
+                    <label><input type="radio" name="theme-preview" value="adaptive" aria-controls="theme-preview-adaptive"><span class="theme-color theme-adaptive" aria-hidden="true"></span> Adaptive (Dynamic)</label>
                 </fieldset>
                 <div class="theme-panels">
                     <figure class="theme-panel" id="theme-preview-midnight" data-theme-preview="midnight">
@@ -115,8 +121,32 @@
                         <img src="assets/theme-emerald.png" alt="The same Panedora player in Emerald Forest, with green accents and waves" width="1000" height="700" loading="lazy">
                         <figcaption><span>Emerald Forest</span><span>Now Playing</span></figcaption>
                     </figure>
+                    <figure class="theme-panel" id="theme-preview-sunset" data-theme-preview="sunset">
+                        <img src="assets/theme-sunset.png" alt="The same Panedora player in Sunset Blaze, with orange accents and waves" width="1000" height="700" loading="lazy">
+                        <figcaption><span>Sunset Blaze</span><span>Now Playing</span></figcaption>
+                    </figure>
+                    <figure class="theme-panel" id="theme-preview-rose" data-theme-preview="rose">
+                        <img src="assets/theme-rose.png" alt="The same Panedora player in Rose Quartz, with pink accents and waves" width="1000" height="700" loading="lazy">
+                        <figcaption><span>Rose Quartz</span><span>Now Playing</span></figcaption>
+                    </figure>
+                    <figure class="theme-panel" id="theme-preview-arctic" data-theme-preview="arctic">
+                        <img src="assets/theme-arctic.png" alt="The same Panedora player in Arctic Frost, with icy blue accents and waves" width="1000" height="700" loading="lazy">
+                        <figcaption><span>Arctic Frost</span><span>Now Playing</span></figcaption>
+                    </figure>
+                    <figure class="theme-panel" id="theme-preview-neon" data-theme-preview="neon">
+                        <img src="assets/theme-neon.png" alt="The same Panedora player in Neon Cyber, with cyan accents and purple waves" width="1000" height="700" loading="lazy">
+                        <figcaption><span>Neon Cyber</span><span>Now Playing</span></figcaption>
+                    </figure>
+                    <figure class="theme-panel" id="theme-preview-classic" data-theme-preview="classic">
+                        <img src="assets/theme-classic.png" alt="The same Panedora player in Classic Dark, with a charcoal background and green accents" width="1000" height="700" loading="lazy">
+                        <figcaption><span>Classic Dark</span><span>Now Playing</span></figcaption>
+                    </figure>
+                    <figure class="theme-panel" id="theme-preview-adaptive" data-theme-preview="adaptive">
+                        <img src="assets/theme-adaptive.png" alt="The same Panedora player in Adaptive, with its blue accent taken from the sample album cover" width="1000" height="700" loading="lazy">
+                        <figcaption><span>Adaptive (Dynamic)</span><span>From album art</span></figcaption>
+                    </figure>
                 </div>
-                <p class="preview-note">App previews use sample song details. Adaptive can also choose colors from your album artwork.</p>
+                <p class="preview-note">App previews use sample song details. Adaptive takes its accent color from the album artwork; this example uses the cover shown.</p>
             </div>
             <div class="feature-list">
                 <article><span class="feature-number" aria-hidden="true">01</span><h3>Tune Your Station</h3><p>Switch to available Pandora modes like Discovery or Deep Cuts from Now Playing.</p></article>
