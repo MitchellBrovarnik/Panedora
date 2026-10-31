@@ -137,6 +137,7 @@
             fetchLyrics: async () => ({ success: true, lyrics: '[00:00.00]A quiet moment, a different view\n[00:12.00]The evening finds a little room\n[00:24.00]A city painted in the light\n[00:36.00]We take the long way home tonight\n[00:48.00]These are sample lyrics for the demo\n[01:00.00]Let the colors move around you' })
         },
         player: {
+            setVolume: async value => { volume = clampVolumePercent(value); return { success: true }; },
             play: async () => { playing = !playing; updatePlayerUI({ isPlaying: playing }); updateMotion(); },
             toggle: async () => { playing = !playing; updatePlayerUI({ isPlaying: playing }); updateMotion(); },
             pause: async () => { playing = false; updatePlayerUI({ isPlaying: false }); updateMotion(); },
@@ -148,7 +149,7 @@
             getStationModes: async () => modes(),
             setStationMode: async (_id, id) => { modeId = id; playing = true; await next(); return { success: true }; }
         },
-        settings: { getVolume: async () => ({ volume }), setVolume: async value => { volume = value; return { volume }; },
+        settings: { getVolume: async () => ({ volume }), saveVolume: async value => { volume = clampVolumePercent(value); return true; },
             getLegacyMiniplayer: async () => false, setLegacyMiniplayer: async () => false },
         auth: { logout: () => reset() }, window: { toggleMini: () => {}, minimize: () => {}, maximize: () => {}, close: () => {} }
     };

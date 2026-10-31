@@ -175,11 +175,20 @@ test('playback, seeking and thumbs change only the sample session', async t => {
     assert.equal(s.state.isPlaying, false);
     d.getElementById('play-pause-btn').click();
     assert.equal(s.state.isPlaying, true);
+    const slider = d.getElementById('volume-slider');
+    slider.dispatchEvent(new s.w.Event('pointerdown', { bubbles: true }));
+    slider.value = '37';
+    slider.dispatchEvent(new s.w.Event('input', { bubbles: true }));
+    slider.dispatchEvent(new s.w.Event('change', { bubbles: true }));
+    assert.equal(d.getElementById('volume-popover').textContent, '37%');
+    assert.equal((await s.w.api.settings.getVolume()).volume, 37);
+    d.dispatchEvent(new s.w.Event('pointerup'));
     const first = s.state.trackToken;
     await s.w.api.player.thumbUp();
     assert.equal(s.state.feedback, 'thumbUp');
     await s.w.api.player.next();
     assert.notEqual(s.state.trackToken, first);
+    assert.equal(slider.value, '37', 'Changing songs keeps the selected sample volume');
     assert.equal(s.state.history[0].feedback, 'liked');
     s.api.seekToFraction(.5);
     assert.equal(s.state.time, s.state.duration / 2);
@@ -189,6 +198,7 @@ test('playback, seeking and thumbs change only the sample session', async t => {
     assert.equal(s.state.trackToken, current);
     assert.equal(s.state.history[0].feedback, 'disliked');
     d.getElementById('demo-reset').click();
+    assert.equal(slider.value, '65');
     assert.equal(s.state.feedback, null);
     assert.deepEqual(Array.from(s.state.history), []);
     assert.equal(s.forbidden(), 0);

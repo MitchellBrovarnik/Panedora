@@ -88,7 +88,7 @@ test('restarting or changing reactive backgrounds before the next frame cannot r
 
 test('reactive circles keep loud peaks inside both mini-player layouts', () => {
     for (const [width, height, classes] of [
-        [540, 80, ['mini-mode']], [900, 80, ['mini-mode']],
+        [540, 72, ['mini-mode']], [900, 72, ['mini-mode']],
         [280, 500, ['mini-mode', 'classic-mini']], [1200, 800, []]
     ]) {
         const s = setup(classes);
@@ -109,7 +109,7 @@ test('reactive circles keep loud peaks inside both mini-player layouts', () => {
 
 test('reactive waves stay proportionate in the tall mini-player and recenter after resizing', () => {
     for (const [width, height, classes, swing] of [
-        [540, 80, ['mini-mode'], 12], [900, 80, ['mini-mode'], 12],
+        [540, 72, ['mini-mode'], 10.8], [900, 72, ['mini-mode'], 10.8],
         [280, 500, ['mini-mode', 'classic-mini'], 42], [1200, 800, [], 64]
     ]) {
         const s = setup(classes);
