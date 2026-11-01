@@ -6,6 +6,9 @@ on:
       - 'v*'
   release:
     types: [published]
+  pull_request:
+    paths:
+      - '.github/workflows/release.yml'
 
 permissions:
   contents: read
@@ -41,6 +44,7 @@ jobs:
           node-version: 20
 
       - name: Sync version from release tag
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           VERSION=${GITHUB_REF_NAME#v}
@@ -48,6 +52,47 @@ jobs:
 
       - name: Install Dependencies
         run: npm install
+
+      - name: Install Linux build dependencies
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        timeout-minutes: 5
+        run: |
+          if command -v bsdtar >/dev/null 2>&1; then
+            bsdtar --version
+            exit 0
+          fi
+
+          source /etc/os-release
+          BUILD_APT_SOURCES=$(mktemp --suffix=.sources)
+          trap 'rm -f "$BUILD_APT_SOURCES"' EXIT
+          # Use canonical HTTPS sources for this install, without changing the
+          # runner's mirror lists or refreshing unrelated third-party repos.
+          cat > "$BUILD_APT_SOURCES" <<EOF
+          Types: deb
+          URIs: https://archive.ubuntu.com/ubuntu
+          Suites: ${VERSION_CODENAME} ${VERSION_CODENAME}-updates
+          Components: main universe
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+
+          Types: deb
+          URIs: https://security.ubuntu.com/ubuntu
+          Suites: ${VERSION_CODENAME}-security
+          Components: main universe
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+          EOF
+          chmod 644 "$BUILD_APT_SOURCES"
+          BUILD_APT_OPTIONS=(
+            -o "Dir::Etc::sourcelist=$BUILD_APT_SOURCES"
+            -o "Dir::Etc::sourceparts=-"
+            -o "Acquire::Languages=none"
+            -o "Acquire::Retries=2"
+            -o "Acquire::http::Timeout=20"
+            -o "Acquire::https::Timeout=20"
+          )
+          sudo apt-get "${BUILD_APT_OPTIONS[@]}" -o APT::Update::Error-Mode=any update
+          sudo apt-get "${BUILD_APT_OPTIONS[@]}" install -y --no-install-recommends libarchive-tools
+          bsdtar --version
 
       - name: Build Windows
         if: matrix.os == 'windows-latest'
@@ -85,8 +130,6 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 15
           command: |
-            sudo apt-get update
-            sudo apt-get install -y libarchive-tools
             npm run prepare-dist
             cd dist
             npm install --omit=dev
@@ -108,6 +151,7 @@ jobs:
 
   release:
     name: Upload release assets
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     permissions:
