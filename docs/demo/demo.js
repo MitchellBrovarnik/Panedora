@@ -310,6 +310,16 @@
     });
     reducedMotion.addEventListener('change', e => { motion = !e.matches; updateMotion(); });
     window.addEventListener('pagehide', () => { visible = false; updateMotion(); });
+    // Observe the applied accent so asynchronous Adaptive artwork colors follow too.
+    let lastAccent;
+    const publishTheme = () => {
+        const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+        if (!accent || accent === lastAccent) return;
+        lastAccent = accent;
+        parent.postMessage({ type: 'panedora-demo-theme', accent }, location.protocol === 'file:' ? '*' : location.origin);
+    };
+    new MutationObserver(publishTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
     reset();
+    publishTheme();
     parent.postMessage({ type: 'panedora-demo-ready' }, location.protocol === 'file:' ? '*' : location.origin);
 })();

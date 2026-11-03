@@ -187,7 +187,12 @@ code { background: #ffffff08; color: #d8d2e8; border-radius: 3px; padding: 2px 5
     *, *::before, *::after { transition: none !important; }
 }
 
-.demo-frame { position: relative; height: clamp(560px, 61vw, 700px); overflow: hidden; border: 1px solid #32303d; border-radius: 10px; background: #080810; box-shadow: 0 20px 50px #0004; }
+.demo-frame {
+    --demo-accent: #7c5bf5;
+    position: relative; height: clamp(560px, 61vw, 700px); overflow: hidden; border: 1px solid #32303d; border-radius: 10px; background: #080810;
+    box-shadow: 0 20px 50px #0004, 0 0 80px -12px color-mix(in srgb, var(--demo-accent) 30%, transparent);
+    transition: box-shadow .4s ease;
+}
 .demo-frame > img { width: 100%; height: 100%; object-fit: cover; object-position: top left; }
 .demo-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 .demo-frame [hidden] { display: none; }

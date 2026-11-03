@@ -2,23 +2,32 @@
 document.addEventListener('DOMContentLoaded', () => {
     const demo = document.getElementById('panedora-demo');
     if (demo) {
+        const frame = document.getElementById('demo-frame');
         let inView = true;
         const tellVisibility = () => demo.contentWindow?.postMessage({
             type: 'panedora-demo-visibility', visible: inView && !document.hidden
         }, location.protocol === 'file:' ? '*' : location.origin);
         window.addEventListener('message', event => {
             const originMatches = event.origin === location.origin || (location.protocol === 'file:' && ['null', 'file://'].includes(event.origin));
-            if (event.source !== demo.contentWindow || !originMatches || event.data?.type !== 'panedora-demo-ready') return;
+            if (event.source !== demo.contentWindow || !originMatches) return;
+            if (event.data?.type === 'panedora-demo-theme') {
+                const accent = event.data.accent;
+                if (typeof accent === 'string' && /^(?:#[0-9a-f]{6}|rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\))$/i.test(accent)) {
+                    frame.style.setProperty('--demo-accent', accent);
+                }
+                return;
+            }
+            if (event.data?.type !== 'panedora-demo-ready') return;
             demo.hidden = false;
             document.getElementById('demo-fallback').hidden = true;
-            document.getElementById('demo-frame').setAttribute('aria-busy', 'false');
+            frame.setAttribute('aria-busy', 'false');
             tellVisibility();
         });
         demo.addEventListener('load', tellVisibility);
         document.addEventListener('visibilitychange', tellVisibility);
         if (typeof IntersectionObserver !== 'undefined') {
             new IntersectionObserver(entries => { inView = entries[0].isIntersecting; tellVisibility(); }, { threshold: .01 })
-                .observe(document.getElementById('demo-frame'));
+                .observe(frame);
         }
         demo.src = demo.dataset.src;
     }
