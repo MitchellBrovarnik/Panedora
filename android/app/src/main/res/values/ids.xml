@@ -1,0 +1,11 @@
+<resources>
+    <item type="id" name="login_email" />
+    <item type="id" name="login_password" />
+    <item type="id" name="login_button" />
+    <item type="id" name="station_list" />
+    <item type="id" name="play_pause" />
+    <item type="id" name="now_title" />
+    <item type="id" name="seek_bar" />
+    <item type="id" name="thumb_up" />
+    <item type="id" name="thumb_down" />
+</resources>
