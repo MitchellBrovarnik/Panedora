@@ -45,7 +45,6 @@ jobs:
           working-directory: android
           script: |
             gradle --no-daemon :app:connectedDebugAndroidTest
-            adb pull /sdcard/Android/data/app.panedora.mobile.prototype/files/screenshots ../android-screenshots
       - name: Package installable prototype
         if: success()
         run: |
@@ -66,5 +65,5 @@ jobs:
           path: |
             android/app/build/reports/
             android/app/build/outputs/androidTest-results/
-            android-screenshots/
+            android/app/build/outputs/connected_android_test_additional_output/
           retention-days: 14

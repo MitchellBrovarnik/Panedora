@@ -42,7 +42,10 @@ public class PlaybackSmokeTest {
         fail("Native player did not reach the expected state within 20 seconds");
     }
     private static void screenshot(Context context, String name) throws Exception {
-        File directory = context.getExternalFilesDir("screenshots"); assertNotNull(directory); directory.mkdirs();
+        // Gradle collects this directory before uninstalling the test app.
+        String output = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir");
+        File directory = output == null ? context.getExternalFilesDir("screenshots") : new File(output, "screenshots");
+        assertNotNull(directory); assertTrue(directory.isDirectory() || directory.mkdirs());
         Bitmap bitmap = InstrumentationRegistry.getInstrumentation().getUiAutomation().takeScreenshot();
         try (var out = new FileOutputStream(new File(directory,name + ".png"))) { bitmap.compress(Bitmap.CompressFormat.PNG,100,out); }
     }
