@@ -58,7 +58,7 @@ test('the local interactive demo activates only after its own ready message', as
     }) }));
     const document = s.window.document;
     const demo = document.getElementById('panedora-demo');
-    assert.equal(demo.src, 'https://panedora.app/demo/index.html');
+    assert.equal(demo.src, 'https://panedora.app/demo/index.html?v=2');
     assert.equal(demo.hidden, true);
     assert.equal(document.getElementById('demo-fallback').hidden, false);
     const send = (source, origin) => s.window.dispatchEvent(new s.window.MessageEvent('message', {
@@ -73,6 +73,30 @@ test('the local interactive demo activates only after its own ready message', as
     assert.equal(document.getElementById('demo-frame').getAttribute('aria-busy'), 'false');
     assert.equal(s.requests.length, 1, 'Only the normal release lookup makes a service request');
     assert.equal(s.node('download-win').href, asset('Panedora.exe').browser_download_url);
+});
+
+test('demo theme messages update only its surrounding glow and require its own window and origin', async t => {
+    const s = await setup(t, () => ({ ok: false }));
+    const document = s.window.document;
+    const demo = s.node('panedora-demo'), frame = s.node('demo-frame');
+    const pageStyles = [document.documentElement, document.body, document.querySelector('.site-header'), document.querySelector('.btn')]
+        .map(node => [node, node.getAttribute('style')]);
+    const send = (accent, source = demo.contentWindow, origin = 'https://panedora.app', type = 'panedora-demo-theme') =>
+        s.window.dispatchEvent(new s.window.MessageEvent('message', { source, origin, data: { type, accent } }));
+    send('#10b981', s.window);
+    send('#10b981', demo.contentWindow, 'https://untrusted.invalid');
+    send('#10b981', demo.contentWindow, 'https://panedora.app', 'unrelated');
+    for (const accent of [null, {}, 'red; background: white', 'url(https://untrusted.invalid)', 'linear-gradient(red, blue)']) send(accent);
+    assert.equal(frame.style.getPropertyValue('--demo-accent'), '');
+    send('#10b981');
+    assert.equal(frame.style.getPropertyValue('--demo-accent'), '#10b981');
+    send('rgb(75, 100, 190)');
+    assert.equal(frame.style.getPropertyValue('--demo-accent'), 'rgb(75, 100, 190)', 'Adaptive artwork accents are accepted');
+    send('#7c5bf5');
+    assert.equal(frame.style.getPropertyValue('--demo-accent'), '#7c5bf5', 'Reset can restore the default accent');
+    for (const [node, style] of pageStyles) assert.equal(node.getAttribute('style'), style, 'The website keeps its own colors');
+    assert.equal(demo.hidden, true, 'A theme message does not bypass the ready handshake');
+    assert.equal(s.requests.length, 1, 'Theme changes add no network requests');
 });
 
 test('release failures, preview releases and foreign asset URLs keep safe download links', async t => {

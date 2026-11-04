@@ -12,6 +12,8 @@ async function setup(t, reduced = false) {
     const dom = new JSDOM(read('docs/demo/index.html'), { url: 'https://panedora.app/demo/', runScripts: 'outside-only', pretendToBeVisual: true });
     const w = dom.window;
     t.after(() => w.close());
+    const messages = [];
+    w.postMessage = (data, origin) => messages.push({ data, origin });
     let time = 1000, forbidden = 0, draws = 0;
     Object.defineProperty(w.performance, 'now', { value: () => time });
     const frames = new Map(); let id = 0;
@@ -42,7 +44,7 @@ async function setup(t, reduced = false) {
     // Browser classic scripts share lexical bindings. Evaluate together here too.
     w.eval(read('docs/demo/app.js') + '\n' + read('docs/demo/demo.js') + '\nwindow.demoTest = { AppState, THEMES, BG_EFFECTS, renderPage, applyBgEffect, seekToFraction };');
     await tick();
-    return { w, document: w.document, app: w.demoTest.AppState, get state() { return w.demoTest.AppState.playerState; }, api: w.demoTest,
+    return { w, document: w.document, messages, app: w.demoTest.AppState, get state() { return w.demoTest.AppState.playerState; }, api: w.demoTest,
         advance: n => { time += n; }, forbidden: () => forbidden, draws: () => draws };
 }
 
@@ -82,6 +84,26 @@ test('sample stations, library filtering, search and reset work without services
     assert.equal(s.app.stations.length, 6);
     assert.equal(s.app.currentTheme, 'midnight');
     assert.equal(s.app.currentEffect, 'waves');
+    assert.equal(s.forbidden(), 0);
+});
+
+test('the demo publishes its applied accent for every theme, including Adaptive and Reset', async t => {
+    const s = await setup(t), d = s.document;
+    const themeMessages = () => s.messages.filter(message => message.data.type === 'panedora-demo-theme');
+    const accent = () => s.w.getComputedStyle(d.documentElement).getPropertyValue('--accent').trim();
+    assert.equal(themeMessages().at(-1).data.accent, '#7c5bf5');
+    s.api.renderPage('settings');
+    for (const theme of Object.keys(s.api.THEMES)) {
+        d.querySelector(`[data-theme="${theme}"]`).click(); await tick();
+        assert.equal(themeMessages().at(-1).data.accent, accent());
+        assert.equal(themeMessages().at(-1).origin, 'https://panedora.app');
+        if (theme === 'adaptive') assert.match(accent(), /^rgb\(/, 'The asynchronously extracted artwork color reaches the parent');
+    }
+    const count = themeMessages().length;
+    d.querySelector('[data-effect="static"]').click(); await tick();
+    assert.equal(themeMessages().length, count, 'Unchanged accents do not send repeated updates');
+    d.getElementById('demo-reset').click(); await tick();
+    assert.equal(themeMessages().at(-1).data.accent, '#7c5bf5');
     assert.equal(s.forbidden(), 0);
 });
 
