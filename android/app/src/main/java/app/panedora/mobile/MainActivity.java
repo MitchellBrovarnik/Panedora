@@ -142,7 +142,7 @@ public final class MainActivity extends Activity {
             int selected = i; Button item = button(labels[i], page == i, v -> { page = selected; scroll = null; render(); });
             item.setTextSize(12); nav.addView(item, weighted());
         }
-        root.addView(nav); setContentView(root);
+        root.addView(nav); setContentView(root); ViewCompat.requestApplyInsets(root);
         scroll.post(() -> { if (scroll != null) scroll.scrollTo(0, previousY); });
     }
     private void showMessage(LinearLayout content) {
@@ -172,7 +172,7 @@ public final class MainActivity extends Activity {
             verifyButton = button("Verify with Pandora", false, v -> startActivity(new Intent(this, VerificationActivity.class))); form.addView(verifyButton); gap(form,20);
             form.addView(text("Requires Pandora Plus or Premium.\nYour sign-in stays encrypted on this phone.",13,MUTED,false)); gap(form,16);
             form.addView(text("Android prototype · " + BuildConfig.VERSION_NAME,12,MUTED,false));
-            holder.addView(form); root.addView(holder,new LinearLayout.LayoutParams(-1,-1)); setContentView(root);
+            holder.addView(form); root.addView(holder,new LinearLayout.LayoutParams(-1,-1)); setContentView(root); ViewCompat.requestApplyInsets(root);
         }
         loginButton.setEnabled(!model.busy); loginButton.setText(model.busy ? "Signing in…" : "Sign in");
         email.setEnabled(!model.busy); password.setEnabled(!model.busy);
@@ -225,7 +225,10 @@ public final class MainActivity extends Activity {
     }
     private void renderPlayer(LinearLayout content) {
         content.addView(text(model.station == null ? "Now Playing" : model.station.name,15,ACCENT,true)); gap(content,22);
-        int width = Math.max(160,Math.min(340, Math.round(getResources().getDisplayMetrics().widthPixels / getResources().getDisplayMetrics().density) - 48));
+        var metrics = getResources().getDisplayMetrics();
+        // Leave room for the song information, touch controls, navigation, and system bars.
+        // Short windows can still scroll; ordinary portrait phones keep the thumbs visible.
+        int width = Math.max(160, Math.min(320, Math.min(Math.round(metrics.widthPixels / metrics.density) - 48, Math.round(metrics.heightPixels / metrics.density) - 620)));
         ImageView cover = art(model.track == null ? "" : model.track.art,width);
         LinearLayout.LayoutParams coverParams = new LinearLayout.LayoutParams(dp(width),dp(width)); coverParams.gravity = Gravity.CENTER_HORIZONTAL;
         content.addView(cover,coverParams); gap(content,24);

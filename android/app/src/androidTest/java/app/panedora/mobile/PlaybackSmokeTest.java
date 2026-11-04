@@ -25,7 +25,10 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.Assert.*;
 import static androidx.test.espresso.Espresso.onView;
 import static androidx.test.espresso.action.ViewActions.click;
+import static androidx.test.espresso.assertion.ViewAssertions.matches;
 import static androidx.test.espresso.matcher.ViewMatchers.withContentDescription;
+import static androidx.test.espresso.matcher.ViewMatchers.withId;
+import static androidx.test.espresso.matcher.ViewMatchers.isCompletelyDisplayed;
 
 @UnstableApi
 @RunWith(AndroidJUnit4.class)
@@ -42,6 +45,8 @@ public class PlaybackSmokeTest {
         fail("Native player did not reach the expected state within 20 seconds");
     }
     private static void screenshot(Context context, String name) throws Exception {
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+        Thread.sleep(400); // Let the rendered frame catch up to the main-thread state.
         // Gradle collects this directory before uninstalling the test app.
         String output = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir");
         File directory = output == null ? context.getExternalFilesDir("screenshots") : new File(output, "screenshots");
@@ -87,6 +92,7 @@ public class PlaybackSmokeTest {
             await(() -> model.playback != null); screenshot(context,"stations");
             onView(withContentDescription("Play Night Drive Radio")).perform(click());
             await(() -> model.playing && model.track != null);
+            onView(withId(R.id.thumb_up)).check(matches(isCompletelyDisplayed()));
             screenshot(context,"now-playing");
             AtomicReference<String> thumbToken = new AtomicReference<>();
             ui(() -> { thumbToken.set(model.track.token); model.rate(true); });
