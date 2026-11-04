@@ -143,7 +143,7 @@ public final class MainActivity extends Activity {
             item.setTextSize(12); nav.addView(item, weighted());
         }
         root.addView(nav); setContentView(root);
-        if (page == 0 || page == 2) scroll.post(() -> { if (scroll != null) scroll.scrollTo(0, previousY); });
+        scroll.post(() -> { if (scroll != null) scroll.scrollTo(0, previousY); });
     }
     private void showMessage(LinearLayout content) {
         if (model.message.isEmpty()) return;
@@ -166,7 +166,7 @@ public final class MainActivity extends Activity {
             form.addView(text("Your stations.\nA little closer.",32,TEXT,true)); gap(form,12);
             form.addView(text("Sign in to Pandora to try Panedora on your phone.",16,MUTED,false)); gap(form,28);
             email = field("Pandora email", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS); email.setId(R.id.login_email); email.setAutofillHints(View.AUTOFILL_HINT_EMAIL_ADDRESS); form.addView(email); gap(form,12);
-            password = field("Password", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD); password.setId(R.id.login_password); password.setAutofillHints(View.AUTOFILL_HINT_PASSWORD); form.addView(password); gap(form,16);
+            password = field("Password", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD); password.setId(R.id.login_password); password.setSaveEnabled(false); password.setAutofillHints(View.AUTOFILL_HINT_PASSWORD); form.addView(password); gap(form,16);
             loginButton = button("Sign in", true, v -> model.login(email.getText().toString(), password.getText().toString())); loginButton.setId(R.id.login_button); form.addView(loginButton);
             gap(form,14); loginMessage = text("",14,0xfff0b7b7,false); loginMessage.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE); form.addView(loginMessage);
             verifyButton = button("Verify with Pandora", false, v -> startActivity(new Intent(this, VerificationActivity.class))); form.addView(verifyButton); gap(form,20);
@@ -235,11 +235,15 @@ public final class MainActivity extends Activity {
         gap(content,24);
         seek = new SeekBar(this); seek.setId(R.id.seek_bar); seek.setMax(1000); seek.setProgressTintList(ColorStateList.valueOf(ACCENT)); seek.setThumbTintList(ColorStateList.valueOf(ACCENT)); seek.setContentDescription("Song position"); seek.setEnabled(model.track != null);
         seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override public void onStartTrackingTouch(SeekBar bar) { scrubbing = true; }
+            private PandoraProtocol.Track selected;
+            @Override public void onStartTrackingTouch(SeekBar bar) { scrubbing = true; selected = model.track; }
             @Override public void onProgressChanged(SeekBar bar,int value,boolean user) { if (user && model.playback != null && elapsed != null) elapsed.setText(time(model.playback.duration() * value / 1000) + "  /  " + time(model.playback.duration())); }
-            @Override public void onStopTrackingTouch(SeekBar bar) { if (model.playback != null) model.playback.seek(model.playback.duration() * bar.getProgress() / 1000); scrubbing = false; }
+            @Override public void onStopTrackingTouch(SeekBar bar) { if (model.playback != null && selected == model.track) model.playback.seek(model.playback.duration() * bar.getProgress() / 1000); scrubbing = false; }
         });
-        content.addView(seek,new LinearLayout.LayoutParams(-1,dp(48))); elapsed = text("0:00 / 0:00",12,MUTED,false); content.addView(elapsed); gap(content,16);
+        content.addView(seek,new LinearLayout.LayoutParams(-1,dp(48)));
+        long duration = model.playback == null ? 0 : model.playback.duration(), position = model.playback == null ? 0 : model.playback.position();
+        seek.setProgress(duration > 0 ? (int)Math.min(1000,position * 1000 / duration) : 0);
+        elapsed = text(time(position) + "  /  " + time(duration),12,MUTED,false); content.addView(elapsed); gap(content,16);
         LinearLayout controls = row();
         Button replay = button("Replay",false,v -> { if (model.playback != null) model.playback.seek(0); }); replay.setEnabled(model.track != null); controls.addView(replay,weighted());
         Button play = button(model.playback != null && model.playback.readyToPlay() ? "Pause" : "Play",true,v -> { if (model.playback != null) model.playback.toggle(); }); play.setId(R.id.play_pause); play.setEnabled(model.station != null); controls.addView(play,weighted());
@@ -258,7 +262,7 @@ public final class MainActivity extends Activity {
         TextView title = text(model.track.title,14,TEXT,true); title.setMaxLines(1); title.setEllipsize(android.text.TextUtils.TruncateAt.END); copy.addView(title);
         TextView artist = text(model.track.artist,12,MUTED,false); artist.setMaxLines(1); copy.addView(artist);
         strip.addView(copy,new LinearLayout.LayoutParams(0,-2,1));
-        strip.addView(button(model.playing ? "Pause" : "Play",true,v -> { if (model.playback != null) model.playback.toggle(); }));
+        strip.addView(button(model.playback != null && model.playback.readyToPlay() ? "Pause" : "Play",true,v -> { if (model.playback != null) model.playback.toggle(); }));
         strip.setOnClickListener(v -> { page = 1; scroll = null; render(); }); return strip;
     }
     private void renderSettings(LinearLayout content) {
@@ -269,6 +273,6 @@ public final class MainActivity extends Activity {
         content.addView(text("Your phone connects directly to Pandora. Saved sign-in details are encrypted on this device. Signing out removes them.",15,MUTED,false)); gap(content,20);
         content.addView(button("Sign out",false,v -> { page = 0; filter = ""; model.logout(); })); gap(content,30);
         content.addView(text("Panedora for Android",18,TEXT,true)); gap(content,8);
-        content.addView(text(BuildConfig.VERSION_NAME + "\nThis early build focuses on stations, playback, and thumbs. Themes, effects, lyrics, and station tuning are planned separately.",14,MUTED,false));
+        content.addView(text(BuildConfig.VERSION_NAME + "\nThis early build focuses on stations, playback, and thumbs. Themes, effects, lyrics, and station tuning are not included yet.",14,MUTED,false));
     }
 }

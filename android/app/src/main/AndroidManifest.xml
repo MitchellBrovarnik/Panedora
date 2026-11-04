@@ -8,7 +8,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application android:label="Panedora Prototype" android:theme="@style/AppTheme"
         android:icon="@drawable/panedora_mark" android:allowBackup="false"
-        android:fullBackupContent="false" android:usesCleartextTraffic="false"
+        android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules"
+        android:usesCleartextTraffic="false"
         android:supportsRtl="true">
         <activity android:name=".MainActivity" android:exported="true" android:windowSoftInputMode="adjustResize">
             <intent-filter>
