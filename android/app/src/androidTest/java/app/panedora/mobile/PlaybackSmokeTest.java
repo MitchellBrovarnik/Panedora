@@ -76,6 +76,7 @@ public class PlaybackSmokeTest {
     }
     @Test public void nativeQueueContinuesAfterTheScreenClosesAndThumbsTargetCurrentTrack() throws Exception {
         Context context = ApplicationProvider.getApplicationContext(); FakePandora fake = new FakePandora(silentWav(context));
+        InstrumentationRegistry.getInstrumentation().getUiAutomation().grantRuntimePermission(context.getPackageName(), android.Manifest.permission.POST_NOTIFICATIONS);
         AtomicReference<AppModel> reference = new AtomicReference<>();
         ui(() -> { AppModel model = AppModel.get(context); model.credentials.clear(); model.api = fake; model.signedIn = true; model.stations = fake.stations(); reference.set(model); });
         AppModel model = reference.get();
