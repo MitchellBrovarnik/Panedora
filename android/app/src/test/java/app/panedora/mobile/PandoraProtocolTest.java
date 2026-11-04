@@ -27,6 +27,7 @@ public class PandoraProtocolTest {
         var tracks = PandoraProtocol.tracks(new JSONObject().put("tracks", new JSONArray().put(song).put(ad).put(invalid)));
         assertEquals(1, tracks.size()); assertEquals("After Hours", tracks.get(0).title); assertEquals(1, tracks.get(0).rating); assertEquals(192, tracks.get(0).seconds);
         assertTrue(PandoraProtocol.conflict(new JSONObject("{\"tracks\":[{\"trackType\":\"SimStreamViolationItem\"}]}")));
+        assertTrue(PandoraProtocol.conflict(new JSONObject().put("message", "SimStreamViolation: another device is playing")));
     }
     @Test public void artworkUsesTheLargestValidImageAndHttps() throws Exception {
         JSONArray art = new JSONArray("[{\"size\":1080},{\"size\":500,\"url\":\"http://images.example/cover.jpg\"},{\"size\":100,\"url\":\"https://images.example/small.jpg\"}]");

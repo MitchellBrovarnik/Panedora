@@ -52,7 +52,7 @@ final class PandoraProtocol {
             Boolean.TRUE.equals(response.opt("smartConversionDisabled")) || (adkv != null && "0".equals(adkv.optString("iat")));
     }
     static boolean conflict(JSONObject value) {
-        if ("STREAM_VIOLATION".equals(value.optString("errorString")) || value.optString("trackType").contains("SimStreamViolation")) return true;
+        if ("STREAM_VIOLATION".equals(value.optString("errorString")) || value.optString("trackType").contains("SimStreamViolation") || value.optString("message").contains("SimStreamViolation")) return true;
         JSONArray tracks = value.optJSONArray("tracks");
         for (int i = 0; tracks != null && i < tracks.length(); i++) if (tracks.optJSONObject(i) != null && conflict(tracks.optJSONObject(i))) return true;
         return false;

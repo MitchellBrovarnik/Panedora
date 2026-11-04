@@ -51,9 +51,10 @@ final class PandoraClient implements PandoraGateway {
     }
     private JSONObject send(String endpoint, JSONObject body) throws Exception {
         String url = ORIGIN + "/api" + endpoint;
-        String jar = cookies.getCookie(ORIGIN); if (jar == null) jar = "";
+        String jar = cookies.getCookie(url); if (jar == null) jar = "";
         String csrf = "";
-        for (String entry : jar.split(";")) if (entry.trim().startsWith("csrftoken=")) csrf = entry.trim().substring(10);
+        // CookieManager orders matching cookies by path; prefer the API-scoped token.
+        for (String entry : jar.split(";")) if (entry.trim().startsWith("csrftoken=")) { csrf = entry.trim().substring(10); break; }
         if (csrf.isEmpty()) {
             byte[] bytes = new byte[16]; new SecureRandom().nextBytes(bytes);
             StringBuilder hex = new StringBuilder(); for (byte b : bytes) hex.append(String.format("%02x", b & 255)); csrf = hex.toString();
@@ -74,7 +75,7 @@ final class PandoraClient implements PandoraGateway {
             try (var out = connection.getOutputStream()) { out.write(body.toString().getBytes(StandardCharsets.UTF_8)); }
             int status = connection.getResponseCode();
             for (var header : connection.getHeaderFields().entrySet()) {
-                if ("Set-Cookie".equalsIgnoreCase(header.getKey())) for (String value : header.getValue()) cookies.setCookie(ORIGIN, value, null);
+                if ("Set-Cookie".equalsIgnoreCase(header.getKey())) for (String value : header.getValue()) cookies.setCookie(url, value, null);
             }
             InputStream stream = status >= 200 && status < 300 ? connection.getInputStream() : connection.getErrorStream();
             JSONObject response;
