@@ -9,6 +9,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.List;
@@ -37,11 +38,17 @@ final class PandoraClient implements PandoraGateway {
     }
     private final CookieManager cookies = CookieManager.getInstance();
     private final CredentialStore credentials;
+    interface ConnectionFactory { HttpURLConnection open(URL url) throws IOException; }
+    private final ConnectionFactory connections;
     final String userAgent;
     private String authToken;
     private String premiumAuthToken;
     private interface RequestCheck { void verify() throws Exception; }
     PandoraClient(Context context, CredentialStore credentials) {
+        this(context,credentials,url -> (HttpURLConnection)url.openConnection());
+    }
+    PandoraClient(Context context,CredentialStore credentials,ConnectionFactory connections) {
+        this.connections=connections;
         this.credentials = credentials; userAgent = WebSettings.getDefaultUserAgent(context);
         cookies.setAcceptCookie(true);
     }
@@ -70,7 +77,7 @@ final class PandoraClient implements PandoraGateway {
             cookies.setCookie(ORIGIN, "csrftoken=" + csrf + "; Path=/; Domain=.pandora.com; Secure", null);
             jar += (jar.isEmpty() ? "" : "; ") + "csrftoken=" + csrf;
         }
-        HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
+        HttpURLConnection connection = connections.open(new URL(url));
         connection.setConnectTimeout(20000); connection.setReadTimeout(20000); connection.setInstanceFollowRedirects(false);
         connection.setRequestMethod("POST"); connection.setDoOutput(true);
         connection.setRequestProperty("Content-Type", "application/json");
@@ -118,12 +125,10 @@ final class PandoraClient implements PandoraGateway {
         PandoraProtocol.Modes offered=stationModes(station); active.verify();
         PandoraProtocol.Mode selected=offered.find(id);
         if (!offered.available || selected==null || !selected.available) throw new Exception("That mode is not available for this station and subscription.");
-        if (selected.premiumOnly) {
-            JSONObject saved=credentials.read();
-            if (saved==null) throw new Exception("Sign in again to confirm your Pandora Premium subscription.");
-            login(saved.getString("email"),saved.getString("password")); active.verify();
-            if (!premiumAccess()) throw new Exception("This mode requires a verified Pandora Premium subscription.");
-        }
+        // The current login already proved this token's subscription. Re-signing
+        // in here creates a different playback session while its old stream plays.
+        // The request check below also gates a token refreshed after expiry.
+        if (selected.premiumOnly && !premiumAccess()) throw new Exception("This mode requires a verified Pandora Premium subscription.");
         JSONObject response=request("/v1/interactiveradio/setAndGetAvailableModes",PandoraProtocol.body("stationId",station,"modeId",id),() -> {
             active.verify();
             if (selected.premiumOnly && !premiumAccess()) throw new Exception("This mode requires a verified Pandora Premium subscription.");

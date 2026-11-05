@@ -86,7 +86,7 @@ public class PlaybackSmokeTest {
         @Override public void resume(boolean takeOver) throws Exception {}
         @Override public String feedback(String token,boolean positive) { feedback.add(token + ":" + positive); return "feedback-" + token; }
         @Override public void deleteFeedback(String id) { removed.add(id); }
-        @Override public void started(String station,String token) { started.add(token); }
+        @Override public void started(String station,String token) throws Exception { started.add(token); }
         @Override public void paused(String station,String token) {}
         @Override public void clear() {}
     }

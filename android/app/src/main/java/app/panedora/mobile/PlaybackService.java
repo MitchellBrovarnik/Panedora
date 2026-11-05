@@ -82,8 +82,8 @@ public final class PlaybackService extends MediaSessionService {
         // Player callbacks can request a refill while the old timeline is removed.
         // Keep that work fenced off until the new station and queue are installed.
         fetching=true;
-        resetModes(); advanceAfterRefill=false;
-        pausePlayback(); wantPlayback = true; artwork.clear(); queue.clear(); seen.clear();
+        pausePlayback(); resetModes(); advanceAfterRefill=false;
+        wantPlayback = true; artwork.clear(); queue.clear(); seen.clear();
         // Reset the old audio pipeline before replacing its timeline and preparing a new station.
         player.stop(); player.clearMediaItems();
         model.rememberCurrent(); model.station = station; model.track = null; model.loading = true; model.message = ""; model.takeover = false; reportedToken = ""; model.changed();
@@ -99,35 +99,50 @@ public final class PlaybackService extends MediaSessionService {
                     if (!current(request)) return;
                     model.station = selected; if (selected.shuffle) model.rememberShuffle(selected);
                     fetching = false; append(tracks); player.prepare(); if (wantPlayback) player.play(); model.loading = false; model.changed();
+                    if (!wantPlayback && model.track!=null) reportPaused(selected.id,model.track.token);
+                    if (takeOver) loadModes(true);
                 });
             } catch (Exception e) { model.main.post(() -> { if (current(request)) { fetching = false; model.loading = false; model.fail(e, () -> load(station,takeOver)); } }); }
         });
     }
     void resume(boolean takeOver) {
         if (destroyed || !model.signedIn || model.station == null || resuming) return;
+        // An explicit takeover starts a fresh, approved queue and invalidates all
+        // errors/metadata requested before it, just as the desktop client does.
+        if (takeOver) { if (model.takeover) load(model.station,true); return; }
+        if (model.takeover) return;
         if (model.modeChanging) { wantPlayback=true; model.changed(); return; }
+        if (player.getPlayWhenReady() && (player.getPlaybackState()==Player.STATE_READY || player.getPlaybackState()==Player.STATE_BUFFERING)) return;
         if (fetching && player.getMediaItemCount() == 0) { wantPlayback = true; model.changed(); return; }
-        if (player.getMediaItemCount() == 0 || player.getPlayerError() != null) { load(model.station, takeOver); return; }
+        if (player.getMediaItemCount() == 0 || player.getPlayerError() != null || player.getPlaybackState()==Player.STATE_IDLE) { load(model.station, takeOver); return; }
         int request = generation, revision = ++resumeRevision; resuming = true; wantPlayback = true; model.takeover = false; model.message = ""; model.changed();
         model.io.execute(() -> {
             try {
                 model.api.resume(takeOver);
                 model.main.post(() -> {
                     if (!current(request) || revision != resumeRevision) return;
-                    resuming = false; reportedToken = "";
+                    resuming = false; model.takeover=false; model.message="";
+                    if (!model.modeError.isEmpty()) { resetModes(); loadModes(true); }
                     if (player.getPlaybackState() == Player.STATE_ENDED) refill(); else player.play();
                 });
-            } catch (Exception e) { model.main.post(() -> { if (current(request) && revision == resumeRevision) { resuming = false; model.fail(e, () -> resume(false)); } }); }
+            } catch (Exception e) { model.main.post(() -> { if (current(request) && revision == resumeRevision) { pausePlayback(false); model.fail(e, () -> resume(false)); } }); }
         });
     }
-    void pausePlayback() {
+    void pausePlayback() { pausePlayback(true); }
+    private void pausePlayback(boolean notifyPandora) {
+        boolean approvalPending=resuming || model.modeChanging && wantPlayback;
         ++resumeRevision; resuming = false; wantPlayback = false;
         boolean wasPlaying = player.getPlayWhenReady();
         PandoraProtocol.Station station = model.station; PandoraProtocol.Track track = model.track;
         player.pause();
         // Cancelling a pending resume may not emit an ExoPlayer state change.
         model.changed();
-        if (wasPlaying && station != null && track != null) model.io.execute(() -> { try { model.api.paused(station.id, track.token); } catch (Exception ignored) { /* Local pause must always work. */ } });
+        // A Pause during an in-flight approval must also reach Pandora, after
+        // that approval, even though audio has not started locally yet.
+        if (notifyPandora && !model.takeover && (wasPlaying || approvalPending) && station != null && track != null) reportPaused(station.id,track.token);
+    }
+    private void reportPaused(String station,String token) {
+        model.io.execute(() -> { try { model.api.paused(station,token); } catch (Exception ignored) { /* Local pause must always work. */ } });
     }
     void toggle() { if (wantsPlayback()) pausePlayback(); else resume(false); }
     void next() {
@@ -143,7 +158,7 @@ public final class PlaybackService extends MediaSessionService {
         ++modesRevision; model.modes=null; model.modesLoading=model.modeChanging=false; model.modeError="";
     }
     void loadModes(boolean refresh) {
-        if (destroyed || !model.signedIn || model.station==null || model.station.shuffle || model.track==null || model.modeChanging || model.modesLoading || model.takeover || (!refresh && model.modes!=null)) return;
+        if (destroyed || !model.signedIn || model.station==null || model.station.shuffle || model.track==null || model.modeChanging || model.modesLoading || model.takeover || (!refresh && model.modes!=null && model.modeError.isEmpty())) return;
         String station=model.station.id; int request=generation, revision=++modesRevision;
         model.modesLoading=true; model.modeError=""; model.changed();
         model.io.execute(() -> {
@@ -157,7 +172,7 @@ public final class PlaybackService extends MediaSessionService {
             } catch (Exception error) { model.main.post(() -> {
                 if (!current(request) || revision!=modesRevision) return;
                 model.modesLoading=false; model.modeError=error.getMessage()==null ? "Could not load station modes. Try Refresh." : error.getMessage();
-                if (error instanceof PandoraClient.ApiException api && (api.conflict() || api.expired() || api.verification())) { pausePlayback(); model.fail(error,() -> loadModes(true)); }
+                if (error instanceof PandoraClient.ApiException api && (api.conflict() || api.expired() || api.verification())) { pausePlayback(false); model.fail(error,() -> loadModes(true)); }
                 else model.changed();
             }); }
         });
@@ -166,6 +181,7 @@ public final class PlaybackService extends MediaSessionService {
         if (destroyed || !model.signedIn || model.station==null || model.station.shuffle || model.track==null || model.modes==null || !model.modes.available || model.modeChanging || model.takeover) return;
         PandoraProtocol.Mode choice=model.modes.find(modeId);
         if (choice==null || !choice.available || model.modes.active(modeId)) return;
+        boolean needsResume=!player.getPlayWhenReady();
         int request=++generation; ++resumeRevision; ++modesRevision; resuming=false; fetching=false; advanceAfterRefill=false;
         String station=model.station.id;
         model.modeChanging=true; model.modesLoading=false; model.modeError=""; model.message=""; wantPlayback=true;
@@ -181,7 +197,7 @@ public final class PlaybackService extends MediaSessionService {
                 actual=model.api.setStationMode(station,modeId,() -> current(request));
                 if (!current(request)) return;
                 if (!actual.active(modeId)) throw new Exception("Pandora did not enable that mode. Choose another available mode.");
-                model.api.resume(false); // This can request takeover confirmation, never force it.
+                if (needsResume) model.api.resume(false); // Already-playing audio keeps its existing approval.
                 if (!current(request)) return;
                 List<PandoraProtocol.Track> tracks=model.api.playlist(station,false);
                 if (!current(request)) return;
@@ -203,7 +219,7 @@ public final class PlaybackService extends MediaSessionService {
                     if (!current(request)) return;
                     model.modeChanging=false; if (latest!=null) model.modes=latest; wantPlayback=player.getPlayWhenReady();
                     model.modeError=error.getMessage()==null ? "Could not change the station mode. Please try again." : error.getMessage();
-                    if (error instanceof PandoraClient.ApiException api && (api.conflict() || api.expired() || api.verification())) pausePlayback();
+                    if (error instanceof PandoraClient.ApiException api && (api.conflict() || api.expired() || api.verification())) pausePlayback(false);
                     model.fail(error,() -> { if (model.station!=null && station.equals(model.station.id)) changeMode(modeId); });
                 });
             }
@@ -237,12 +253,12 @@ public final class PlaybackService extends MediaSessionService {
     private void reportStarted() {
         if (model.track == null || model.station == null || model.track.token.equals(reportedToken)) return;
         reportedToken = model.track.token;
-        String token = reportedToken, station = model.station.id; int request = generation;
+        String token = reportedToken, station = model.station.id; int request = generation, revision=resumeRevision;
         model.io.execute(() -> {
             try { model.api.started(station, token); }
             catch (Exception e) { model.main.post(() -> {
-                if (!current(request)) return;
-                if (e instanceof PandoraClient.ApiException api && (api.conflict() || api.expired() || api.verification())) { pausePlayback(); model.fail(e, () -> resume(false)); }
+                if (!current(request) || revision!=resumeRevision || model.track==null || !token.equals(model.track.token)) return;
+                if (e instanceof PandoraClient.ApiException api && (api.conflict() || api.expired() || api.verification())) { pausePlayback(false); model.fail(e, () -> resume(false)); }
             }); }
         });
     }
@@ -262,13 +278,13 @@ public final class PlaybackService extends MediaSessionService {
             } catch (Exception e) { model.main.post(() -> {
                 if (!current(request)) return;
                 fetching = false; advanceAfterRefill=false;
-                if (e instanceof PandoraClient.ApiException api && (api.conflict() || api.expired() || api.verification())) pausePlayback();
+                if (e instanceof PandoraClient.ApiException api && (api.conflict() || api.expired() || api.verification())) pausePlayback(false);
                 model.fail(e, this::refill);
             }); }
         });
     }
     void clearPlayback() {
-        ++generation; fetching=true; resetModes(); pausePlayback(); advanceAfterRefill=false; artwork.clear(); queue.clear(); seen.clear();
+        ++generation; fetching=true; pausePlayback(); resetModes(); advanceAfterRefill=false; artwork.clear(); queue.clear(); seen.clear();
         model.track = null; model.station = null; model.playing = false; model.loading = false;
         player.stop(); player.clearMediaItems(); fetching=false;
     }

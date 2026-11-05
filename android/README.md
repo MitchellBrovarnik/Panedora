@@ -30,6 +30,14 @@ old mix, request a continuation fragment, and confirm the selected mode before
 starting a fresh song. A later Pause or station selection takes precedence over a
 pending change. Taking playback from another device still requires a user choice.
 
+Pause/resume reuses the approved playback session and does not report the same song
+as a new start. Artist Only uses the current token's verified Premium status;
+genuine expiry refreshes recheck eligibility before retrying a Premium request.
+A Pause while approval is pending also releases that approval on Pandora, including
+before the first song loads. A confirmed **Play here instead** discards the old
+queue and errors, fetches fresh songs, and reloads tuning automatically. Stopping
+local audio for a device conflict does not send a pause to the other device.
+
 The player, playlist refill, audio focus, and media notification live in a
 `MediaSessionService`, so switching apps or locking the phone does not stop the
 queue. Removing Panedora's card from Recents stops playback and the media service,

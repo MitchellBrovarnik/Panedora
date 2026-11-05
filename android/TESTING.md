@@ -46,6 +46,12 @@ Requires Android 8 or newer and Pandora Plus or Premium.
 6. Pause/resume with the lock-screen controls, and try headphones/Bluetooth.
    Disconnecting headphones should pause playback.
 7. Try playing Pandora on another device. Panedora should ask before taking over.
+   Try several ordinary pause/resume cycles and change to Artist Only while already
+   playing. These should keep the same session and should not create a new device
+   warning. With a real conflict, **Play here instead** should start a fresh queue
+   and restore tuning without needing Refresh. Declining or a rejected takeover
+   must leave playback paused. Also press Pause while Play or initial station
+   loading is waiting on a connection, then try Play again.
 8. While music is playing, remove Panedora's card from Recents. Music and its
    notification should stop. Also try closing it while a song is buffering or
    Play is waiting on a connection; a late response must not restart playback.
