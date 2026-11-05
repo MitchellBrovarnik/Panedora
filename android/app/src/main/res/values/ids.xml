@@ -1,0 +1,37 @@
+<resources>
+    <item type="id" name="tune_station" />
+    <item type="id" name="tuning_status" />
+    <item type="id" name="appearance_theme" />
+    <item type="id" name="appearance_accent" />
+    <item type="id" name="custom_accent" />
+    <item type="id" name="top_toolbar" />
+    <item type="id" name="playback_controls" />
+    <item type="id" name="compact_player" />
+    <item type="id" name="compact_play_pause" />
+    <item type="id" name="compact_next" />
+    <item type="id" name="next_song" />
+    <item type="id" name="replay" />
+    <item type="id" name="station_search" />
+    <item type="id" name="refresh_stations" />
+    <item type="id" name="login_email" />
+    <item type="id" name="login_password" />
+    <item type="id" name="login_button" />
+    <item type="id" name="station_list" />
+    <item type="id" name="shuffle_stations" />
+    <item type="id" name="play_pause" />
+    <item type="id" name="now_title" />
+    <item type="id" name="seek_bar" />
+    <item type="id" name="thumb_up" />
+    <item type="id" name="thumb_down" />
+    <item type="id" name="current_artwork" />
+    <item type="id" name="compact_artwork" />
+    <item type="id" name="nav_stations" />
+    <item type="id" name="nav_playing" />
+    <item type="id" name="nav_history" />
+    <item type="id" name="nav_settings" />
+    <item type="id" name="verification_title" />
+    <item type="id" name="verification_web" />
+    <item type="id" name="verification_status" />
+    <item type="id" name="verification_reload" />
+    <item type="id" name="page_scroll" />
+</resources>
