@@ -22,6 +22,12 @@ Requires Android 8 or newer and Pandora Plus or Premium.
    station while a change is loading; the later action should win.
    Open Settings and try Theme and Accent color, including Custom hex. The chosen
    colors should apply immediately, persist after reopening, and keep music playing.
+   Select **Adaptive (Dynamic)** in Theme. The background and controls should
+   follow the current album artwork. Give queued covers time to preload, then skip
+   between songs with different artwork colors; both the cover and palette should
+   be ready immediately. Pause/resume should keep the layout still. Try reopening,
+   a song without artwork, and switching back to a fixed theme while artwork is
+   loading. The theme choice should persist and late covers should not override it.
    While browsing Stations or Settings, tap the media notification. It should open
    Now Playing for the current station without restarting the song. Repeat after
    switching stations and after Android recreates the screen.
@@ -51,8 +57,8 @@ were on Wi-Fi or cellular, and whether the screen was locked. Do not share your
 password, cookies, authentication tokens, or raw Pandora network responses.
 
 This prototype has emulator tests with simulated Pandora responses. It has not
-been verified against your live Pandora account. It does not include themes,
-effects, adaptive colors, lyrics, or the desktop mini-players yet.
+been verified against your live Pandora account. It does not include visual
+effects, lyrics, or the desktop mini-players yet.
 
 If verification appears, its widget should load below the title. If loading fails,
 the page should show an error and offer **Reload check**. Complete the real check

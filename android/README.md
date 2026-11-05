@@ -11,9 +11,15 @@ larger artwork and a single row of playback icons. There is no persistent bottom
 navigation bar. Back/collapse returns to the previous screen and retains station
 search and scroll position. Tap the song title for album details.
 
-Settings includes eight theme presets adapted from the desktop app, preset accent
-colors, and a custom six-digit hex accent. Preferences persist on the phone and
-apply without interrupting playback. Notification taps open Now Playing for the
+Settings includes the desktop app's nine themes, including **Adaptive (Dynamic)**,
+plus preset accents and a custom six-digit hex accent for the fixed themes.
+Adaptive samples the current album artwork using the desktop's dominant-color
+algorithm and colors the background, surfaces, and controls while keeping readable
+contrast. Colors are prepared from the existing queued-cover loads, without extra
+image requests, and cached as small color values. Missing artwork uses a purple
+fallback; late downloads cannot recolor a newer song or a fixed theme. Preferences
+persist on the phone and apply without interrupting playback.
+Notification taps open Now Playing for the
 current active station, including when Android needs to create the screen again.
 With no active station, the app opens Stations without starting music.
 
@@ -62,7 +68,7 @@ later prototype may require uninstalling the previous prototype before installin
 Real Pandora authentication, mobile verification, and long screen-off listening
 still require testing with a paid account on a physical phone. See [TESTING.md](TESTING.md).
 
-Not included yet: desktop mini-players, Discord, adaptive colors or visual effects,
+Not included yet: desktop mini-players, Discord, visual effects,
 lyrics, station creation/removal, downloaded music, or free accounts. History keeps
 the last 100 songs from this app session. History ratings do not skip the current
 song. Ratings created here retain Pandora's feedback ID for undo; existing ratings

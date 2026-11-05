@@ -7,6 +7,8 @@ import android.graphics.Color;
 import android.graphics.drawable.BitmapDrawable;
 import android.view.View;
 import android.widget.ImageView;
+import android.widget.SeekBar;
+import androidx.core.graphics.ColorUtils;
 import androidx.lifecycle.Lifecycle;
 import androidx.media3.common.util.UnstableApi;
 import androidx.test.core.app.ActivityScenario;
@@ -44,6 +46,7 @@ import static androidx.test.espresso.Espresso.onView;
 import static androidx.test.espresso.action.ViewActions.click;
 import static androidx.test.espresso.matcher.ViewMatchers.withId;
 import static androidx.test.espresso.matcher.ViewMatchers.withContentDescription;
+import static androidx.test.espresso.matcher.ViewMatchers.withText;
 import static org.junit.Assert.*;
 
 /** Exercises the real image loader/caches with deterministic delayed image responses. */
@@ -81,6 +84,7 @@ public class ArtworkLoadingTest {
     }
     private ImageView target() { ImageView image = new ImageView(context); targets.add(image); return image; }
     @Before public void registerImages() {
+        context.getSharedPreferences("appearance",Context.MODE_PRIVATE).edit().clear().commit();
         ui(() -> Glide.get(context).getRegistry().prepend(GlideUrl.class, InputStream.class, new ModelLoaderFactory<GlideUrl,InputStream>() {
             @Override public ModelLoader<GlideUrl,InputStream> build(MultiModelLoaderFactory ignored) {
                 return new ModelLoader<GlideUrl,InputStream>() {
@@ -110,6 +114,7 @@ public class ArtworkLoadingTest {
     @After public void clearTargets() {
         for (Fixture fixture : fixtures.values()) fixture.release.countDown();
         ui(() -> { for (ImageView target : targets) Artwork.clear(target); });
+        context.getSharedPreferences("appearance",Context.MODE_PRIVATE).edit().clear().commit();
     }
     private static final class Fixture {
         final String url; final byte[] bytes; final CountDownLatch release, started = new CountDownLatch(1);
@@ -173,6 +178,7 @@ public class ArtworkLoadingTest {
         }
     }
     @Test public void queuedCoverAppearsOnSkipWithoutAPlaceholderOrAnotherDownload() throws Exception {
+        new Appearance(context).select(Appearance.THEMES[Appearance.THEMES.length-1]);
         Fixture first = fixture(Color.BLUE,false), next = fixture(Color.GREEN,false), third = fixture(Color.RED,false);
         PlaybackSmokeTest.FakePandora fake = new PlaybackSmokeTest.FakePandora(PlaybackSmokeTest.silentWav(context,60)) {
             @Override public List<PandoraProtocol.Track> playlist(String station,boolean start) {
@@ -192,17 +198,83 @@ public class ArtworkLoadingTest {
             AtomicReference<MainActivity> activity = new AtomicReference<>(); scenario.onActivity(activity::set);
             await(() -> model.playback != null); onView(withContentDescription("Play Night Drive Radio")).perform(click());
             await(() -> model.playing && model.track != null); ui(() -> model.playback.pausePlayback());
-            await(() -> model.playback.artwork.ready(next.url)); next.allowNetwork = false;
+            await(() -> model.playback.artwork.ready(next.url) && Artwork.accent(next.url)!=null && Artwork.accent(first.url)!=null); next.allowNetwork = false;
+            await(() -> playerAccent(activity.get())==new Appearance(context).palette(Color.BLUE).accent);
+            NavigationLayoutTest.screenshot(context,"adaptive-blue-player");
             assertEquals("Large/compact preloads share the image download",1,next.hits.get());
             ui(() -> {
+                View cover=activity.get().findViewById(R.id.current_artwork), controls=activity.get().findViewById(R.id.playback_controls);
+                for (int i=0;i<5;i++) model.changed();
+                assertSame("Pause and progress updates do not rebuild adaptive artwork",cover,activity.get().findViewById(R.id.current_artwork));
+                assertSame(controls,activity.get().findViewById(R.id.playback_controls));
                 model.playback.next();
                 assertTrue("Skip displays the decoded cover in the same UI turn",hasColor(activity.get().findViewById(R.id.current_artwork),Color.GREEN));
+                assertEquals("The queued artwork color applies in the same UI turn",new Appearance(context).palette(Color.GREEN).accent,playerAccent(activity.get()));
                 ImageView compact = target(); Artwork.load(compact,next.url,Math.round(42 * context.getResources().getDisplayMetrics().density),true);
                 assertTrue("The compact cover is also already decoded",hasColor(compact,Color.GREEN));
             });
             assertEquals("Skipping does not fetch again",1,next.hits.get());
+            PandoraProtocol.Track selected=model.track; scenario.recreate(); scenario.onActivity(activity::set);
+            await(() -> playerAccent(activity.get())==new Appearance(context).palette(Color.GREEN).accent);
+            assertTrue(new Appearance(context).adaptive()); assertSame(selected,model.track); assertFalse(model.playing);
+            NavigationLayoutTest.screenshot(context,"adaptive-green-player");
             ui(model::logout); assertFalse(model.playback != null && model.playback.artwork.ready(next.url));
         } finally { ui(model::logout); context.stopService(new Intent(context,PlaybackService.class)); }
+    }
+    private static int playerAccent(MainActivity activity) {
+        SeekBar seek=activity.findViewById(R.id.seek_bar); return seek==null ? 0 : seek.getProgressTintList().getDefaultColor();
+    }
+    @Test public void adaptiveIgnoresLateCoversAndSwitchingToAFixedThemeStaysFixed() throws Exception {
+        Fixture old=fixture(Color.RED,true), current=fixture(Color.GREEN,false), late=fixture(Color.BLUE,true);
+        AtomicReference<AppModel> reference=new AtomicReference<>();
+        ui(() -> {
+            AppModel model=AppModel.get(context); model.credentials.clear(); model.signedIn=true;
+            model.station=new PandoraProtocol.Station("adaptive","Adaptive artwork test",""); model.stations=Collections.singletonList(model.station);
+            model.track=new PandoraProtocol.Track("old","Old song","Artist","Album","","",180,0); reference.set(model);
+            // Keep an old request alive even after the screen has moved to another cover.
+            Artwork.load(target(),old.url,Math.round(42*context.getResources().getDisplayMetrics().density),true);
+        });
+        AppModel model=reference.get();
+        try (ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)) {
+            AtomicReference<MainActivity> activity=new AtomicReference<>(); scenario.onActivity(activity::set);
+            onView(withId(R.id.nav_settings)).perform(click()); onView(withId(R.id.appearance_theme)).perform(click());
+            onView(withText("Adaptive (Dynamic)")).perform(click()); assertTrue(new Appearance(context).adaptive());
+            NavigationLayoutTest.screenshot(context,"adaptive-settings");
+            onView(withId(R.id.nav_stations)).perform(click()); onView(withId(R.id.nav_playing)).perform(click());
+            assertTrue(old.started.await(5,TimeUnit.SECONDS));
+            ui(() -> { model.track=new PandoraProtocol.Track("current","Current green song","Artist","Album","",current.url,180,0); model.changed(); });
+            await(() -> playerAccent(activity.get())==new Appearance(context).palette(Color.GREEN).accent);
+            old.release.countDown(); await(() -> Artwork.accent(old.url)!=null);
+            ui(() -> assertEquals("An old download cannot recolor the current song",new Appearance(context).palette(Color.GREEN).accent,playerAccent(activity.get())));
+            ui(() -> { model.track=new PandoraProtocol.Track("missing","Song without artwork","Artist","Album","","",180,0); model.changed(); });
+            ui(() -> assertEquals("Missing artwork uses the fallback instead of a previous cover",new Appearance(context).palette(null).accent,playerAccent(activity.get())));
+            onView(withId(R.id.nav_stations)).perform(click()); onView(withId(R.id.nav_settings)).perform(click());
+            onView(withId(R.id.appearance_theme)).perform(click()); onView(withText("Deep Ocean")).perform(click());
+            ui(() -> Artwork.load(target(),late.url,120,true)); assertTrue(late.started.await(5,TimeUnit.SECONDS));
+            late.release.countDown(); await(() -> Artwork.accent(late.url)!=null);
+            assertEquals("ocean",new Appearance(context).theme().id); scenario.recreate();
+            onView(withId(R.id.nav_stations)).perform(click()); onView(withId(R.id.nav_playing)).perform(click());
+            scenario.onActivity(screen -> assertEquals("A late artwork result never changes a fixed theme",0xff7bb6ff,playerAccent(screen)));
+        } finally { ui(model::logout); context.stopService(new Intent(context,PlaybackService.class)); }
+    }
+    @Test public void artworkSamplingIgnoresBlackWhiteAndTransparencyAndKeepsControlsReadable() {
+        Bitmap sample=Bitmap.createBitmap(50,50,Bitmap.Config.ARGB_8888);
+        try {
+            int teal=0xff109c84; int[] pixels=new int[2500];
+            java.util.Arrays.fill(pixels,0,1200,Color.WHITE); java.util.Arrays.fill(pixels,1200,2100,Color.BLACK);
+            java.util.Arrays.fill(pixels,2100,2450,teal); java.util.Arrays.fill(pixels,2450,2500,Color.RED);
+            sample.setPixels(pixels,0,50,0,0,50,50);
+            float[] expected=new float[3], actual=new float[3]; ColorUtils.colorToHSL(teal,expected); ColorUtils.colorToHSL(Appearance.artworkAccent(sample),actual);
+            assertEquals("The real artwork hue wins over its white/black border",expected[0],actual[0],1f);
+            Appearance settings=new Appearance(context); settings.select(Appearance.THEMES[Appearance.THEMES.length-1]);
+            for (int color:new int[]{teal,Color.BLUE,Color.RED,0xff444444,Color.YELLOW}) {
+                sample.eraseColor(color); Appearance.Palette palette=settings.palette(Appearance.artworkAccent(sample));
+                assertTrue("Adaptive controls keep readable contrast",ColorUtils.calculateContrast(palette.accent,palette.background)>=4.5);
+            }
+            for (int color:new int[]{Color.BLACK,Color.WHITE,Color.TRANSPARENT}) {
+                sample.eraseColor(color); assertEquals(Appearance.ADAPTIVE_FALLBACK,Appearance.artworkAccent(sample));
+            }
+        } finally { sample.recycle(); }
     }
     @Test public void coverPreloadingIsBoundedAndMovesWithTheQueue() throws Exception {
         List<Fixture> covers = new ArrayList<>(); List<PandoraProtocol.Track> queue = new ArrayList<>();

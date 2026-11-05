@@ -8,12 +8,17 @@ import android.os.Looper;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
+import android.util.LruCache;
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.Priority;
 import com.bumptech.glide.RequestBuilder;
 import com.bumptech.glide.RequestManager;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
+import com.bumptech.glide.load.DataSource;
+import com.bumptech.glide.load.engine.GlideException;
+import com.bumptech.glide.request.RequestListener;
 import com.bumptech.glide.request.target.CustomTarget;
+import com.bumptech.glide.request.target.Target;
 import com.bumptech.glide.request.transition.Transition;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -24,6 +29,20 @@ import java.util.List;
 import java.util.Map;
 
 final class Artwork {
+    // Only small color values outlive decoded covers; never retain extra bitmaps.
+    private static final LruCache<String,Integer> accents=new LruCache<>(32);
+    private static final List<Runnable> colorListeners=new ArrayList<>();
+    private static final Handler main=new Handler(Looper.getMainLooper());
+    private static final Runnable colorsChanged=() -> { for (Runnable listener:new ArrayList<>(colorListeners)) listener.run(); };
+    static Integer accent(String source) { return accents.get(PandoraProtocol.https(source)); }
+    static void observeColors(Runnable listener) { colorListeners.add(listener); }
+    static void unobserveColors(Runnable listener) { colorListeners.remove(listener); }
+    private static void rememberColor(String source,Bitmap image) {
+        if (accents.get(source)!=null) return;
+        accents.put(source,Appearance.artworkAccent(image));
+        // Glide may deliver from memory inside render(). Never replace its target in that callback.
+        main.removeCallbacks(colorsChanged); main.post(colorsChanged);
+    }
     static int playerSizeDp(Context context) {
         var metrics = context.getResources().getDisplayMetrics();
         int textSpace = Math.round(590 + Math.max(0,context.getResources().getConfiguration().fontScale - 1) * 160);
@@ -32,7 +51,7 @@ final class Artwork {
     private static int pixels(Context context,int dp) { return Math.round(dp * context.getResources().getDisplayMetrics().density); }
     private static RequestBuilder<Bitmap> bitmap(RequestManager manager,String source,int size,Priority priority) {
         return manager.asBitmap().load(source).override(Math.min(size,1024),Math.min(size,1024)).centerCrop()
-            .diskCacheStrategy(DiskCacheStrategy.ALL).dontAnimate().timeout(10000).priority(priority);
+            .diskCacheStrategy(DiskCacheStrategy.ALL).disallowHardwareConfig().dontAnimate().timeout(10000).priority(priority);
     }
     static void load(ImageView view, String url, int pixels, boolean currentSong) {
         // The Activity owns and clears these targets when it replaces its view tree.
@@ -45,6 +64,10 @@ final class Artwork {
         var request = bitmap(manager,source,pixels,currentSong ? Priority.IMMEDIATE : Priority.LOW)
             .placeholder(R.drawable.panedora_mark).error(R.drawable.panedora_mark);
         if (currentSong) {
+            request=request.listener(new RequestListener<Bitmap>() {
+                @Override public boolean onLoadFailed(@Nullable GlideException error,Object model,Target<Bitmap> target,boolean first) { return false; }
+                @Override public boolean onResourceReady(Bitmap image,Object model,Target<Bitmap> target,DataSource data,boolean first) { rememberColor(source,image); return false; }
+            });
             // Current/queued covers have their own workers, outside the station queue.
             request = request.useUnlimitedSourceGeneratorsPool(true);
             int thumbnail = Math.round(42 * view.getResources().getDisplayMetrics().density);
@@ -88,6 +111,7 @@ final class Artwork {
                 full = new CustomTarget<Bitmap>() {
                     @Override public void onResourceReady(@NonNull Bitmap image,@Nullable Transition<? super Bitmap> transition) {
                         fullReady = true;
+                        rememberColor(source,image);
                         // Decode the compact size only after the source is on disk, avoiding a second download.
                         handler.post(() -> { if (active) bitmap(manager,source,small,Priority.HIGH).onlyRetrieveFromCache(true).useUnlimitedSourceGeneratorsPool(true).into(compact); });
                     }

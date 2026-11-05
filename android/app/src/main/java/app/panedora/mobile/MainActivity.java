@@ -54,6 +54,7 @@ public final class MainActivity extends Activity {
     private ListenableFuture<MediaController> controllerFuture;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable observer = this::render;
+    private final Runnable artworkObserver = () -> { if (appearance.adaptive()) render(); };
     private int page;
     private final List<Integer> backStack = new ArrayList<>();
     private final int[] scrollPositions = new int[4];
@@ -107,7 +108,7 @@ public final class MainActivity extends Activity {
         if (intent!=null && ACTION_NOW_PLAYING.equals(intent.getAction())) { openNowPlaying=true; notificationHandled=true; }
     }
     @Override protected void onStart() {
-        super.onStart(); model.listeners.add(observer); model.restore();
+        super.onStart(); model.listeners.add(observer); Artwork.observeColors(artworkObserver); model.restore();
         controllerFuture = new MediaController.Builder(this, new SessionToken(this, new ComponentName(this, PlaybackService.class))).buildAsync();
         ListenableFuture<MediaController> future = controllerFuture;
         future.addListener(() -> {
@@ -118,7 +119,7 @@ public final class MainActivity extends Activity {
         render(); handler.post(tick);
     }
     @Override protected void onStop() {
-        model.listeners.remove(observer); handler.removeCallbacks(tick);
+        model.listeners.remove(observer); Artwork.unobserveColors(artworkObserver); handler.removeCallbacks(tick);
         if (Build.VERSION.SDK_INT >= 33 && backCallback != null) { getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(backCallback); backCallback = null; }
         if (controllerFuture != null) { MediaController.releaseFuture(controllerFuture); controllerFuture = null; }
         super.onStop();
@@ -256,8 +257,9 @@ public final class MainActivity extends Activity {
         ScrollView restored = scroll; restored.post(() -> { if (scroll == restored) restored.scrollTo(0, previousY); });
     }
     private void applyAppearance() {
-        String key=appearance.key(); if (key.equals(appearanceKey)) return;
-        appearanceKey=key; Appearance.Theme theme=appearance.theme(); BG=theme.background; themeTint=theme.tint; ACCENT=appearance.accent();
+        Appearance.Palette palette=appearance.palette(model.track==null ? null : Artwork.accent(model.track.art));
+        String key=appearance.theme().id+":"+palette.key(); if (key.equals(appearanceKey)) return;
+        appearanceKey=key; BG=palette.background; themeTint=palette.tint; ACCENT=palette.accent;
         SURFACE=Appearance.blend(BG,themeTint,.12f); BORDER=Appearance.blend(BG,themeTint,.28f);
         renderedPage=-1; loginVisible=false;
         getWindow().setNavigationBarColor(BG); getWindow().setStatusBarColor(BG);
@@ -581,7 +583,9 @@ public final class MainActivity extends Activity {
     private void renderSettings(LinearLayout content) {
         content.addView(text("Appearance",28,TEXT,true)); gap(content,18);
         Button theme=button("Theme · "+appearance.theme().name,false,v -> chooseTheme()); theme.setId(R.id.appearance_theme); content.addView(theme); gap(content,10);
-        Button color=button("Accent color · "+Appearance.hex(ACCENT),false,v -> chooseAccent()); color.setId(R.id.appearance_accent); content.addView(color); gap(content,32);
+        if (appearance.adaptive()) content.addView(text("Background and accent colors follow the current song’s artwork. Choose another theme to set a fixed accent color.",14,MUTED,false));
+        else { Button color=button("Accent color · "+Appearance.hex(ACCENT),false,v -> chooseAccent()); color.setId(R.id.appearance_accent); content.addView(color); }
+        gap(content,32);
         content.addView(text("Your account",28,TEXT,true)); gap(content,20);
         LinearLayout account = column(); account.setPadding(dp(20),dp(20),dp(20),dp(20)); account.setBackground(rounded(SURFACE,18));
         account.addView(text("Connected to Pandora",17,TEXT,true)); gap(account,10); account.addView(text("Your saved sign-in stays encrypted on this phone.",14,MUTED,false)); gap(account,20);
