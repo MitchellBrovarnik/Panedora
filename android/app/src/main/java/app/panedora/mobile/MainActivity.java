@@ -62,7 +62,7 @@ public final class MainActivity extends Activity {
     private View currentRoot;
     private SeekBar seek;
     private TextView elapsed, remaining, selectedStationStatus;
-    private boolean scrubbing, loginVisible, openNowPlaying;
+    private boolean scrubbing, loginVisible, openNowPlaying, notificationHandled;
     private android.window.OnBackInvokedCallback backCallback;
     private EditText email, password;
     private TextView loginMessage;
@@ -93,17 +93,18 @@ public final class MainActivity extends Activity {
         setVolumeControlStream(android.media.AudioManager.STREAM_MUSIC);
         model = AppModel.get(this); appearance=new Appearance(this);
         if (saved != null) {
+            notificationHandled=saved.getBoolean("notificationHandled",false);
             page = Math.max(0,Math.min(3,saved.getInt("page",0))); filter = saved.getString("filter","");
             int[] previous = saved.getIntArray("backStack");
             if (previous != null) for (int value : previous) if (value >= 0 && value <= 3) backStack.add(value);
             int[] positions = saved.getIntArray("scrollPositions");
             if (positions != null) System.arraycopy(positions,0,scrollPositions,0,Math.min(4,positions.length));
         }
-        acceptIntent(getIntent()); render();
+        if (!notificationHandled) acceptIntent(getIntent()); render();
     }
-    @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); acceptIntent(intent); render(); }
+    @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); acceptIntent(intent); render(); }
     private void acceptIntent(Intent intent) {
-        if (intent!=null && ACTION_NOW_PLAYING.equals(intent.getAction())) { openNowPlaying=true; intent.setAction(Intent.ACTION_MAIN); }
+        if (intent!=null && ACTION_NOW_PLAYING.equals(intent.getAction())) { openNowPlaying=true; notificationHandled=true; }
     }
     @Override protected void onStart() {
         super.onStart(); model.listeners.add(observer); model.restore();
@@ -125,6 +126,7 @@ public final class MainActivity extends Activity {
     @Override protected void onDestroy() { if (tuningDialog!=null) tuningDialog.dismiss(); Artwork.clear(currentRoot); super.onDestroy(); }
     @Override protected void onSaveInstanceState(Bundle state) {
         rememberScroll(); state.putInt("page",page); state.putString("filter",filter);
+        state.putBoolean("notificationHandled",notificationHandled);
         state.putIntArray("backStack",backStack.stream().mapToInt(Integer::intValue).toArray()); state.putIntArray("scrollPositions",scrollPositions);
         super.onSaveInstanceState(state);
     }
@@ -486,6 +488,7 @@ public final class MainActivity extends Activity {
         tuningDialog=new AlertDialog.Builder(this).setTitle("Tune your station").setView(holder).setPositiveButton("Done",null).setNeutralButton("Refresh",null).create();
         tuningDialog.setOnDismissListener(dialog -> { tuningDialog=null; tuningChoices=null; tuningStatus=null; tuningStationId=""; });
         tuningDialog.setOnShowListener(dialog -> {
+            if (tuningDialog.getWindow()!=null) tuningDialog.getWindow().setBackgroundDrawable(rounded(SURFACE,18));
             tuningDialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> { if (model.playback!=null) model.playback.loadModes(true); });
             tuningDialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(ACCENT); tuningDialog.getButton(AlertDialog.BUTTON_NEUTRAL).setTextColor(ACCENT); updateTuningDialog();
         });

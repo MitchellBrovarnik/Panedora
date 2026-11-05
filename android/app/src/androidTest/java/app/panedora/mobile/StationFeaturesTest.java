@@ -103,8 +103,12 @@ public class StationFeaturesTest {
             ui(() -> model.playback.changeMode(2)); assertTrue(fake.entered.await(5,TimeUnit.SECONDS));
             ui(() -> model.playback.select(model.stations.get(1))); fake.release.countDown();
             await(() -> model.track!=null && model.playing && "other".equals(model.station.id));
-            assertNull(model.modes); assertFalse(model.modeChanging); assertTrue(model.track.token.startsWith("mode-0-"));
-            assertFalse("Stale tuning never requests the old station's next mix",fake.calls.contains("playlist:station:false"));
+            ui(() -> {
+                assertNull("A new station clears old mode metadata: "+fake.calls,model.modes);
+                assertFalse("A new station is not still changing the old mode: "+fake.calls,model.modeChanging);
+                assertTrue("New station token is "+model.track.token+"; calls: "+fake.calls,model.track.token.startsWith("mode-0-"));
+                assertFalse("Stale tuning never requests the old station's next mix: "+fake.calls,fake.calls.contains("playlist:station:false"));
+            });
         }
     }
     @Test public void pausingDuringAChangeKeepsTheConfirmedNewSongPaused() throws Exception {
@@ -114,7 +118,7 @@ public class StationFeaturesTest {
             ui(() -> model.playback.changeMode(2)); assertTrue(fake.entered.await(5,TimeUnit.SECONDS));
             ui(() -> model.playback.pausePlayback()); fake.release.countDown();
             await(() -> !model.modeChanging && model.track!=null && model.track.token.startsWith("mode-2-"));
-            assertFalse(model.playing); assertFalse(model.playback.wantsPlayback()); assertTrue(model.modes.active(2));
+            ui(() -> { assertFalse(model.playing); assertFalse(model.playback.wantsPlayback()); assertTrue(model.modes.active(2)); });
         }
     }
     @Test public void rejectedChangesKeepTheCurrentSongAndNextFetchesAFreshQueue() throws Exception {

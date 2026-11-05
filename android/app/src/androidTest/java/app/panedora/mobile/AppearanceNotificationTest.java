@@ -75,9 +75,9 @@ public class AppearanceNotificationTest {
             start(); await(() -> notificationTap()!=null); tap=notificationTap();
             AtomicReference<MainActivity> activity=new AtomicReference<>(); scenario.onActivity(activity::set);
             onView(withId(R.id.nav_stations)).perform(click()); onView(withId(R.id.nav_settings)).perform(click());
-            current=model.track; long position=model.playback.position(); tap.send();
+            current=model.track; PandoraProtocol.Track original=current; AtomicReference<Long> position=new AtomicReference<>(); ui(() -> position.set(model.playback.position())); tap.send();
             await(() -> activity.get().findViewById(R.id.current_artwork)!=null);
-            assertSame("A notification never reloads the station",current,model.track); assertTrue(model.playback.position()>=position);
+            ui(() -> { assertSame("A notification never reloads the station",original,model.track); assertTrue(model.playback.position()>=position.get()); });
             PandoraProtocol.Track initial=current; ui(() -> model.playback.select(model.stations.get(1))); await(() -> model.playing && model.track!=initial);
             PandoraProtocol.Track newer=model.track;
             onView(withId(R.id.nav_stations)).perform(click()); onView(withId(R.id.nav_settings)).perform(click()); tap.send();
@@ -94,7 +94,7 @@ public class AppearanceNotificationTest {
     @Test public void notificationWithoutAnActiveStationFallsBackWithoutStartingMusic() throws Exception {
         try (ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.nowPlayingIntent(context).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))) {
             await(() -> model.playback!=null); onView(withId(R.id.station_list)).check(matches(isDisplayed()));
-            assertNull(model.track); assertNull(model.station); assertFalse(model.playback.wantsPlayback());
+            ui(() -> { assertNull(model.track); assertNull(model.station); assertFalse(model.playback.wantsPlayback()); });
         }
     }
 }
