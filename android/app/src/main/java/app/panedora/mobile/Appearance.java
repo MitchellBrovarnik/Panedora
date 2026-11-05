@@ -58,11 +58,11 @@ final class Appearance {
         Bitmap sample=Bitmap.createScaledBitmap(image,50,50,false);
         int[] pixels=new int[2500]; sample.getPixels(pixels,0,50,0,0,50,50);
         if (sample!=image) sample.recycle();
-        int[] counts=new int[26*26*26]; int dominant=ADAPTIVE_FALLBACK, maximum=0;
+        int[] counts=new int[27*27*27]; int dominant=ADAPTIVE_FALLBACK, maximum=0;
         for (int pixel:pixels) {
             int r=Color.red(pixel), g=Color.green(pixel), b=Color.blue(pixel);
             if (Color.alpha(pixel)<128 || (r<30 && g<30 && b<30) || (r>240 && g>240 && b>240)) continue;
-            int bucket=(Math.round(r/10f)*26+Math.round(g/10f))*26+Math.round(b/10f);
+            int bucket=(Math.round(r/10f)*27+Math.round(g/10f))*27+Math.round(b/10f);
             if (++counts[bucket]>maximum) { maximum=counts[bucket]; dominant=pixel|0xff000000; }
         }
         if (maximum==0) return ADAPTIVE_FALLBACK;
