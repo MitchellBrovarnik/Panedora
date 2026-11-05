@@ -115,6 +115,8 @@ public final class MainActivity extends Activity {
         state.putIntArray("backStack",backStack.stream().mapToInt(Integer::intValue).toArray()); state.putIntArray("scrollPositions",scrollPositions);
         super.onSaveInstanceState(state);
     }
+    // Android 13+ uses the OnBackInvokedCallback below. Keep the older entry point for Android 8–12.
+    @android.annotation.SuppressLint("GestureBackNavigation")
     @Override public void onBackPressed() {
         if (model.signedIn && (page != 0 || !backStack.isEmpty())) closePage(); else super.onBackPressed();
     }
@@ -357,7 +359,7 @@ public final class MainActivity extends Activity {
         populateStations(list);
         search.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s,int start,int count,int after) {}
-            @Override public void onTextChanged(CharSequence s,int start,int before,int count) { filter = s.toString(); populateStations(list); }
+            @Override public void onTextChanged(CharSequence s,int start,int before,int count) { filter = s.toString(); populateStations(list); updateControls(); }
             @Override public void afterTextChanged(Editable value) {}
         });
     }
@@ -398,14 +400,14 @@ public final class MainActivity extends Activity {
         int width = Artwork.playerSizeDp(this);
         ImageView cover = art(model.track == null ? "" : model.track.art,width,true); cover.setId(R.id.current_artwork);
         LinearLayout.LayoutParams coverParams = new LinearLayout.LayoutParams(dp(width),dp(width)); coverParams.gravity = Gravity.CENTER_HORIZONTAL;
-        content.addView(cover,coverParams); gap(content,28);
+        content.addView(cover,coverParams); gap(content,22);
         TextView title = text(model.track == null ? (model.loading ? "Loading your station…" : "Choose a station") : model.track.title,26,TEXT,true); title.setId(R.id.now_title); title.setMaxLines(2); title.setEllipsize(android.text.TextUtils.TruncateAt.END); content.addView(title); gap(content,6);
         TextView artist = singleLine(model.track == null ? "Your music will appear here." : model.track.artist,17,MUTED,false); content.addView(artist);
         if (model.track != null) {
             title.setContentDescription(model.track.title + ". Song details"); title.setOnClickListener(v -> showSongDetails());
             artist.setOnClickListener(v -> showSongDetails());
         }
-        gap(content,22);
+        gap(content,14);
         seek = new SeekBar(this); seek.setId(R.id.seek_bar); seek.setMax(1000); seek.setProgressTintList(ColorStateList.valueOf(ACCENT)); seek.setThumbTintList(ColorStateList.valueOf(ACCENT)); seek.setContentDescription("Song position"); seek.setEnabled(model.track != null);
         seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             private PandoraProtocol.Track selected;
@@ -413,11 +415,11 @@ public final class MainActivity extends Activity {
             @Override public void onProgressChanged(SeekBar bar,int value,boolean user) { if (user && model.playback != null && elapsed != null) elapsed.setText(time(model.playback.duration() * value / 1000)); }
             @Override public void onStopTrackingTouch(SeekBar bar) { if (model.playback != null && selected == model.track) model.playback.seek(model.playback.duration() * bar.getProgress() / 1000); scrubbing = false; }
         });
-        content.addView(seek,new LinearLayout.LayoutParams(-1,dp(40)));
+        content.addView(seek,new LinearLayout.LayoutParams(-1,dp(32)));
         long duration = model.playback == null ? 0 : model.playback.duration(), position = model.playback == null ? 0 : model.playback.position();
         seek.setProgress(duration > 0 ? (int)Math.min(1000,position * 1000 / duration) : 0);
         LinearLayout times = row(); times.setPadding(dp(4),0,dp(4),0); elapsed = singleLine(time(position),12,MUTED,false); remaining = singleLine(time(duration),12,MUTED,false);
-        times.addView(elapsed,new LinearLayout.LayoutParams(0,-2,1)); times.addView(remaining); content.addView(times); gap(content,20);
+        times.addView(elapsed,new LinearLayout.LayoutParams(0,-2,1)); times.addView(remaining); content.addView(times); gap(content,12);
         LinearLayout controls = row(); controls.setId(R.id.playback_controls); controls.setGravity(Gravity.CENTER);
         ImageButton down = thumbButton(model.track,false,true), up = thumbButton(model.track,true,true); down.setId(R.id.thumb_down); up.setId(R.id.thumb_up);
         ImageButton replay = icon(R.drawable.ic_replay,"Replay",false,v -> { if (model.playback != null) model.playback.seek(0); }); replay.setId(R.id.replay); replay.setEnabled(model.track != null);
@@ -428,7 +430,7 @@ public final class MainActivity extends Activity {
             controls.addView(control,new LinearLayout.LayoutParams(dp(size),dp(size)));
             if (control != up) controls.addView(new View(this),new LinearLayout.LayoutParams(0,1,1));
         }
-        thumbControls.add(new ThumbControls(model.track,up,down)); content.addView(controls); gap(content,8);
+        thumbControls.add(new ThumbControls(model.track,up,down)); content.addView(controls);
     }
     private void showSongDetails() {
         if (model.track == null) return;
