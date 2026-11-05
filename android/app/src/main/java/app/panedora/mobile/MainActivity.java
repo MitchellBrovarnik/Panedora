@@ -25,7 +25,6 @@ import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
-import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.TextView;
@@ -57,7 +56,6 @@ public final class MainActivity extends Activity {
     private View currentRoot;
     private SeekBar seek;
     private TextView elapsed, remaining, selectedStationStatus;
-    private ProgressBar compactProgress;
     private boolean scrubbing, loginVisible;
     private android.window.OnBackInvokedCallback backCallback;
     private EditText email, password;
@@ -211,7 +209,7 @@ public final class MainActivity extends Activity {
             (page != 2 || (renderedHistorySize == model.history.size() && renderedHistoryFirst == first))) {
             updateControls(); return;
         }
-        rememberScroll(); loginVisible = false; seek = null; elapsed = remaining = selectedStationStatus = shuffleLabel = null; compactProgress = null;
+        rememberScroll(); loginVisible = false; seek = null; elapsed = remaining = selectedStationStatus = shuffleLabel = null;
         playControl = compactPlayControl = refreshControl = null; shuffleControl = null; thumbControls.clear();
         int previousY = scrollPositions[page];
         LinearLayout root = root();
@@ -245,8 +243,7 @@ public final class MainActivity extends Activity {
             back.setId(R.id.nav_stations); toolbarIcon(header,back);
             if (page == 1) {
                 LinearLayout copy = column(); copy.setGravity(Gravity.CENTER);
-                TextView caption = text("PLAYING FROM",10,MUTED,true); caption.setLetterSpacing(.14f); copy.addView(caption);
-                TextView title = singleLine(model.station == null ? "Your stations" : model.station.name,14,TEXT,true); title.setGravity(Gravity.CENTER); copy.addView(title);
+                TextView title = singleLine(model.station == null ? "Your stations" : model.station.name,16,TEXT,true); title.setGravity(Gravity.CENTER); copy.addView(title);
                 header.addView(copy,new LinearLayout.LayoutParams(0,-2,1));
                 ImageButton history = icon(R.drawable.ic_history,"History",false,v -> openPage(2)); history.setId(R.id.nav_history); toolbarIcon(header,history);
             } else {
@@ -285,7 +282,6 @@ public final class MainActivity extends Activity {
         long position = model.playback.position(), duration = model.playback.duration();
         int progress = duration > 0 ? (int)Math.min(1000,position * 1000 / duration) : 0;
         if (seek != null) seek.setProgress(progress);
-        if (compactProgress != null) compactProgress.setProgress(progress);
         if (elapsed != null) elapsed.setText(model.loading ? "Buffering…" : time(position));
         if (remaining != null) remaining.setText(time(duration));
     }
@@ -313,7 +309,7 @@ public final class MainActivity extends Activity {
         content.addView(notice); gap(content,16);
     }
     private void renderLogin() {
-        seek = null; elapsed = remaining = null; compactProgress = null;
+        seek = null; elapsed = remaining = null;
         if (!loginVisible) {
             loginVisible = true;
             LinearLayout root = root(); ScrollView holder = new ScrollView(this); holder.setFillViewport(true);
@@ -448,9 +444,7 @@ public final class MainActivity extends Activity {
         compactPlayControl = icon(R.drawable.ic_play,"Play",false,v -> { if (model.playback != null) model.playback.toggle(); }); compactPlayControl.setId(R.id.compact_play_pause); toolbarIcon(strip,compactPlayControl);
         ImageButton next = icon(R.drawable.ic_next,"Next song",false,v -> { if (model.playback != null) model.playback.next(); }); next.setId(R.id.compact_next); toolbarIcon(strip,next);
         strip.setBackground(new RippleDrawable(ColorStateList.valueOf(0x18ffffff),null,rounded(android.graphics.Color.WHITE,16)));
-        strip.setContentDescription("Open now playing: " + model.track.title + ", " + model.track.artist); strip.setFocusable(true); strip.setOnClickListener(v -> openPage(1)); card.addView(strip);
-        compactProgress = new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal); compactProgress.setMax(1000); compactProgress.setProgressTintList(ColorStateList.valueOf(ACCENT)); compactProgress.setProgressBackgroundTintList(ColorStateList.valueOf(0xff3e334e));
-        compactProgress.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO); card.addView(compactProgress,new LinearLayout.LayoutParams(-1,dp(2))); return card;
+        strip.setContentDescription("Open now playing: " + model.track.title + ", " + model.track.artist); strip.setFocusable(true); strip.setOnClickListener(v -> openPage(1)); card.addView(strip); return card;
     }
     private void renderHistory(LinearLayout content) {
         content.addView(text("Recently played",28,TEXT,true)); gap(content,8);
