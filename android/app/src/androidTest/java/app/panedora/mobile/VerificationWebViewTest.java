@@ -8,6 +8,7 @@ import android.webkit.WebChromeClient;
 import android.webkit.CookieManager;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
+import android.webkit.WebResourceError;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import androidx.test.core.app.ApplicationProvider;
@@ -38,6 +39,8 @@ public class VerificationWebViewTest {
     private ActivityScenario<MainActivity> scenario;
     private volatile boolean silent;
     private final AtomicReference<String> consoleError = new AtomicReference<>("");
+    private final AtomicReference<String> pageError = new AtomicReference<>("");
+    private final java.util.List<String> requests = new java.util.concurrent.CopyOnWriteArrayList<>();
     private final AtomicInteger primary = new AtomicInteger(), alternate = new AtomicInteger();
     private static void ui(Runnable task) { InstrumentationRegistry.getInstrumentation().runOnMainSync(task); }
     private static WebResourceResponse response(int code,String body) {
@@ -64,6 +67,10 @@ public class VerificationWebViewTest {
             web.setWebViewClient(new WebViewClient() {
                 @Override public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request) {
                     String url = request.getUrl().toString();
+                    String scheme = request.getUrl().getScheme();
+                    requests.add((request.isForMainFrame() ? "main:" : "sub:") + ("data".equals(scheme) ? "data" : url));
+                    // Inline documents are local data, not a network fixture.
+                    if ("data".equals(scheme) || "about".equals(scheme)) return null;
                     if (url.startsWith("https://www.pandora.com/Fixture/captcha")) { primary.incrementAndGet(); return response(silent ? 200 : 404,""); }
                     if (url.startsWith("https://captcha.px-cloud.net/PXFixture/captcha.js")) {
                         alternate.incrementAndGet();
@@ -78,6 +85,9 @@ public class VerificationWebViewTest {
                             """);
                     }
                     return response(404,""); // The test must never access Pandora or any external service.
+                }
+                @Override public void onReceivedError(WebView view,WebResourceRequest request,WebResourceError error) {
+                    pageError.set(error.getErrorCode() + ":" + error.getDescription());
                 }
             });
             dialog.setContentView(web,new ViewGroup.LayoutParams(-1,-1)); dialog.show();
@@ -99,8 +109,8 @@ public class VerificationWebViewTest {
             if (evaluate(VerificationPage.stateScript("fixture-page")).equals(JSONObject.quote(expected))) return;
             Thread.sleep(100);
         }
-        fail("Verification never reached " + expected + ": " + evaluate("JSON.stringify({origin:window.origin,url:location.href,ready:document.readyState,page:document.documentElement.dataset.panedoraPage,state:document.documentElement.dataset.panedoraVerification})") +
-            "; primary=" + primary.get() + "; alternate=" + alternate.get() + "; console=" + consoleError.get());
+        fail("Verification never reached " + expected + ": " + evaluate("JSON.stringify({origin:window.origin,url:location.href,ready:document.readyState,page:document.documentElement.dataset.panedoraPage,state:document.documentElement.dataset.panedoraVerification,body:document.body?.innerText.slice(0,350)})") +
+            "; primary=" + primary.get() + "; alternate=" + alternate.get() + "; console=" + consoleError.get() + "; error=" + pageError.get() + "; requests=" + requests);
     }
     private void load(int timeout) throws Exception {
         JSONObject challenge = new JSONObject("{\"errorCode\":1215,\"appId\":\"PXFixture\",\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"jsClientSrc\":\"/Fixture/init.js\",\"hostUrl\":\"/Fixture/xhr\",\"blockScript\":\"/Fixture/captcha\",\"altBlockScript\":\"https://captcha.px-cloud.net/PXFixture/captcha.js\"}");
