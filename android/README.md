@@ -3,11 +3,13 @@
 A separate native Android prototype. The desktop app and website are unchanged.
 
 This build focuses on Pandora sign-in, stations, history, rating/undo, seeking, and
-continuous playback through Android Media3. The Stations / Now Playing / Settings
+continuous playback through Android Media3. The Stations / Playing / History / Settings
 layout is made for touch and uses Panedora's dark purple palette.
 
 The player, playlist refill, audio focus, and media notification live in a
-`MediaSessionService`, so closing the screen does not stop the queue. The phone
+`MediaSessionService`, so switching apps or locking the phone does not stop the
+queue. Removing Panedora's card from Recents stops playback and the media service,
+including pending playlist/resume requests, without signing out. The phone
 talks directly to Pandora using the desktop client's REST payloads. Credentials
 are encrypted with Android Keystore; backup and cleartext networking are disabled.
 Pandora verification is displayed for the user to complete, using the same cookie

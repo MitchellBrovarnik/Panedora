@@ -19,8 +19,11 @@ Requires Android 8 or newer and Pandora Plus or Premium.
 6. Pause/resume with the lock-screen controls, and try headphones/Bluetooth.
    Disconnecting headphones should pause playback.
 7. Try playing Pandora on another device. Panedora should ask before taking over.
-8. Close and reopen Panedora; check that saved sign-in restores your stations.
-   Sign out and reopen to check that the saved login was removed.
+8. While music is playing, remove Panedora's card from Recents. Music and its
+   notification should stop. Also try closing it while a song is buffering or
+   Play is waiting on a connection; a late response must not restart playback.
+   Reopen Panedora; saved sign-in should restore your stations without starting
+   music. Sign out and reopen to check that the saved login was removed.
 
 If something fails, report the visible error, your Android version, whether you
 were on Wi-Fi or cellular, and whether the screen was locked. Do not share your

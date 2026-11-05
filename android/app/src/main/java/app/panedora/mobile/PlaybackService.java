@@ -4,6 +4,7 @@ import android.app.PendingIntent;
 import android.content.Intent;
 import android.net.Uri;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.media3.common.AudioAttributes;
 import androidx.media3.common.C;
 import androidx.media3.common.ForwardingPlayer;
@@ -182,6 +183,14 @@ public final class PlaybackService extends MediaSessionService {
     void clearPlayback() {
         ++generation; pausePlayback(); fetching = false; queue.clear(); seen.clear(); player.stop(); player.clearMediaItems();
         model.track = null; model.station = null; model.playing = false; model.loading = false;
+    }
+    @Override public void onTaskRemoved(@Nullable Intent rootIntent) {
+        model.rememberCurrent();
+        // Invalidate pending playlist/resume callbacks before stopping the player.
+        clearPlayback();
+        // Disconnect bound system controllers so they cannot retain this service.
+        if (session != null) { session.release(); session = null; }
+        pauseAllPlayersAndStopSelf();
     }
     @Override public void onDestroy() {
         destroyed = true; ++generation; ++resumeRevision;

@@ -54,7 +54,7 @@ public class PlaybackSmokeTest {
         Bitmap bitmap = InstrumentationRegistry.getInstrumentation().getUiAutomation().takeScreenshot();
         try (var out = new FileOutputStream(new File(directory,name + ".png"))) { bitmap.compress(Bitmap.CompressFormat.PNG,100,out); }
     }
-    private static String silentWav(Context context) throws Exception {
+    static String silentWav(Context context) throws Exception {
         int bytes = 8000 * 2 * 3;
         ByteBuffer buffer = ByteBuffer.allocate(44 + bytes).order(ByteOrder.LITTLE_ENDIAN);
         buffer.put("RIFF".getBytes()).putInt(36 + bytes).put("WAVEfmt ".getBytes()).putInt(16).putShort((short)1).putShort((short)1);
@@ -63,7 +63,7 @@ public class PlaybackSmokeTest {
         try (var out = new FileOutputStream(file)) { out.write(buffer.array()); }
         return Uri.fromFile(file).toString();
     }
-    static final class FakePandora implements PandoraGateway {
+    static class FakePandora implements PandoraGateway {
         final AtomicInteger fragments = new AtomicInteger();
         final List<String> started = new CopyOnWriteArrayList<>();
         final List<String> feedback = new CopyOnWriteArrayList<>();
