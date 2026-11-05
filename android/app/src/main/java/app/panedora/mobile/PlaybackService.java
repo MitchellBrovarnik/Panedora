@@ -109,6 +109,8 @@ public final class PlaybackService extends MediaSessionService {
         boolean wasPlaying = player.getPlayWhenReady();
         PandoraProtocol.Station station = model.station; PandoraProtocol.Track track = model.track;
         player.pause();
+        // Cancelling a pending resume may not emit an ExoPlayer state change.
+        model.changed();
         if (wasPlaying && station != null && track != null) model.io.execute(() -> { try { model.api.paused(station.id, track.token); } catch (Exception ignored) { /* Local pause must always work. */ } });
     }
     void toggle() { if (wantsPlayback()) pausePlayback(); else resume(false); }

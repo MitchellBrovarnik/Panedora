@@ -163,8 +163,8 @@ public final class MainActivity extends Activity {
         int previousY = scroll == null ? 0 : scroll.getScrollY();
         LinearLayout root = root(), header = row(); header.setPadding(dp(20), dp(14), dp(20), dp(12));
         ImageView mark = art("", 32); header.addView(mark);
-        TextView title = text("Panedora", 23, TEXT, true); title.setPadding(dp(10),0,0,0); header.addView(title, new LinearLayout.LayoutParams(0,-2,1));
-        TextView tag = text("ANDROID PREVIEW", 10, MUTED, true); tag.setLetterSpacing(.08f); header.addView(tag); root.addView(header);
+        TextView title = text("Panedora", 23, TEXT, true); title.setPadding(dp(10),0,0,0); title.setSingleLine(true); title.setEllipsize(android.text.TextUtils.TruncateAt.END); header.addView(title, new LinearLayout.LayoutParams(0,-2,1));
+        TextView tag = text("ANDROID PREVIEW", 10, MUTED, true); tag.setLetterSpacing(.08f); tag.setPadding(dp(8),0,0,0); header.addView(tag); root.addView(header);
         scroll = new ScrollView(this); scroll.setId(R.id.page_scroll); scroll.setFillViewport(true);
         LinearLayout content = column(); content.setPadding(dp(20), dp(12), dp(20), dp(20)); scroll.addView(content);
         root.addView(scroll, new LinearLayout.LayoutParams(-1,0,1));

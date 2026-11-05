@@ -1,12 +1,18 @@
 package app.panedora.mobile;
 
 import android.content.Context;
+import android.app.Dialog;
+import android.view.ViewGroup;
+import android.webkit.ConsoleMessage;
+import android.webkit.WebChromeClient;
 import android.webkit.CookieManager;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import androidx.test.core.app.ApplicationProvider;
+import androidx.test.core.app.ActivityScenario;
+import androidx.media3.common.util.UnstableApi;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import org.json.JSONObject;
@@ -25,9 +31,13 @@ import static org.junit.Assert.*;
 
 /** Only local provider fixtures are used; no live CAPTCHA is automated. */
 @RunWith(AndroidJUnit4.class)
+@UnstableApi
 public class VerificationWebViewTest {
     private WebView web;
-    private boolean silent;
+    private Dialog dialog;
+    private ActivityScenario<MainActivity> scenario;
+    private volatile boolean silent;
+    private final AtomicReference<String> consoleError = new AtomicReference<>("");
     private final AtomicInteger primary = new AtomicInteger(), alternate = new AtomicInteger();
     private static void ui(Runnable task) { InstrumentationRegistry.getInstrumentation().runOnMainSync(task); }
     private static WebResourceResponse response(int code,String body) {
@@ -36,10 +46,21 @@ public class VerificationWebViewTest {
     }
     @Before public void createBrowser() {
         Context context = ApplicationProvider.getApplicationContext();
-        ui(() -> {
-            web = new WebView(context); web.getSettings().setJavaScriptEnabled(true); web.getSettings().setDomStorageEnabled(true);
-            web.getSettings().setAllowFileAccess(false); web.getSettings().setAllowContentAccess(false); web.layout(0,0,720,1280);
+        ui(() -> { AppModel model = AppModel.get(context); model.credentials.clear(); model.signedIn = false; });
+        scenario = ActivityScenario.launch(MainActivity.class);
+        scenario.onActivity(activity -> {
+            // A visible window keeps WebView's document and layout lifecycle active,
+            // just as VerificationActivity does on a phone.
+            dialog = new Dialog(activity); web = new WebView(activity);
+            web.getSettings().setJavaScriptEnabled(true); web.getSettings().setDomStorageEnabled(true);
+            web.getSettings().setAllowFileAccess(false); web.getSettings().setAllowContentAccess(false);
             CookieManager.getInstance().setAcceptCookie(true); CookieManager.getInstance().setAcceptThirdPartyCookies(web,true);
+            web.setWebChromeClient(new WebChromeClient() {
+                @Override public boolean onConsoleMessage(ConsoleMessage message) {
+                    if (message.messageLevel() == ConsoleMessage.MessageLevel.ERROR) consoleError.set(message.message());
+                    return true;
+                }
+            });
             web.setWebViewClient(new WebViewClient() {
                 @Override public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request) {
                     String url = request.getUrl().toString();
@@ -59,9 +80,14 @@ public class VerificationWebViewTest {
                     return response(404,""); // The test must never access Pandora or any external service.
                 }
             });
+            dialog.setContentView(web,new ViewGroup.LayoutParams(-1,-1)); dialog.show();
+            dialog.getWindow().setLayout(-1,-1);
         });
     }
-    @After public void closeBrowser() { ui(() -> { if (web != null) { web.stopLoading(); web.destroy(); } }); }
+    @After public void closeBrowser() {
+        ui(() -> { if (dialog != null) dialog.dismiss(); if (web != null) { web.stopLoading(); web.destroy(); } });
+        if (scenario != null) scenario.close();
+    }
     private String evaluate(String script) throws Exception {
         AtomicReference<String> result = new AtomicReference<>(); CountDownLatch done = new CountDownLatch(1);
         ui(() -> web.evaluateJavascript(script,value -> { result.set(value); done.countDown(); }));
@@ -73,7 +99,8 @@ public class VerificationWebViewTest {
             if (evaluate(VerificationPage.stateScript("fixture-page")).equals(JSONObject.quote(expected))) return;
             Thread.sleep(100);
         }
-        fail("Verification never reached " + expected);
+        fail("Verification never reached " + expected + ": " + evaluate("JSON.stringify({origin:window.origin,url:location.href,ready:document.readyState,page:document.documentElement.dataset.panedoraPage,state:document.documentElement.dataset.panedoraVerification})") +
+            "; primary=" + primary.get() + "; alternate=" + alternate.get() + "; console=" + consoleError.get());
     }
     private void load(int timeout) throws Exception {
         JSONObject challenge = new JSONObject("{\"errorCode\":1215,\"appId\":\"PXFixture\",\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"jsClientSrc\":\"/Fixture/init.js\",\"hostUrl\":\"/Fixture/xhr\",\"blockScript\":\"/Fixture/captcha\",\"altBlockScript\":\"https://captcha.px-cloud.net/PXFixture/captcha.js\"}");
