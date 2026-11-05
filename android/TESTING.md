@@ -9,6 +9,13 @@ Requires Android 8 or newer and Pandora Plus or Premium.
 3. Sign in to your Pandora account. If a verification prompt appears, tap
    **Verify with Pandora** and complete Pandora's check.
 4. Choose a station. Check that the song, artwork, seeking, thumbs, and Next work.
+   Now Playing should show one row of playback icons and no bottom navigation or
+   duplicate player. Collapse it with the top-left chevron to browse stations.
+   The compact player should pause, resume, skip, and reopen Now Playing. History
+   and Settings are in the top toolbar. Back should return to the previous screen,
+   including after rotating or reopening the screen. Tap the song title for album
+   details. Try a long song/station name and landscape orientation; controls should
+   stay readable and reachable by scrolling in short windows.
    A thumbs-down on the current song should save to Pandora and skip that song.
    Tap an active thumb again to remove the rating. Check the change in Pandora.
    Play/pause should keep the cover, controls, and scroll position still.

@@ -4,7 +4,12 @@ A separate native Android prototype. The desktop app and website are unchanged.
 
 This build focuses on Pandora sign-in, stations/shuffle, history, rating/undo, seeking, and
 continuous playback through Android Media3. The Stations / Playing / History / Settings
-layout is made for touch and uses Panedora's dark purple palette.
+layout is made for touch and uses Panedora's dark purple palette. Stations is the
+home screen, with History and Settings in the top toolbar. A compact player stays
+available while browsing; tapping it opens a dedicated Now Playing screen with
+larger artwork and a single row of playback icons. There is no persistent bottom
+navigation bar. Back/collapse returns to the previous screen and retains station
+search and scroll position. Tap the song title for album details.
 
 The player, playlist refill, audio focus, and media notification live in a
 `MediaSessionService`, so switching apps or locking the phone does not stop the

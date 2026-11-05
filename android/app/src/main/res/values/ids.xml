@@ -1,4 +1,13 @@
 <resources>
+    <item type="id" name="top_toolbar" />
+    <item type="id" name="playback_controls" />
+    <item type="id" name="compact_player" />
+    <item type="id" name="compact_play_pause" />
+    <item type="id" name="compact_next" />
+    <item type="id" name="next_song" />
+    <item type="id" name="replay" />
+    <item type="id" name="station_search" />
+    <item type="id" name="refresh_stations" />
     <item type="id" name="login_email" />
     <item type="id" name="login_password" />
     <item type="id" name="login_button" />

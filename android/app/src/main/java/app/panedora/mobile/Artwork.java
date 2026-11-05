@@ -26,7 +26,8 @@ import java.util.Map;
 final class Artwork {
     static int playerSizeDp(Context context) {
         var metrics = context.getResources().getDisplayMetrics();
-        return Math.max(160,Math.min(320,Math.min(Math.round(metrics.widthPixels / metrics.density) - 48,Math.round(metrics.heightPixels / metrics.density) - 620)));
+        int textSpace = Math.round(480 + Math.max(0,context.getResources().getConfiguration().fontScale - 1) * 120);
+        return Math.max(160,Math.min(360,Math.min(Math.round(metrics.widthPixels / metrics.density) - 48,Math.round(metrics.heightPixels / metrics.density) - textSpace)));
     }
     private static int pixels(Context context,int dp) { return Math.round(dp * context.getResources().getDisplayMetrics().density); }
     private static RequestBuilder<Bitmap> bitmap(RequestManager manager,String source,int size,Priority priority) {
