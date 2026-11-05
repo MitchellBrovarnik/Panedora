@@ -183,6 +183,7 @@ public final class PlaybackService extends MediaSessionService {
         if (choice==null || !choice.available || model.modes.active(modeId)) return;
         boolean needsResume=!player.getPlayWhenReady();
         int request=++generation; ++resumeRevision; ++modesRevision; resuming=false; fetching=false; advanceAfterRefill=false;
+        int approvalRevision=resumeRevision;
         String station=model.station.id;
         model.modeChanging=true; model.modesLoading=false; model.modeError=""; model.message=""; wantPlayback=true;
         // Keep the current audio while confirming the change, but discard the old queued mix.
@@ -210,7 +211,13 @@ public final class PlaybackService extends MediaSessionService {
                     if (!current(request)) return;
                     model.rememberCurrent(); player.pause(); artwork.clear(); queue.clear(); seen.clear(); player.clearMediaItems();
                     model.track=null; model.modes=confirmed; reportedToken="";
-                    append(tracks); model.modeChanging=false; player.prepare(); if (wantPlayback) player.play(); model.changed();
+                    append(tracks); model.modeChanging=false; player.prepare();
+                    if (wantPlayback) {
+                        // A Pause then Play during tuning queued a server pause.
+                        // Approve the latest Play after that pause has completed.
+                        if (approvalRevision!=resumeRevision) resume(false); else player.play();
+                    }
+                    model.changed();
                     if (queue.size()-player.getCurrentMediaItemIndex()<=2) refill();
                 });
             } catch (Exception error) {

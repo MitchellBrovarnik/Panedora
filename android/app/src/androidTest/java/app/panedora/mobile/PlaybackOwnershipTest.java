@@ -52,7 +52,8 @@ public class PlaybackOwnershipTest {
         final ConcurrentHashMap<String,Integer> starts=new ConcurrentHashMap<>();
         final AtomicInteger modeReads=new AtomicInteger(), forced=new AtomicInteger(), foreignPauses=new AtomicInteger();
         final CountDownLatch entered=new CountDownLatch(1), release=new CountDownLatch(1);
-        volatile boolean foreign, active, blockNextResume, rejectForce;
+        final CountDownLatch modeEntered=new CountDownLatch(1), modeRelease=new CountDownLatch(1);
+        volatile boolean foreign, active, blockNextResume, rejectForce, blockMode;
         volatile long mode=2;
         OwnershipPandora(String audio) { super(audio); }
         private PandoraClient.ApiException conflict() throws Exception { return new PandoraClient.ApiException(409,new JSONObject().put("errorString","STREAM_VIOLATION"),PandoraClient.ORIGIN); }
@@ -68,7 +69,7 @@ public class PlaybackOwnershipTest {
         }
         @Override public void started(String station,String token) throws Exception {
             events.add("start:"+token);
-            if (starts.merge(token,1,Integer::sum)>1 || foreign) throw conflict();
+            if (starts.merge(token,1,Integer::sum)>1 || foreign || !active) throw conflict();
         }
         @Override public PandoraProtocol.Modes stationModes(String station) throws Exception {
             modeReads.incrementAndGet(); if (foreign) throw conflict();
@@ -78,6 +79,7 @@ public class PlaybackOwnershipTest {
         }
         @Override public PandoraProtocol.Modes setStationMode(String station,long selected,BooleanSupplier current) throws Exception {
             if (!current.getAsBoolean()) throw new java.util.concurrent.CancellationException();
+            if (blockMode) { modeEntered.countDown(); if (!modeRelease.await(15,TimeUnit.SECONDS)) throw new Exception("Mode fixture stalled"); }
             mode=selected; return stationModes(station);
         }
         @Override public List<PandoraProtocol.Track> playlist(String station,boolean first) {
@@ -96,7 +98,7 @@ public class PlaybackOwnershipTest {
         await(() -> model.playing && model.track!=null); drain();
     }
     @After public void stop() throws Exception {
-        if (fake!=null) fake.release.countDown();
+        if (fake!=null) { fake.release.countDown(); fake.modeRelease.countDown(); }
         if (model!=null) { ui(model::logout); context.stopService(new Intent(context,PlaybackService.class)); drain(); }
     }
     @Test public void pauseResumeAndPlayingModeChangesDoNotReclaimOrRestartTheSameTrack() throws Exception {
@@ -172,6 +174,17 @@ public class PlaybackOwnershipTest {
             assertFalse(fake.active);
             ui(() -> model.playback.resume(false)); await(() -> model.playing); drain();
             assertFalse(model.takeover); assertEquals(0,fake.forced.get());
+        }
+    }
+    @Test public void pauseThenPlayDuringTuningApprovesTheNewMixAfterItsQueuedPause() throws Exception {
+        prepare();
+        try (ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)) {
+            start(); ui(() -> model.playback.loadModes(false)); await(() -> model.modes!=null);
+            fake.blockMode=true; ui(() -> model.playback.changeMode(0)); assertTrue(fake.modeEntered.await(5,TimeUnit.SECONDS));
+            ui(() -> { model.playback.pausePlayback(); model.playback.resume(false); }); fake.modeRelease.countDown();
+            await(() -> model.playing && !model.modeChanging && model.modes.active(0)); drain();
+            assertTrue(fake.active); assertFalse(model.takeover); assertEquals(0,fake.forced.get());
+            assertEquals("The latest Play follows the queued Pause",2,fake.events.stream().filter(e -> e.equals("resume:false")).count());
         }
     }
 }
