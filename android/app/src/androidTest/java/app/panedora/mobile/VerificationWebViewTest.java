@@ -119,7 +119,7 @@ public class VerificationWebViewTest {
     }
     @Test public void fallbackRendersAndMobileCompletionUsesTheSharedCookieJar() throws Exception {
         load(2000); state("ready"); assertEquals(1,primary.get()); assertEquals(1,alternate.get());
-        assertEquals(JSONObject.quote(VerificationPage.ORIGIN),evaluate("window.origin"));
+        assertEquals(VerificationPage.ORIGIN,new org.json.JSONTokener(evaluate("window.origin")).nextValue());
         evaluate("window._pxOnMobileCaptchaSuccess(false)"); state("ready");
         evaluate("document.getElementById('fixture-complete').click()"); state("complete");
         AtomicReference<String> cookies = new AtomicReference<>(); ui(() -> { CookieManager.getInstance().flush(); cookies.set(CookieManager.getInstance().getCookie(VerificationPage.ORIGIN)); });
