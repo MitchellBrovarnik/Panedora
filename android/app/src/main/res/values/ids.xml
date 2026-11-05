@@ -10,4 +10,13 @@
     <item type="id" name="thumb_down" />
     <item type="id" name="current_artwork" />
     <item type="id" name="compact_artwork" />
+    <item type="id" name="nav_stations" />
+    <item type="id" name="nav_playing" />
+    <item type="id" name="nav_history" />
+    <item type="id" name="nav_settings" />
+    <item type="id" name="verification_title" />
+    <item type="id" name="verification_web" />
+    <item type="id" name="verification_status" />
+    <item type="id" name="verification_reload" />
+    <item type="id" name="page_scroll" />
 </resources>

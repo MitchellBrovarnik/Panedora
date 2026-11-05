@@ -75,7 +75,7 @@ public final class PlaybackService extends MediaSessionService {
     private void load(PandoraProtocol.Station station, boolean takeOver) {
         int request = ++generation; ++resumeRevision;
         pausePlayback(); wantPlayback = true; queue.clear(); seen.clear(); player.clearMediaItems(); fetching = true;
-        model.station = station; model.track = null; model.loading = true; model.message = ""; model.takeover = false; reportedToken = ""; model.changed();
+        model.rememberCurrent(); model.station = station; model.track = null; model.loading = true; model.message = ""; model.takeover = false; reportedToken = ""; model.changed();
         model.io.execute(() -> {
             try {
                 model.api.resume(takeOver);
@@ -90,6 +90,7 @@ public final class PlaybackService extends MediaSessionService {
     }
     void resume(boolean takeOver) {
         if (destroyed || !model.signedIn || model.station == null || resuming) return;
+        if (fetching && player.getMediaItemCount() == 0) { wantPlayback = true; model.changed(); return; }
         if (player.getMediaItemCount() == 0 || player.getPlayerError() != null) { load(model.station, takeOver); return; }
         int request = generation, revision = ++resumeRevision; resuming = true; wantPlayback = true; model.takeover = false; model.message = ""; model.changed();
         model.io.execute(() -> {
@@ -110,7 +111,7 @@ public final class PlaybackService extends MediaSessionService {
         player.pause();
         if (wasPlaying && station != null && track != null) model.io.execute(() -> { try { model.api.paused(station.id, track.token); } catch (Exception ignored) { /* Local pause must always work. */ } });
     }
-    void toggle() { if (player.getPlayWhenReady() || resuming) pausePlayback(); else resume(false); }
+    void toggle() { if (wantsPlayback()) pausePlayback(); else resume(false); }
     void next() {
         if (model.takeover || fetching && queue.isEmpty()) return;
         if (player.hasNextMediaItem()) player.seekToNextMediaItem(); else refill();
@@ -118,12 +119,13 @@ public final class PlaybackService extends MediaSessionService {
     void seek(long position) { player.seekTo(Math.max(0, position)); }
     long position() { return player.getCurrentPosition(); }
     long duration() { return player.getDuration() == C.TIME_UNSET ? (model.track == null ? 0 : model.track.seconds * 1000L) : player.getDuration(); }
-    boolean readyToPlay() { return player.getPlayWhenReady(); }
+    boolean wantsPlayback() { return player.getPlayWhenReady() || resuming || (fetching && wantPlayback); }
     private boolean current(int request) { return !destroyed && request == generation && model.signedIn; }
     private void append(List<PandoraProtocol.Track> tracks) {
         List<MediaItem> items = new ArrayList<>();
         for (PandoraProtocol.Track track : tracks) {
             if (!seen.add(track.token)) continue;
+            track.stationId = model.station.id;
             queue.add(track);
             MediaMetadata.Builder metadata = new MediaMetadata.Builder().setTitle(track.title).setArtist(track.artist).setAlbumTitle(track.album);
             if (!track.art.isEmpty()) metadata.setArtworkUri(Uri.parse(track.art));
@@ -136,8 +138,7 @@ public final class PlaybackService extends MediaSessionService {
         if (index < 0 || index >= queue.size()) return;
         PandoraProtocol.Track next = queue.get(index);
         if (model.track != null && model.track != next) {
-            model.history.add(0, model.track);
-            if (model.history.size() > 20) model.history.remove(20);
+            model.rememberCurrent();
         }
         model.track = next; reportedToken = ""; model.changed();
         if (player.isPlaying()) reportStarted();

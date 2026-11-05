@@ -36,4 +36,11 @@ public class PandoraProtocolTest {
         assertEquals("", PandoraProtocol.https("javascript:alert(1)"));
         assertEquals("", PandoraProtocol.artwork(null));
     }
+    @Test public void undoLookupRequiresTheSameRecordingAndStation() throws Exception {
+        var track = new PandoraProtocol.Track("token","Same title","Artist","Album","","",180,1);
+        track.stationId = "station-a"; track.musicId = "S123";
+        JSONArray feedback = new JSONArray("[{\"stationId\":\"station-b\",\"musicId\":\"S123\",\"feedbackId\":\"wrong-station\"},{\"stationId\":\"station-a\",\"musicId\":\"S456\",\"songTitle\":\"Same title\",\"feedbackId\":\"wrong-song\"},{\"stationId\":\"station-a\",\"musicId\":\"S123\",\"feedbackId\":\"correct\"}]");
+        assertEquals("correct",PandoraProtocol.matchingFeedback(feedback,track));
+        track.musicId = ""; assertEquals("",PandoraProtocol.matchingFeedback(feedback,track));
+    }
 }

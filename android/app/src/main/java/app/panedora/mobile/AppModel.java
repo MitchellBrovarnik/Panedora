@@ -87,20 +87,36 @@ final class AppModel {
         if (retry != null) retry.run();
     }
     void rate(boolean positive) {
-        PandoraProtocol.Track selected = track;
-        if (selected == null || feedbackBusy || selected.rating == (positive ? 1 : -1)) return;
+        rateTrack(track,positive,true);
+    }
+    void rateTrack(PandoraProtocol.Track selected, boolean positive, boolean skipCurrentOnDown) {
+        if (selected == null || feedbackBusy || !signedIn) return;
+        boolean undo = selected.rating == (positive ? 1 : -1);
         int generation = authGeneration; feedbackBusy = true; message = ""; changed();
         io.execute(() -> {
             try {
-                api.feedback(selected.token, positive);
+                String id;
+                if (undo) {
+                    id = api.findFeedback(selected);
+                    if (id == null || id.isEmpty()) throw new Exception("Pandora did not provide the ID needed to remove this saved rating. Please try again.");
+                    api.deleteFeedback(id); id = "";
+                } else id = api.feedback(selected.token, positive);
+                String savedId = id == null ? "" : id;
                 main.post(() -> {
                     if (generation != authGeneration) return;
-                    feedbackBusy = false; selected.rating = positive ? 1 : -1;
-                    if (!positive && track == selected && playback != null) playback.next();
+                    feedbackBusy = false; selected.rating = undo ? 0 : (positive ? 1 : -1); selected.feedbackId = savedId;
+                    if (!undo && !positive && skipCurrentOnDown && track == selected && playback != null) playback.next();
                     changed();
                 });
-            } catch (Exception e) { main.post(() -> { if (generation == authGeneration) { feedbackBusy = false; fail(e, () -> { if (track == selected) rate(positive); }); } }); }
+            } catch (Exception e) { main.post(() -> { if (generation == authGeneration) { feedbackBusy = false; fail(e, () -> {
+                if (track == selected || history.contains(selected)) rateTrack(selected,positive,skipCurrentOnDown);
+            }); } }); }
         });
+    }
+    void rememberCurrent() {
+        if (track == null) return;
+        if (history.isEmpty() || history.get(0) != track) history.add(0,track);
+        if (history.size() > 100) history.remove(history.size()-1);
     }
     void logout() {
         ++authGeneration;

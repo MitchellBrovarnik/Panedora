@@ -67,6 +67,7 @@ public class PlaybackSmokeTest {
         final AtomicInteger fragments = new AtomicInteger();
         final List<String> started = new CopyOnWriteArrayList<>();
         final List<String> feedback = new CopyOnWriteArrayList<>();
+        final List<String> removed = new CopyOnWriteArrayList<>();
         final String audio;
         FakePandora(String audio) { this.audio = audio; }
         @Override public void login(String email,String password) {}
@@ -77,7 +78,8 @@ public class PlaybackSmokeTest {
             return tracks;
         }
         @Override public void resume(boolean takeOver) {}
-        @Override public void feedback(String token,boolean positive) { feedback.add(token + ":" + positive); }
+        @Override public String feedback(String token,boolean positive) { feedback.add(token + ":" + positive); return "feedback-" + token; }
+        @Override public void deleteFeedback(String id) { removed.add(id); }
         @Override public void started(String station,String token) { started.add(token); }
         @Override public void paused(String station,String token) {}
         @Override public void clear() {}

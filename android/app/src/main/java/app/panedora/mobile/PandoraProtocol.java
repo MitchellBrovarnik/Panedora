@@ -20,6 +20,7 @@ final class PandoraProtocol {
         final String token, title, artist, album, audio, art;
         final int seconds;
         int rating;
+        String feedbackId = "", stationId = "", musicId = "", pandoraId = "";
         Track(String token, String title, String artist, String album, String audio, String art, int seconds, int rating) {
             this.token = token; this.title = title; this.artist = artist; this.album = album;
             this.audio = audio; this.art = art; this.seconds = seconds; this.rating = rating;
@@ -93,10 +94,24 @@ final class PandoraProtocol {
             if (type.contains("advert") || type.startsWith("ad") || type.contains("simstream") || t.optBoolean("isAd")) continue;
             String audio = https(t.optString("audioURL"));
             if (audio.isEmpty() || t.optString("trackToken").isEmpty()) continue;
-            result.add(new Track(t.optString("trackToken"), t.optString("songTitle", "Unknown song"),
+            Track track = new Track(t.optString("trackToken"), t.optString("songTitle", "Unknown song"),
                 t.optString("artistName", "Unknown artist"), t.optString("albumTitle"), audio,
-                artwork(t.optJSONArray("albumArt")), t.optInt("trackLength"), t.optInt("rating", t.optInt("songRating"))));
+                artwork(t.optJSONArray("albumArt")), t.optInt("trackLength"), t.optInt("rating", t.optInt("songRating")));
+            track.feedbackId = t.isNull("feedbackId") ? "" : t.optString("feedbackId");
+            track.stationId = t.isNull("stationId") ? "" : t.optString("stationId");
+            track.musicId = t.isNull("musicId") ? "" : t.optString("musicId"); track.pandoraId = t.isNull("pandoraId") ? "" : t.optString("pandoraId");
+            result.add(track);
         }
         return result;
+    }
+    static String matchingFeedback(JSONArray entries, Track track) {
+        for (int i = 0; entries != null && i < entries.length(); i++) {
+            JSONObject item = entries.optJSONObject(i); if (item == null) continue;
+            if (!item.isNull("stationId") && !item.optString("stationId").equals(track.stationId)) continue;
+            boolean same = (!track.musicId.isEmpty() && track.musicId.equals(item.optString("musicId"))) ||
+                (!track.pandoraId.isEmpty() && track.pandoraId.equals(item.optString("pandoraId")));
+            if (same && !item.isNull("feedbackId")) return item.optString("feedbackId");
+        }
+        return "";
     }
 }

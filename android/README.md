@@ -2,7 +2,7 @@
 
 A separate native Android prototype. The desktop app and website are unchanged.
 
-This build focuses on Pandora sign-in, stations, current-song thumbs, seeking, and
+This build focuses on Pandora sign-in, stations, history, rating/undo, seeking, and
 continuous playback through Android Media3. The Stations / Now Playing / Settings
 layout is made for touch and uses Panedora's dark purple palette.
 
@@ -35,7 +35,10 @@ later prototype may require uninstalling the previous prototype before installin
 Real Pandora authentication, mobile verification, and long screen-off listening
 still require testing with a paid account on a physical phone. See [TESTING.md](TESTING.md).
 
-Not included yet: desktop mini-players, Discord, themes/effects, lyrics, history
-ratings, station creation/removal/tuning, downloaded music, or free accounts.
+Not included yet: desktop mini-players, Discord, themes/effects, lyrics,
+station creation/removal/tuning, downloaded music, or free accounts. History keeps
+the last 100 songs from this app session. History ratings do not skip the current
+song. Ratings created here retain Pandora's feedback ID for undo; existing ratings
+without an ID are looked up by recording ID and original station before removal.
 No automatic playback restoration after Android kills the process or the phone
 reboots; reopen and choose a station.

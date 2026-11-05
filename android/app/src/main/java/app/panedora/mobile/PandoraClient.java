@@ -4,6 +4,7 @@ import android.content.Context;
 import android.webkit.CookieManager;
 import android.webkit.WebSettings;
 import org.json.JSONObject;
+import org.json.JSONArray;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
@@ -87,7 +88,7 @@ final class PandoraClient implements PandoraGateway {
                 try { response = new JSONObject(buffer.toString(StandardCharsets.UTF_8.name())); }
                 catch (Exception invalid) { throw new Exception("Pandora returned an unreadable response (" + status + "). Please try again."); }
             }
-            if (status < 200 || status >= 300 || PandoraProtocol.conflict(response)) throw new ApiException(status, response, url);
+            if (status < 200 || status >= 300 || response.optInt("errorCode") != 0 || "fail".equals(response.optString("stat")) || PandoraProtocol.conflict(response)) throw new ApiException(status, response, url);
             return response;
         } finally { connection.disconnect(); }
     }
@@ -101,7 +102,23 @@ final class PandoraClient implements PandoraGateway {
     @Override public List<PandoraProtocol.Station> stations() throws Exception { return PandoraProtocol.stations(request("/v1/station/getStations", PandoraProtocol.body("pageSize", 250, "startIndex", 0))); }
     @Override public List<PandoraProtocol.Track> playlist(String station, boolean first) throws Exception { return PandoraProtocol.tracks(request("/v1/playlist/getFragment", PandoraProtocol.playlistBody(station, first))); }
     @Override public void resume(boolean takeOver) throws Exception { request("/v1/station/playbackResumed", PandoraProtocol.body("forceActive", takeOver)); }
-    @Override public void feedback(String token, boolean positive) throws Exception { request("/v1/station/addFeedback", PandoraProtocol.body("trackToken", token, "isPositive", positive)); }
+    @Override public String feedback(String token, boolean positive) throws Exception {
+        JSONObject result = request("/v1/station/addFeedback", PandoraProtocol.body("trackToken", token, "isPositive", positive));
+        return result.isNull("feedbackId") ? "" : result.optString("feedbackId");
+    }
+    @Override public void deleteFeedback(String id) throws Exception { request("/v1/station/deleteFeedback", PandoraProtocol.body("feedbackId", id)); }
+    @Override public String findFeedback(PandoraProtocol.Track track) throws Exception {
+        if (!track.feedbackId.isEmpty()) return track.feedbackId;
+        if (track.stationId.isEmpty() || (track.musicId.isEmpty() && track.pandoraId.isEmpty())) return "";
+        long deadline = System.currentTimeMillis() + 15000;
+        for (int start = 0; start < 5000 && System.currentTimeMillis() < deadline; start += 100) {
+            JSONObject result = request("/v1/station/getStationFeedback", PandoraProtocol.body("stationId",track.stationId,"positive",track.rating == 1,"pageSize",100,"startIndex",start));
+            JSONArray entries = result.optJSONArray("feedback");
+            String id = PandoraProtocol.matchingFeedback(entries,track); if (!id.isEmpty()) return id;
+            if (entries == null || entries.length() == 0 || start + entries.length() >= result.optInt("total",start + entries.length())) break;
+        }
+        return "";
+    }
     @Override public void started(String station, String token) throws Exception { request("/v1/station/trackStarted", PandoraProtocol.body("stationId", station, "trackToken", token)); }
     @Override public void paused(String station, String token) throws Exception { request("/v1/station/playbackPaused", PandoraProtocol.body("stationId", station, "trackToken", token)); }
     @Override public void clear() { authToken = null; cookies.removeAllCookies(null); cookies.flush(); }

@@ -6,102 +6,109 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.webkit.CookieManager;
+import android.webkit.RenderProcessGoneDetail;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import org.json.JSONObject;
-import java.net.URI;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import java.util.UUID;
 
-/** Shows Pandora's own challenge for the user. Never solves or skips verification. */
+/** Displays the original challenge for the user; completion only retries the server request. */
 @androidx.media3.common.util.UnstableApi
 public final class VerificationActivity extends Activity {
-    private WebView web;
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private boolean injected, finished;
+    private WebView web;
+    private FrameLayout container;
+    private TextView status;
     private AppModel model;
-    private String script;
-    static boolean pandoraUrl(String value) {
-        try { URI uri = new URI(value); return "https".equals(uri.getScheme()) && "www.pandora.com".equals(uri.getHost()) && uri.getUserInfo() == null && (uri.getPort() == -1 || uri.getPort() == 443); }
-        catch (Exception ignored) { return false; }
-    }
-    private static String resource(JSONObject response, String field, String expected) throws Exception {
-        String value = response.getString(field);
-        String absolute = value.startsWith("/") ? PandoraClient.ORIGIN + value : value;
-        if (!pandoraUrl(absolute) || !new URI(absolute).getPath().equals(expected)) throw new Exception("Unexpected Pandora verification address.");
-        return absolute;
-    }
-    static String challengeScript(PandoraClient.ApiException error) throws Exception {
-        JSONObject source = error.details;
-        String appId = source.getString("appId"), uuid = source.getString("uuid");
-        if (!error.verification() || !appId.matches("PX[a-zA-Z0-9]{1,32}") || !uuid.matches("(?i)[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}") || !pandoraUrl(error.blockedUrl)) throw new Exception("Invalid Pandora verification response.");
-        String prefix = "/" + appId.substring(2);
-        JSONObject data = PandoraProtocol.body("appId", appId, "uuid", uuid, "vid", source.optString("vid"),
-            "blockedUrl", error.blockedUrl, "firstPartyEnabled", source.optBoolean("firstPartyEnabled"),
-            "jsClientSrc", resource(source, "jsClientSrc", prefix + "/init.js"),
-            "hostUrl", resource(source, "hostUrl", prefix + "/xhr"),
-            "blockScript", resource(source, "blockScript", prefix + "/captcha"));
-        String alternate = source.optString("altBlockScript");
-        if (!alternate.isEmpty()) {
-            URI uri = new URI(alternate);
-            if (!"https".equals(uri.getScheme()) || !"captcha.px-cloud.net".equals(uri.getHost()) || uri.getUserInfo() != null || !uri.getPath().equals("/" + appId + "/captcha.js")) throw new Exception("Unexpected verification fallback.");
-            data.put("alternate", alternate);
-        }
-        return "(() => { const c = " + data.toString().replace("<", "\\u003c") + ";" + """
-            window._pxMonitorAbr = false; window._pxBlockedUrl = c.blockedUrl;
-            window._pxAppId = c.appId; window._pxJsClientSrc = c.jsClientSrc;
-            window._pxFirstPartyEnabled = c.firstPartyEnabled;
-            window._pxVid = c.vid; window._pxUuid = c.uuid; window._pxHostUrl = c.hostUrl;
-            window._pxOnCaptchaSuccess = valid => { if (valid === true) document.documentElement.dataset.panedoraVerified = 'true'; };
-            document.documentElement.dataset.panedoraVerified = 'false';
-            document.body.innerHTML = '<main style="position:fixed;inset:0;z-index:2147483647;overflow:auto;background:#101016;color:#eeedf3;font:16px system-ui;padding:28px 12px;text-align:center"><h2>Verify with Pandora</h2><p>Complete the check below to continue signing in.</p><div id="px-captcha"></div><p id="load-error" hidden>The check could not load. Close this screen and try again.</p></main>';
-            const load = (url, retry) => {
-                const s = document.createElement('script'); s.src = url;
-                s.onerror = () => { if (retry && c.alternate) load(c.alternate, false); else document.getElementById('load-error').hidden = false; };
-                document.head.appendChild(s);
-            };
-            load(c.blockScript, true);
-            })();
-            """;
-    }
+    private PandoraClient.ApiException challenge;
+    private boolean finished, alternateFirst, widgetReady, loadFailed;
+    private int generation;
+    private String pageId;
+
+    private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
     @Override public void onCreate(Bundle saved) {
-        super.onCreate(saved); model = AppModel.get(this);
-        try { if (model.verification == null) { finish(); return; } script = challengeScript(model.verification); }
-        catch (Exception e) { model.message = e.getMessage(); model.changed(); finish(); return; }
+        super.onCreate(saved); WindowCompat.setDecorFitsSystemWindows(getWindow(),false);
+        model = AppModel.get(this); challenge = model.verification;
+        if (challenge == null) { finish(); return; }
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setBackgroundColor(Color.rgb(16,16,22));
-        root.setPadding(0, 40, 0, 24);
-        TextView title = new TextView(this); title.setText("Pandora verification"); title.setTextColor(Color.WHITE); title.setTextSize(20); title.setPadding(20,16,20,16); root.addView(title);
-        web = new WebView(this); root.addView(web, new LinearLayout.LayoutParams(-1, 0, 1));
-        Button close = new Button(this); close.setText("Cancel verification"); close.setOnClickListener(v -> finish()); root.addView(close);
-        setContentView(root);
-        web.getSettings().setJavaScriptEnabled(true); web.getSettings().setDomStorageEnabled(true);
-        web.getSettings().setAllowFileAccess(false); web.getSettings().setAllowContentAccess(false);
-        web.getSettings().setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        ViewCompat.setOnApplyWindowInsetsListener(root,(view,insets) -> {
+            var padding = insets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.ime());
+            view.setPadding(padding.left,padding.top,padding.right,padding.bottom); return insets;
+        });
+        TextView title = new TextView(this); title.setId(R.id.verification_title);
+        title.setText("Pandora verification"); title.setTextColor(0xffeeedf3); title.setTextSize(20); title.setPadding(dp(20),dp(16),dp(20),dp(12)); root.addView(title);
+        status = new TextView(this); status.setId(R.id.verification_status); status.setTextColor(0xffbdb9cd); status.setTextSize(14);
+        status.setPadding(dp(20),0,dp(20),dp(12)); status.setAccessibilityLiveRegion(android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE); root.addView(status);
+        container = new FrameLayout(this); root.addView(container,new LinearLayout.LayoutParams(-1,0,1));
+        LinearLayout actions = new LinearLayout(this); actions.setPadding(dp(12),dp(8),dp(12),dp(12));
+        Button reload = new Button(this); reload.setText("Reload check"); reload.setAllCaps(false); reload.setId(R.id.verification_reload);
+        reload.setOnClickListener(v -> { alternateFirst = !alternateFirst; loadPage(); });
+        Button cancel = new Button(this); cancel.setText("Cancel"); cancel.setAllCaps(false); cancel.setOnClickListener(v -> finish());
+        actions.addView(reload,new LinearLayout.LayoutParams(0,dp(52),1)); actions.addView(cancel,new LinearLayout.LayoutParams(0,dp(52),1)); root.addView(actions);
+        setContentView(root); ViewCompat.requestApplyInsets(root); loadPage();
+    }
+    private void failed() {
+        if (!finished && !loadFailed) { loadFailed = true; status.setText("Pandora’s check could not load. Tap Reload check to try again."); status.setTextColor(0xfff0b7b7); }
+    }
+    private void loadPage() {
+        int request = ++generation; handler.removeCallbacksAndMessages(null); pageId = UUID.randomUUID().toString(); widgetReady = loadFailed = false;
+        String html;
+        try { html = VerificationPage.html(challenge.status,challenge.details,challenge.blockedUrl,pageId,12000,alternateFirst); }
+        catch (Exception e) { failed(); return; }
+        if (web != null) { container.removeView(web); web.stopLoading(); web.destroy(); }
+        web = new WebView(this); web.setId(R.id.verification_web); container.addView(web,new FrameLayout.LayoutParams(-1,-1)); web.setBackgroundColor(0xff101016);
+        WebSettings settings = web.getSettings(); settings.setJavaScriptEnabled(true); settings.setDomStorageEnabled(true);
+        settings.setAllowFileAccess(false); settings.setAllowContentAccess(false); settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        if (model.api instanceof PandoraClient client) settings.setUserAgentString(client.userAgent);
+        CookieManager.getInstance().setAcceptCookie(true);
+        // HUMAN may render its own cross-site frame. Its cookies remain in the API's shared jar.
+        CookieManager.getInstance().setAcceptThirdPartyCookies(web,true);
         web.setWebViewClient(new WebViewClient() {
-            @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                return request.isForMainFrame() && !pandoraUrl(request.getUrl().toString());
+            @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest resource) {
+                return resource.isForMainFrame() && !VerificationPage.pandoraUrl(resource.getUrl().toString());
             }
-            @Override public void onPageFinished(WebView view, String url) {
-                if (injected || !pandoraUrl(url) || finished) return;
-                injected = true; view.evaluateJavascript(script, ignored -> poll());
+            @Override public void onReceivedError(WebView view,WebResourceRequest resource,WebResourceError error) {
+                if (request == generation && resource.isForMainFrame()) failed();
+            }
+            @Override public boolean onRenderProcessGone(WebView view,RenderProcessGoneDetail detail) {
+                if (web == view) { container.removeView(view); view.destroy(); web = null; failed(); }
+                return true;
             }
         });
-        web.loadUrl(PandoraClient.ORIGIN + "/");
+        status.setText("Loading Pandora’s verification check…"); status.setTextColor(0xffbdb9cd);
+        // A clean document avoids the site's existing sensor/app scripts and CSP.
+        // No credentials, native JavaScript bridge, or automatic challenge interaction.
+        web.loadDataWithBaseURL(VerificationPage.ORIGIN + "/",html,"text/html","UTF-8",VerificationPage.ORIGIN + "/");
+        handler.postDelayed(() -> poll(request),250);
+        handler.postDelayed(() -> { if (!finished && request == generation && !widgetReady) failed(); },30000);
     }
-    private void poll() {
-        if (finished || web == null || !pandoraUrl(web.getUrl())) return;
-        web.evaluateJavascript("document.documentElement.dataset.panedoraVerified === 'true'", result -> {
-            if (finished) return;
-            if ("true".equals(result)) { finished = true; CookieManager.getInstance().flush(); model.verified(); finish(); }
-            else handler.postDelayed(this::poll, 500);
+    private void poll(int request) {
+        if (finished || request != generation || web == null) return;
+        web.evaluateJavascript(VerificationPage.stateScript(pageId),result -> {
+            if (finished || request != generation) return;
+            if ("\"complete\"".equals(result)) {
+                finished = true; CookieManager.getInstance().flush(); model.verified(); finish(); return;
+            }
+            if ("\"failed\"".equals(result)) failed();
+            if ("\"ready\"".equals(result) && (!widgetReady || loadFailed)) {
+                widgetReady = true; loadFailed = false; status.setTextColor(0xffbdb9cd);
+                status.setText("Complete the check below. Sign-in will retry when Pandora accepts it.");
+            }
+            handler.postDelayed(() -> poll(request),250);
         });
     }
     @Override protected void onDestroy() {
-        finished = true; handler.removeCallbacksAndMessages(null);
-        if (web != null) { web.stopLoading(); web.destroy(); web = null; }
+        finished = true; ++generation; handler.removeCallbacksAndMessages(null);
+        if (web != null) { container.removeView(web); web.stopLoading(); web.destroy(); web = null; }
         super.onDestroy();
     }
 }

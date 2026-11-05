@@ -10,6 +10,10 @@ Requires Android 8 or newer and Pandora Plus or Premium.
    **Verify with Pandora** and complete Pandora's check.
 4. Choose a station. Check that the song, artwork, seeking, thumbs, and Next work.
    A thumbs-down on the current song should save to Pandora and skip that song.
+   Tap an active thumb again to remove the rating. Check the change in Pandora.
+   Play/pause should keep the cover, controls, and scroll position still.
+   After another song starts, open **History** and rate the previous song. The
+   current song should keep playing. History currently covers this app session.
 5. Lock the phone for at least three full songs. Confirm that music continues and
    track changes update the lock-screen controls. Then try using another app.
 6. Pause/resume with the lock-screen controls, and try headphones/Bluetooth.
@@ -25,3 +29,7 @@ password, cookies, authentication tokens, or raw Pandora network responses.
 This prototype has emulator tests with simulated Pandora responses. It has not
 been verified against your live Pandora account. It does not include themes,
 effects, lyrics, tuning, or the desktop mini-players yet.
+
+If verification appears, its widget should load below the title. If loading fails,
+the page should show an error and offer **Reload check**. Complete the real check
+yourself; emulator fixtures cannot verify Pandora's live acceptance.

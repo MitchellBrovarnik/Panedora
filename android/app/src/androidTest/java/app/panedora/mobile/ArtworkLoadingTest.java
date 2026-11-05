@@ -42,7 +42,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import static androidx.test.espresso.Espresso.onView;
 import static androidx.test.espresso.action.ViewActions.click;
-import static androidx.test.espresso.matcher.ViewMatchers.withText;
+import static androidx.test.espresso.matcher.ViewMatchers.withId;
 import static org.junit.Assert.*;
 
 /** Exercises the real image loader/caches with deterministic delayed image responses. */
@@ -155,14 +155,16 @@ public class ArtworkLoadingTest {
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
             AtomicReference<MainActivity> activity = new AtomicReference<>(); scenario.onActivity(activity::set);
             await(() -> hasColor(activity.get().findViewById(R.id.compact_artwork),Color.GREEN));
-            onView(withText("Now Playing")).perform(click());
+            onView(withId(R.id.nav_playing)).perform(click());
             await(() -> hasColor(activity.get().findViewById(R.id.current_artwork),Color.GREEN));
             ui(() -> { for (int i = 0; i < 6; i++) modelRef.get().changed(); });
             await(() -> hasColor(activity.get().findViewById(R.id.current_artwork),Color.GREEN));
             ui(() -> Artwork.clear(activity.get().findViewById(android.R.id.content)));
             scenario.moveToState(Lifecycle.State.CREATED);
             ui(() -> Glide.get(context).clearMemory());
+            scenario.recreate();
             scenario.moveToState(Lifecycle.State.RESUMED);
+            scenario.onActivity(activity::set);
             await(() -> hasColor(activity.get().findViewById(R.id.current_artwork),Color.GREEN));
             assertEquals("Disk cache avoids re-downloading when size or screen changes",1,current.hits.get());
         } finally {

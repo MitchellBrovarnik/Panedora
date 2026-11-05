@@ -21,6 +21,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
@@ -35,6 +36,7 @@ import androidx.media3.session.SessionToken;
 import com.google.common.util.concurrent.ListenableFuture;
 import java.util.Locale;
 import java.util.ArrayList;
+import java.util.List;
 
 @UnstableApi
 public final class MainActivity extends Activity {
@@ -54,6 +56,19 @@ public final class MainActivity extends Activity {
     private EditText email, password;
     private TextView loginMessage;
     private Button loginButton, verifyButton;
+    private Button playControl, compactPlayControl, refreshControl;
+    private final List<ThumbControls> thumbControls = new ArrayList<>();
+    private int renderedPage = -1, renderedHistorySize;
+    private PandoraProtocol.Track renderedTrack, renderedHistoryFirst;
+    private PandoraProtocol.Station renderedStation;
+    private List<PandoraProtocol.Station> renderedStations;
+    private String renderedMessage = "";
+    private PandoraClient.ApiException renderedVerification;
+    private boolean renderedTakeover;
+    private static final class ThumbControls {
+        final PandoraProtocol.Track track; final ImageButton up, down;
+        ThumbControls(PandoraProtocol.Track track,ImageButton up,ImageButton down) { this.track = track; this.up = up; this.down = down; }
+    }
 
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved); WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
@@ -85,7 +100,7 @@ public final class MainActivity extends Activity {
             if (seek != null && model.playback != null && !scrubbing) {
                 long duration = model.playback.duration(), position = model.playback.position();
                 seek.setProgress(duration > 0 ? (int) Math.min(1000, position * 1000 / duration) : 0);
-                if (elapsed != null) elapsed.setText(time(position) + "  /  " + time(duration));
+                if (elapsed != null) elapsed.setText(model.loading ? "Buffering…" : time(position) + "  /  " + time(duration));
             }
             handler.postDelayed(this, 500);
         }
@@ -136,26 +151,72 @@ public final class MainActivity extends Activity {
     private void render() {
         if (isFinishing()) return;
         if (!model.signedIn) { renderLogin(); return; }
+        PandoraProtocol.Track first = model.history.isEmpty() ? null : model.history.get(0);
+        if (!loginVisible && currentRoot != null && renderedPage == page && renderedTrack == model.track && renderedStation == model.station &&
+            (page != 0 || renderedStations == model.stations) && renderedMessage.equals(model.message) &&
+            renderedVerification == model.verification && renderedTakeover == model.takeover &&
+            (page != 2 || (renderedHistorySize == model.history.size() && renderedHistoryFirst == first))) {
+            updateControls(); return;
+        }
         loginVisible = false; seek = null; elapsed = null;
+        playControl = compactPlayControl = refreshControl = null; thumbControls.clear();
         int previousY = scroll == null ? 0 : scroll.getScrollY();
         LinearLayout root = root(), header = row(); header.setPadding(dp(20), dp(14), dp(20), dp(12));
         ImageView mark = art("", 32); header.addView(mark);
         TextView title = text("Panedora", 23, TEXT, true); title.setPadding(dp(10),0,0,0); header.addView(title, new LinearLayout.LayoutParams(0,-2,1));
         TextView tag = text("ANDROID PREVIEW", 10, MUTED, true); tag.setLetterSpacing(.08f); header.addView(tag); root.addView(header);
-        scroll = new ScrollView(this); scroll.setFillViewport(true);
+        scroll = new ScrollView(this); scroll.setId(R.id.page_scroll); scroll.setFillViewport(true);
         LinearLayout content = column(); content.setPadding(dp(20), dp(12), dp(20), dp(20)); scroll.addView(content);
         root.addView(scroll, new LinearLayout.LayoutParams(-1,0,1));
         showMessage(content);
-        if (page == 0) renderStations(content); else if (page == 1) renderPlayer(content); else renderSettings(content);
+        if (page == 0) renderStations(content); else if (page == 1) renderPlayer(content); else if (page == 2) renderHistory(content); else renderSettings(content);
         if (page != 1 && model.track != null) root.addView(compactPlayer());
         LinearLayout nav = row(); nav.setPadding(dp(12), dp(10), dp(12), dp(12));
-        String[] labels = {"Stations", "Now Playing", "Settings"};
+        String[] labels = {"Stations", "Playing", "History", "Settings"};
+        int[] ids = {R.id.nav_stations,R.id.nav_playing,R.id.nav_history,R.id.nav_settings};
         for (int i = 0; i < labels.length; i++) {
             int selected = i; Button item = button(labels[i], page == i, v -> { page = selected; scroll = null; render(); });
-            item.setTextSize(12); nav.addView(item, weighted());
+            item.setId(ids[i]); item.setTextSize(12); nav.addView(item, weighted());
         }
+        renderedPage = page; renderedTrack = model.track; renderedStation = model.station; renderedStations = model.stations;
+        renderedMessage = model.message; renderedVerification = model.verification; renderedTakeover = model.takeover;
+        renderedHistorySize = model.history.size(); renderedHistoryFirst = first;
         root.addView(nav); showRoot(root);
-        scroll.post(() -> { if (scroll != null) scroll.scrollTo(0, previousY); });
+        updateControls();
+        ScrollView restored = scroll; restored.post(() -> { if (scroll == restored) restored.scrollTo(0, previousY); });
+    }
+    private void updateControls() {
+        boolean playing = model.playback != null && model.playback.wantsPlayback();
+        if (playControl != null) { playControl.setText(playing ? "Pause" : "Play"); playControl.setEnabled(model.station != null); }
+        if (compactPlayControl != null) compactPlayControl.setText(playing ? "Pause" : "Play");
+        if (refreshControl != null) { refreshControl.setText(model.busy ? "Loading…" : "Refresh"); refreshControl.setEnabled(!model.busy); }
+        if (elapsed != null && model.playback != null && !scrubbing) elapsed.setText(model.loading ? "Buffering…" : time(model.playback.position()) + "  /  " + time(model.playback.duration()));
+        for (ThumbControls controls : thumbControls) {
+            boolean enabled = controls.track != null && !model.feedbackBusy;
+            controls.up.setEnabled(enabled); controls.down.setEnabled(enabled);
+            int rating = controls.track == null ? 0 : controls.track.rating;
+            controls.up.setImageTintList(ColorStateList.valueOf(rating == 1 ? 0xff7dd3a5 : MUTED));
+            controls.down.setImageTintList(ColorStateList.valueOf(rating == -1 ? 0xfff09a9a : MUTED));
+            controls.up.setSelected(rating == 1); controls.down.setSelected(rating == -1);
+            controls.up.setContentDescription(rating == 1 ? "Undo thumbs up" : "Thumbs up");
+            controls.down.setContentDescription(rating == -1 ? "Undo thumbs down" : "Thumbs down");
+            controls.up.setAlpha(enabled ? 1f : .45f); controls.down.setAlpha(enabled ? 1f : .45f);
+        }
+    }
+    private View ratingControls(PandoraProtocol.Track track, boolean current, int size) {
+        LinearLayout row = row(); row.setGravity(Gravity.CENTER);
+        ImageButton down = thumbButton(track,false,current), up = thumbButton(track,true,current);
+        if (current) { down.setId(R.id.thumb_down); up.setId(R.id.thumb_up); }
+        for (ImageButton button : new ImageButton[]{down,up}) {
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(size),dp(size)); params.setMargins(dp(4),0,dp(4),0); row.addView(button,params);
+        }
+        thumbControls.add(new ThumbControls(track,up,down)); return row;
+    }
+    private ImageButton thumbButton(PandoraProtocol.Track track, boolean positive, boolean current) {
+        ImageButton button = new ImageButton(this); button.setImageResource(positive ? R.drawable.thumb_up : R.drawable.thumb_down);
+        button.setPadding(dp(12),dp(12),dp(12),dp(12));
+        button.setBackground(new RippleDrawable(ColorStateList.valueOf(0x22ffffff),shape(SURFACE,12),null));
+        button.setOnClickListener(v -> model.rateTrack(track,positive,current)); return button;
     }
     private void showMessage(LinearLayout content) {
         if (model.message.isEmpty()) return;
@@ -197,7 +258,7 @@ public final class MainActivity extends Activity {
     }
     private void renderStations(LinearLayout content) {
         LinearLayout heading = row(); heading.addView(text("Your stations",27,TEXT,true),new LinearLayout.LayoutParams(0,-2,1));
-        Button refresh = button(model.busy ? "Loading…" : "Refresh", false, v -> model.refreshStations()); refresh.setEnabled(!model.busy); heading.addView(refresh); content.addView(heading); gap(content,8);
+        Button refresh = button(model.busy ? "Loading…" : "Refresh", false, v -> model.refreshStations()); refreshControl = refresh; refresh.setEnabled(!model.busy); heading.addView(refresh); content.addView(heading); gap(content,8);
         content.addView(text("Pick a station and settle in.",14,MUTED,false)); gap(content,20);
         EditText search = field("Find a station",InputType.TYPE_CLASS_TEXT); search.setText(filter); content.addView(search); gap(content,18);
         LinearLayout list = column(); list.setId(R.id.station_list); content.addView(list);
@@ -261,18 +322,12 @@ public final class MainActivity extends Activity {
         content.addView(seek,new LinearLayout.LayoutParams(-1,dp(48)));
         long duration = model.playback == null ? 0 : model.playback.duration(), position = model.playback == null ? 0 : model.playback.position();
         seek.setProgress(duration > 0 ? (int)Math.min(1000,position * 1000 / duration) : 0);
-        elapsed = text(time(position) + "  /  " + time(duration),12,MUTED,false); content.addView(elapsed); gap(content,16);
+        elapsed = text(time(position) + "  /  " + time(duration),12,MUTED,false); elapsed.setSingleLine(true); content.addView(elapsed); gap(content,16);
         LinearLayout controls = row();
         Button replay = button("Replay",false,v -> { if (model.playback != null) model.playback.seek(0); }); replay.setEnabled(model.track != null); controls.addView(replay,weighted());
-        Button play = button(model.playback != null && model.playback.readyToPlay() ? "Pause" : "Play",true,v -> { if (model.playback != null) model.playback.toggle(); }); play.setId(R.id.play_pause); play.setEnabled(model.station != null); controls.addView(play,weighted());
+        Button play = button("Play",true,v -> { if (model.playback != null) model.playback.toggle(); }); playControl = play; play.setId(R.id.play_pause); play.setEnabled(model.station != null); controls.addView(play,weighted());
         Button next = button("Next",false,v -> { if (model.playback != null) model.playback.next(); }); next.setEnabled(model.track != null); controls.addView(next,weighted()); content.addView(controls); gap(content,14);
-        LinearLayout feedback = row();
-        Button down = button("Thumbs down",false,v -> model.rate(false)); down.setId(R.id.thumb_down);
-        Button up = button("Thumbs up",false,v -> model.rate(true)); up.setId(R.id.thumb_up);
-        down.setEnabled(model.track != null && !model.feedbackBusy); up.setEnabled(down.isEnabled());
-        if (model.track != null) { if (model.track.rating == 1) up.setTextColor(0xff7dd3a5); if (model.track.rating == -1) down.setTextColor(0xfff09a9a); }
-        feedback.addView(down,weighted()); feedback.addView(up,weighted()); content.addView(feedback);
-        if (model.loading) { gap(content,12); content.addView(text("Buffering…",13,MUTED,false)); }
+        content.addView(ratingControls(model.track,true,52));
     }
     private View compactPlayer() {
         LinearLayout strip = row(); strip.setBackground(shape(SURFACE,14)); strip.setPadding(dp(14),dp(10),dp(14),dp(10));
@@ -281,8 +336,26 @@ public final class MainActivity extends Activity {
         TextView title = text(model.track.title,14,TEXT,true); title.setMaxLines(1); title.setEllipsize(android.text.TextUtils.TruncateAt.END); copy.addView(title);
         TextView artist = text(model.track.artist,12,MUTED,false); artist.setMaxLines(1); copy.addView(artist);
         strip.addView(copy,new LinearLayout.LayoutParams(0,-2,1));
-        strip.addView(button(model.playback != null && model.playback.readyToPlay() ? "Pause" : "Play",true,v -> { if (model.playback != null) model.playback.toggle(); }));
+        compactPlayControl = button("Play",true,v -> { if (model.playback != null) model.playback.toggle(); }); strip.addView(compactPlayControl);
         strip.setOnClickListener(v -> { page = 1; scroll = null; render(); }); return strip;
+    }
+    private void renderHistory(LinearLayout content) {
+        content.addView(text("Recently played",27,TEXT,true)); gap(content,8);
+        content.addView(text("This session · most recent first",14,MUTED,false)); gap(content,20);
+        if (model.history.isEmpty()) { content.addView(text("Songs appear here after they finish or you skip them.",15,MUTED,false)); return; }
+        for (PandoraProtocol.Track track : model.history) {
+            LinearLayout card = row(); card.setPadding(dp(10),dp(10),dp(6),dp(10)); card.setBackground(shape(SURFACE,14));
+            card.setContentDescription("History: " + track.title); card.addView(art(track.art,46));
+            LinearLayout copy = column(); copy.setPadding(dp(12),0,dp(4),0);
+            TextView title = text(track.title,15,TEXT,true), artist = text(track.artist,12,MUTED,false);
+            title.setSingleLine(true); title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            artist.setSingleLine(true); artist.setEllipsize(android.text.TextUtils.TruncateAt.END); copy.addView(title); copy.addView(artist);
+            for (PandoraProtocol.Station station : model.stations) if (station.id.equals(track.stationId)) {
+                TextView label = text(station.name,11,MUTED,false); label.setSingleLine(true); label.setEllipsize(android.text.TextUtils.TruncateAt.END); copy.addView(label); break;
+            }
+            card.addView(copy,new LinearLayout.LayoutParams(0,-2,1)); card.addView(ratingControls(track,false,48));
+            content.addView(card); gap(content,10);
+        }
     }
     private void renderSettings(LinearLayout content) {
         content.addView(text("Settings",27,TEXT,true)); gap(content,24);
