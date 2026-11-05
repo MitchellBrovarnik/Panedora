@@ -9,6 +9,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.HashSet;
 
 /** The same REST payloads and subscription rules used by pandora-api.js. */
 final class PandoraProtocol {
@@ -27,6 +28,60 @@ final class PandoraProtocol {
             this.token = token; this.title = title; this.artist = artist; this.album = album;
             this.audio = audio; this.art = art; this.seconds = seconds; this.rating = rating;
         }
+    }
+    static final class Mode {
+        final long id;
+        final String name, description;
+        final boolean available, premiumOnly;
+        Mode(long id,String name,String description,boolean available,boolean premiumOnly) {
+            this.id=id; this.name=name; this.description=description; this.available=available; this.premiumOnly=premiumOnly;
+        }
+    }
+    static final class Modes {
+        final boolean available;
+        final Long current;
+        final List<Mode> choices;
+        Modes(boolean available,Long current,List<Mode> choices) { this.available=available; this.current=current; this.choices=choices; }
+        Mode find(long id) { for (Mode mode:choices) if (mode.id==id) return mode; return null; }
+        boolean active(long id) { Mode mode=find(id); return available && current!=null && current==id && mode!=null && mode.available; }
+        static Modes unavailable() { return new Modes(false,null,new ArrayList<>()); }
+    }
+    static Long modeId(Object value) {
+        try {
+            if (value instanceof String text && text.matches("[0-9]+")) {
+                long id=Long.parseLong(text); return id<=9007199254740991L ? id : null;
+            }
+            if (value instanceof Number number) {
+                double id=number.doubleValue();
+                if (Double.isFinite(id) && id>=0 && id<=9007199254740991L && id==Math.rint(id)) return (long)id;
+            }
+        } catch (NumberFormatException ignored) {}
+        return null;
+    }
+    static Modes modes(JSONObject response,boolean premium) throws Exception {
+        JSONObject data=response.optJSONObject("result"); if (data==null) data=response;
+        JSONArray entries=data.optJSONArray("availableModes");
+        if (response.optInt("errorCode")!=0 || "fail".equals(response.optString("stat")) ||
+            (entries==null && !Boolean.FALSE.equals(data.opt("interactiveRadioAvailable")))) throw new Exception("Pandora returned unreadable station modes. Please try again.");
+        List<Mode> choices=new ArrayList<>(); HashSet<Long> seen=new HashSet<>();
+        for (int i=0;entries!=null && i<entries.length();i++) {
+            JSONObject entry=entries.optJSONObject(i); if (entry==null) continue;
+            Long id=modeId(entry.opt("modeId")); Object label=entry.opt("modeName");
+            if (id==null || !(label instanceof String name) || name.trim().isEmpty() || !seen.add(id)) continue;
+            boolean premiumOnly=Boolean.TRUE.equals(entry.opt("isPremiumOnly")) || id==5 || "artist only".equals(name.trim().toLowerCase(Locale.ROOT));
+            choices.add(new Mode(id,name,entry.optString("modeDescription",""),Boolean.TRUE.equals(entry.opt("isModeAvailable")) && (!premiumOnly || premium),premiumOnly));
+        }
+        return new Modes(!Boolean.FALSE.equals(data.opt("interactiveRadioAvailable")) && !choices.isEmpty(),modeId(data.opt("currentModeId")),choices);
+    }
+    static boolean premium(JSONObject response) {
+        JSONObject config=response.optJSONObject("config");
+        if (response.isNull("authToken") || response.optString("authToken").isEmpty() || config==null) return false;
+        String branding=config.optString("branding");
+        if ("PandoraPlus".equals(branding) || "Pandora".equals(branding)) return false;
+        if ("PandoraPremium".equals(branding)) return true;
+        JSONArray flags=config.optJSONArray("flags");
+        for (int i=0;flags!=null && i<flags.length();i++) if ("onDemand".equals(flags.optString(i))) return true;
+        return false;
     }
     static JSONObject body(Object... values) throws JSONException {
         JSONObject result = new JSONObject();

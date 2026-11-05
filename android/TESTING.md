@@ -16,6 +16,15 @@ Requires Android 8 or newer and Pandora Plus or Premium.
    including after rotating or reopening the screen. Tap the song title for album
    details. Try a long song/station name and landscape orientation; controls should
    stay readable and reachable by scrolling in short windows.
+   Tap **Tune your station** under the station name. Choose an offered mode and
+   check that a fresh song starts from that mix. Plus accounts should not show
+   Artist Only; Shuffle should not show tuning. Try pausing or selecting another
+   station while a change is loading; the later action should win.
+   Open Settings and try Theme and Accent color, including Custom hex. The chosen
+   colors should apply immediately, persist after reopening, and keep music playing.
+   While browsing Stations or Settings, tap the media notification. It should open
+   Now Playing for the current station without restarting the song. Repeat after
+   switching stations and after Android recreates the screen.
    A thumbs-down on the current song should save to Pandora and skip that song.
    Tap an active thumb again to remove the rating. Check the change in Pandora.
    Play/pause should keep the cover, controls, and scroll position still.
@@ -43,7 +52,7 @@ password, cookies, authentication tokens, or raw Pandora network responses.
 
 This prototype has emulator tests with simulated Pandora responses. It has not
 been verified against your live Pandora account. It does not include themes,
-effects, lyrics, tuning, or the desktop mini-players yet.
+effects, adaptive colors, lyrics, or the desktop mini-players yet.
 
 If verification appears, its widget should load below the title. If loading fails,
 the page should show an error and offer **Reload check**. Complete the real check

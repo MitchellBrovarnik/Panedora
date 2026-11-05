@@ -11,6 +11,19 @@ larger artwork and a single row of playback icons. There is no persistent bottom
 navigation bar. Back/collapse returns to the previous screen and retains station
 search and scroll position. Tap the song title for album details.
 
+Settings includes eight theme presets adapted from the desktop app, preset accent
+colors, and a custom six-digit hex accent. Preferences persist on the phone and
+apply without interrupting playback. Notification taps open Now Playing for the
+current active station, including when Android needs to create the screen again.
+With no active station, the app opens Stations without starting music.
+
+The **Tune your station** button below the station name loads Pandora's available
+modes. Shuffle is excluded; Premium-only choices are hidden unless the login and
+station both allow them. Mode changes revalidate eligibility, discard the queued
+old mix, request a continuation fragment, and confirm the selected mode before
+starting a fresh song. A later Pause or station selection takes precedence over a
+pending change. Taking playback from another device still requires a user choice.
+
 The player, playlist refill, audio focus, and media notification live in a
 `MediaSessionService`, so switching apps or locking the phone does not stop the
 queue. Removing Panedora's card from Recents stops playback and the media service,
@@ -49,8 +62,8 @@ later prototype may require uninstalling the previous prototype before installin
 Real Pandora authentication, mobile verification, and long screen-off listening
 still require testing with a paid account on a physical phone. See [TESTING.md](TESTING.md).
 
-Not included yet: desktop mini-players, Discord, themes/effects, lyrics,
-station creation/removal/tuning, downloaded music, or free accounts. History keeps
+Not included yet: desktop mini-players, Discord, adaptive colors or visual effects,
+lyrics, station creation/removal, downloaded music, or free accounts. History keeps
 the last 100 songs from this app session. History ratings do not skip the current
 song. Ratings created here retain Pandora's feedback ID for undo; existing ratings
 without an ID are looked up by recording ID and original station before removal.

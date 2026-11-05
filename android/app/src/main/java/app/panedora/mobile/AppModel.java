@@ -28,6 +28,9 @@ final class AppModel {
     final List<PandoraProtocol.Track> history = new ArrayList<>();
     PandoraProtocol.Station station;
     PandoraProtocol.Track track;
+    PandoraProtocol.Modes modes;
+    boolean modesLoading, modeChanging;
+    String modeError = "";
     boolean signedIn, busy, playing, loading, feedbackBusy, takeover;
     String message = "";
     PandoraClient.ApiException verification;
@@ -128,6 +131,7 @@ final class AppModel {
         if (playback != null) playback.clearPlayback();
         signedIn = busy = feedbackBusy = takeover = false; stations = new ArrayList<>(); history.clear();
         station = null; track = null; message = ""; verification = null; verificationRetry = null;
+        modes=null; modesLoading=modeChanging=false; modeError="";
         io.execute(() -> { credentials.clear(); api.clear(); });
         changed();
     }

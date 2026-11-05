@@ -12,6 +12,8 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.List;
+import java.util.function.BooleanSupplier;
+import java.util.concurrent.CancellationException;
 
 final class PandoraClient implements PandoraGateway {
     static final String ORIGIN = "https://www.pandora.com";
@@ -37,16 +39,22 @@ final class PandoraClient implements PandoraGateway {
     private final CredentialStore credentials;
     final String userAgent;
     private String authToken;
+    private String premiumAuthToken;
+    private interface RequestCheck { void verify() throws Exception; }
     PandoraClient(Context context, CredentialStore credentials) {
         this.credentials = credentials; userAgent = WebSettings.getDefaultUserAgent(context);
         cookies.setAcceptCookie(true);
     }
     private JSONObject request(String endpoint, JSONObject body) throws Exception {
-        try { return send(endpoint, body); }
+        return request(endpoint,body,() -> {});
+    }
+    private JSONObject request(String endpoint,JSONObject body,RequestCheck check) throws Exception {
+        try { check.verify(); return send(endpoint, body); }
         catch (ApiException e) {
             if (endpoint.equals("/v1/auth/login") || !e.expired()) throw e;
             JSONObject saved = credentials.read(); if (saved == null) throw e;
             login(saved.getString("email"), saved.getString("password"));
+            check.verify();
             return send(endpoint, body); // One refresh, then surface failure to the user.
         }
     }
@@ -93,11 +101,34 @@ final class PandoraClient implements PandoraGateway {
         } finally { connection.disconnect(); }
     }
     @Override public void login(String email, String password) throws Exception {
-        authToken = null;
+        authToken = premiumAuthToken = null;
         JSONObject result = send("/v1/auth/login", PandoraProtocol.loginBody(email, password));
         if (!PandoraProtocol.paid(result)) throw new Exception("Panedora requires Pandora Plus or Premium. Free accounts are not supported.");
         String token = result.optString("authToken"); if (token.isEmpty()) throw new Exception("Pandora did not return a sign-in token.");
-        authToken = token; cookies.flush();
+        authToken = token; premiumAuthToken=PandoraProtocol.premium(result) ? token : null; cookies.flush();
+    }
+    private boolean premiumAccess() { return premiumAuthToken!=null && premiumAuthToken.equals(authToken); }
+    @Override public PandoraProtocol.Modes stationModes(String station) throws Exception {
+        return PandoraProtocol.modes(request("/v1/interactiveradio/getAvailableModesSimple",PandoraProtocol.body("stationId",station)),premiumAccess());
+    }
+    @Override public PandoraProtocol.Modes setStationMode(String station,long id,BooleanSupplier current) throws Exception {
+        RequestCheck active=() -> { if (!current.getAsBoolean()) throw new CancellationException(); };
+        active.verify();
+        if (id<0 || id>9007199254740991L) throw new Exception("Choose a mode offered by your station.");
+        PandoraProtocol.Modes offered=stationModes(station); active.verify();
+        PandoraProtocol.Mode selected=offered.find(id);
+        if (!offered.available || selected==null || !selected.available) throw new Exception("That mode is not available for this station and subscription.");
+        if (selected.premiumOnly) {
+            JSONObject saved=credentials.read();
+            if (saved==null) throw new Exception("Sign in again to confirm your Pandora Premium subscription.");
+            login(saved.getString("email"),saved.getString("password")); active.verify();
+            if (!premiumAccess()) throw new Exception("This mode requires a verified Pandora Premium subscription.");
+        }
+        JSONObject response=request("/v1/interactiveradio/setAndGetAvailableModes",PandoraProtocol.body("stationId",station,"modeId",id),() -> {
+            active.verify();
+            if (selected.premiumOnly && !premiumAccess()) throw new Exception("This mode requires a verified Pandora Premium subscription.");
+        });
+        active.verify(); return PandoraProtocol.modes(response,premiumAccess());
     }
     @Override public List<PandoraProtocol.Station> stations() throws Exception { return PandoraProtocol.stations(request("/v1/station/getStations", PandoraProtocol.body("pageSize", 250, "startIndex", 0))); }
     @Override public PandoraProtocol.Station shuffleStation() throws Exception {
@@ -126,5 +157,5 @@ final class PandoraClient implements PandoraGateway {
     }
     @Override public void started(String station, String token) throws Exception { request("/v1/station/trackStarted", PandoraProtocol.body("stationId", station, "trackToken", token)); }
     @Override public void paused(String station, String token) throws Exception { request("/v1/station/playbackPaused", PandoraProtocol.body("stationId", station, "trackToken", token)); }
-    @Override public void clear() { authToken = null; cookies.removeAllCookies(null); cookies.flush(); }
+    @Override public void clear() { authToken = premiumAuthToken = null; cookies.removeAllCookies(null); cookies.flush(); }
 }

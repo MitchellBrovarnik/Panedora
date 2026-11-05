@@ -3,6 +3,7 @@ package app.panedora.mobile;
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Context;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -42,8 +43,13 @@ import java.util.List;
 
 @UnstableApi
 public final class MainActivity extends Activity {
-    private static final int BG = 0xff121018, SURFACE = 0xff211c2c, BORDER = 0xff352e45;
-    private static final int TEXT = 0xfff5f1fb, MUTED = 0xffaaa1bb, ACCENT = 0xffc4adff;
+    static final String ACTION_NOW_PLAYING="app.panedora.mobile.OPEN_NOW_PLAYING";
+    static Intent nowPlayingIntent(Context context) { return new Intent(context,MainActivity.class).setAction(ACTION_NOW_PLAYING).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP); }
+    private int BG=0xff121018, SURFACE=0xff211c2c, BORDER=0xff352e45;
+    private final int TEXT=0xfff5f1fb, MUTED=0xffaaa1bb;
+    private int ACCENT=0xffc4adff, themeTint=0xff8461b4;
+    private Appearance appearance;
+    private String appearanceKey="";
     private AppModel model;
     private ListenableFuture<MediaController> controllerFuture;
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -56,12 +62,17 @@ public final class MainActivity extends Activity {
     private View currentRoot;
     private SeekBar seek;
     private TextView elapsed, remaining, selectedStationStatus;
-    private boolean scrubbing, loginVisible;
+    private boolean scrubbing, loginVisible, openNowPlaying;
     private android.window.OnBackInvokedCallback backCallback;
     private EditText email, password;
     private TextView loginMessage;
     private Button loginButton, verifyButton;
-    private ImageButton playControl, compactPlayControl, refreshControl;
+    private Button tuneControl;
+    private ImageButton playControl, compactPlayControl, refreshControl, nextControl, compactNextControl;
+    private AlertDialog tuningDialog;
+    private LinearLayout tuningChoices;
+    private TextView tuningStatus;
+    private String tuningStationId="";
     private View shuffleControl;
     private TextView shuffleLabel;
     private final List<ThumbControls> thumbControls = new ArrayList<>();
@@ -80,7 +91,7 @@ public final class MainActivity extends Activity {
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved); WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         setVolumeControlStream(android.media.AudioManager.STREAM_MUSIC);
-        model = AppModel.get(this);
+        model = AppModel.get(this); appearance=new Appearance(this);
         if (saved != null) {
             page = Math.max(0,Math.min(3,saved.getInt("page",0))); filter = saved.getString("filter","");
             int[] previous = saved.getIntArray("backStack");
@@ -88,7 +99,11 @@ public final class MainActivity extends Activity {
             int[] positions = saved.getIntArray("scrollPositions");
             if (positions != null) System.arraycopy(positions,0,scrollPositions,0,Math.min(4,positions.length));
         }
-        render();
+        acceptIntent(getIntent()); render();
+    }
+    @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); acceptIntent(intent); render(); }
+    private void acceptIntent(Intent intent) {
+        if (intent!=null && ACTION_NOW_PLAYING.equals(intent.getAction())) { openNowPlaying=true; intent.setAction(Intent.ACTION_MAIN); }
     }
     @Override protected void onStart() {
         super.onStart(); model.listeners.add(observer); model.restore();
@@ -107,7 +122,7 @@ public final class MainActivity extends Activity {
         if (controllerFuture != null) { MediaController.releaseFuture(controllerFuture); controllerFuture = null; }
         super.onStop();
     }
-    @Override protected void onDestroy() { Artwork.clear(currentRoot); super.onDestroy(); }
+    @Override protected void onDestroy() { if (tuningDialog!=null) tuningDialog.dismiss(); Artwork.clear(currentRoot); super.onDestroy(); }
     @Override protected void onSaveInstanceState(Bundle state) {
         rememberScroll(); state.putInt("page",page); state.putString("filter",filter);
         state.putIntArray("backStack",backStack.stream().mapToInt(Integer::intValue).toArray()); state.putIntArray("scrollPositions",scrollPositions);
@@ -200,6 +215,13 @@ public final class MainActivity extends Activity {
     }
     private void render() {
         if (isFinishing()) return;
+        applyAppearance();
+        if (openNowPlaying && model.signedIn) {
+            if (model.station!=null) {
+                openNowPlaying=false;
+                if (page!=1) { rememberScroll(); page=1; backStack.clear(); backStack.add(0); scroll=null; scrollPositions[1]=0; }
+            } else if (model.playback!=null) openNowPlaying=false;
+        }
         updateBackCallback();
         if (!model.signedIn) { renderLogin(); return; }
         PandoraProtocol.Track first = model.history.isEmpty() ? null : model.history.get(0);
@@ -210,10 +232,10 @@ public final class MainActivity extends Activity {
             updateControls(); return;
         }
         rememberScroll(); loginVisible = false; seek = null; elapsed = remaining = selectedStationStatus = shuffleLabel = null;
-        playControl = compactPlayControl = refreshControl = null; shuffleControl = null; thumbControls.clear();
+        playControl = compactPlayControl = refreshControl = nextControl = compactNextControl = null; tuneControl=null; shuffleControl = null; thumbControls.clear();
         int previousY = scrollPositions[page];
         LinearLayout root = root();
-        if (page == 1) root.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{0xff2d223d,0xff19131f,BG}));
+        if (page == 1) root.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{Appearance.blend(BG,themeTint,.24f),Appearance.blend(BG,themeTint,.07f),BG}));
         root.addView(toolbar());
         scroll = new ScrollView(this); scroll.setId(R.id.page_scroll); scroll.setFillViewport(true); scroll.setVerticalScrollBarEnabled(false);
         LinearLayout content = column(); content.setPadding(dp(24),dp(page == 1 ? 12 : 16),dp(24),dp(24)); scroll.addView(content);
@@ -231,6 +253,13 @@ public final class MainActivity extends Activity {
         updateControls();
         ScrollView restored = scroll; restored.post(() -> { if (scroll == restored) restored.scrollTo(0, previousY); });
     }
+    private void applyAppearance() {
+        String key=appearance.key(); if (key.equals(appearanceKey)) return;
+        appearanceKey=key; Appearance.Theme theme=appearance.theme(); BG=theme.background; themeTint=theme.tint; ACCENT=appearance.accent();
+        SURFACE=Appearance.blend(BG,themeTint,.12f); BORDER=Appearance.blend(BG,themeTint,.28f);
+        renderedPage=-1; loginVisible=false;
+        getWindow().setNavigationBarColor(BG); getWindow().setStatusBarColor(BG);
+    }
     private View toolbar() {
         LinearLayout header = row(); header.setId(R.id.top_toolbar); header.setPadding(dp(12),dp(6),dp(12),dp(6)); header.setMinimumHeight(dp(64));
         if (page == 0) {
@@ -244,6 +273,11 @@ public final class MainActivity extends Activity {
             if (page == 1) {
                 LinearLayout copy = column(); copy.setGravity(Gravity.CENTER);
                 TextView title = singleLine(model.station == null ? "Your stations" : model.station.name,16,TEXT,true); title.setGravity(Gravity.CENTER); copy.addView(title);
+                if (model.station!=null && !model.station.shuffle) {
+                    tuneControl=button("Tune your station",false,v -> showTuning()); tuneControl.setId(R.id.tune_station); tuneControl.setTextSize(12); tuneControl.setMinWidth(0); tuneControl.setMinimumWidth(0); tuneControl.setContentDescription("Tune your station");
+                    var tuneIcon=getDrawable(R.drawable.ic_tune); tuneIcon.setTint(ACCENT); tuneIcon.setBounds(0,0,dp(16),dp(16)); tuneControl.setCompoundDrawablesRelative(tuneIcon,null,null,null); tuneControl.setCompoundDrawablePadding(dp(8));
+                    LinearLayout.LayoutParams pill=new LinearLayout.LayoutParams(-2,dp(48)); pill.gravity=Gravity.CENTER_HORIZONTAL; copy.addView(tuneControl,pill);
+                }
                 header.addView(copy,new LinearLayout.LayoutParams(0,-2,1));
                 ImageButton history = icon(R.drawable.ic_history,"History",false,v -> openPage(2)); history.setId(R.id.nav_history); toolbarIcon(header,history);
             } else {
@@ -256,6 +290,14 @@ public final class MainActivity extends Activity {
         boolean playing = model.playback != null && model.playback.wantsPlayback();
         for (ImageButton control : new ImageButton[]{playControl,compactPlayControl}) if (control != null) {
             control.setImageResource(playing ? R.drawable.ic_pause : R.drawable.ic_play); control.setContentDescription(playing ? "Pause" : "Play"); control.setEnabled(model.station != null);
+        }
+        for (ImageButton control:new ImageButton[]{nextControl,compactNextControl}) if (control!=null) { control.setEnabled(model.track!=null && !model.modeChanging && !model.takeover); control.setAlpha(control.isEnabled() ? 1f : .4f); }
+        if (tuneControl!=null) {
+            String label="Tune your station";
+            if (model.modeChanging) label="Changing mode…";
+            else if (model.modesLoading) label="Loading modes…";
+            else if (model.modes!=null && model.modes.current!=null) { var mode=model.modes.find(model.modes.current); if (mode!=null && mode.available) label=mode.name; }
+            tuneControl.setText(label); tuneControl.setEnabled(model.playback!=null && model.track!=null && !model.modeChanging && !model.takeover);
         }
         if (selectedStationStatus != null) selectedStationStatus.setText(model.loading ? "Connecting…" : playing ? "Now playing" : "Paused");
         if (refreshControl != null) { refreshControl.setContentDescription(model.busy ? "Refreshing stations" : "Refresh stations"); refreshControl.setEnabled(!model.busy); refreshControl.setAlpha(model.busy ? .4f : 1f); }
@@ -276,6 +318,7 @@ public final class MainActivity extends Activity {
             controls.down.setContentDescription(rating == -1 ? "Undo thumbs down" : "Thumbs down");
             controls.up.setAlpha(enabled ? 1f : .45f); controls.down.setAlpha(enabled ? 1f : .45f);
         }
+        updateTuningDialog();
     }
     private void updateProgress() {
         if (model.playback == null || scrubbing) return;
@@ -342,7 +385,7 @@ public final class MainActivity extends Activity {
         var searchIcon = getDrawable(R.drawable.ic_search); searchIcon.setTint(MUTED); searchIcon.setBounds(0,0,dp(20),dp(20)); search.setCompoundDrawablesRelative(searchIcon,null,null,null); search.setCompoundDrawablePadding(dp(12));
         search.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE); content.addView(search); gap(content,20);
         LinearLayout shuffle = row(); shuffle.setId(R.id.shuffle_stations); shuffle.setMinimumHeight(dp(72)); shuffle.setPadding(dp(14),dp(12),dp(14),dp(12));
-        GradientDrawable shuffleBackground = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,new int[]{0xff392a50,0xff292036}); shuffleBackground.setCornerRadius(dp(16));
+        GradientDrawable shuffleBackground = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,new int[]{Appearance.blend(BG,themeTint,.30f),Appearance.blend(BG,themeTint,.16f)}); shuffleBackground.setCornerRadius(dp(16));
         shuffle.setBackground(new RippleDrawable(ColorStateList.valueOf(0x22ffffff),shuffleBackground,null));
         ImageView symbol = new ImageView(this); symbol.setImageResource(R.drawable.ic_shuffle); symbol.setImageTintList(ColorStateList.valueOf(ACCENT)); symbol.setPadding(dp(10),dp(10),dp(10),dp(10)); symbol.setBackground(rounded(0x25c4adff,12)); shuffle.addView(symbol,new LinearLayout.LayoutParams(dp(44),dp(44)));
         LinearLayout copy = column(); copy.setPadding(dp(14),0,dp(8),0); shuffleLabel = singleLine("Shuffle Stations",16,TEXT,true); copy.addView(shuffleLabel); copy.addView(text("Mix your collection",12,MUTED,false)); shuffle.addView(copy,new LinearLayout.LayoutParams(0,-2,1));
@@ -369,7 +412,7 @@ public final class MainActivity extends Activity {
             count++;
             boolean active = model.station != null && model.station.id.equals(station.id);
             LinearLayout card = row(); card.setPadding(dp(8),dp(12),dp(10),dp(12)); card.setMinimumHeight(dp(80));
-            card.setBackground(new RippleDrawable(ColorStateList.valueOf(0x18ffffff),rounded(active ? 0xff211a2d : android.graphics.Color.TRANSPARENT,14),null));
+            card.setBackground(new RippleDrawable(ColorStateList.valueOf(0x18ffffff),rounded(active ? SURFACE : android.graphics.Color.TRANSPARENT,14),null));
             card.addView(art(station.art,56));
             LinearLayout copy = column(); copy.setPadding(dp(16),0,dp(12),0); copy.addView(singleLine(station.name,16,TEXT,true));
             if (active) { selectedStationStatus = text("Now playing",12,ACCENT,false); copy.addView(selectedStationStatus); }
@@ -420,6 +463,7 @@ public final class MainActivity extends Activity {
         ImageButton down = thumbButton(model.track,false,true), up = thumbButton(model.track,true,true); down.setId(R.id.thumb_down); up.setId(R.id.thumb_up);
         ImageButton replay = icon(R.drawable.ic_replay,"Replay",false,v -> { if (model.playback != null) model.playback.seek(0); }); replay.setId(R.id.replay); replay.setEnabled(model.track != null);
         ImageButton next = icon(R.drawable.ic_next,"Next song",false,v -> { if (model.playback != null) model.playback.next(); }); next.setId(R.id.next_song); next.setEnabled(model.track != null);
+        nextControl=next;
         playControl = icon(R.drawable.ic_play,"Play",true,v -> { if (model.playback != null) model.playback.toggle(); }); playControl.setId(R.id.play_pause);
         for (ImageButton control : new ImageButton[]{down,replay,playControl,next,up}) {
             int size = control == playControl ? 72 : 48;
@@ -433,8 +477,72 @@ public final class MainActivity extends Activity {
         PandoraProtocol.Track track = model.track;
         new AlertDialog.Builder(this).setTitle(track.title).setMessage(track.artist + (track.album.isEmpty() ? "" : "\n\n" + track.album) + (model.station == null ? "" : "\n\n" + model.station.name)).setPositiveButton("Done",null).show();
     }
+    private void showTuning() {
+        if (model.station==null || model.station.shuffle || model.playback==null || tuningDialog!=null) return;
+        tuningStationId=model.station.id;
+        LinearLayout panel=column(); panel.setPadding(dp(20),dp(12),dp(20),dp(8));
+        tuningStatus=text("Loading station modes…",14,MUTED,false); tuningStatus.setId(R.id.tuning_status); tuningStatus.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE); panel.addView(tuningStatus); gap(panel,12);
+        tuningChoices=column(); panel.addView(tuningChoices); ScrollView holder=new ScrollView(this); holder.addView(panel);
+        tuningDialog=new AlertDialog.Builder(this).setTitle("Tune your station").setView(holder).setPositiveButton("Done",null).setNeutralButton("Refresh",null).create();
+        tuningDialog.setOnDismissListener(dialog -> { tuningDialog=null; tuningChoices=null; tuningStatus=null; tuningStationId=""; });
+        tuningDialog.setOnShowListener(dialog -> {
+            tuningDialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> { if (model.playback!=null) model.playback.loadModes(true); });
+            tuningDialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(ACCENT); tuningDialog.getButton(AlertDialog.BUTTON_NEUTRAL).setTextColor(ACCENT); updateTuningDialog();
+        });
+        tuningDialog.show(); model.playback.loadModes(false);
+    }
+    private void updateTuningDialog() {
+        if (tuningDialog==null || tuningChoices==null) return;
+        if (model.station==null || !tuningStationId.equals(model.station.id) || model.verification!=null || model.takeover || !model.signedIn) { tuningDialog.dismiss(); return; }
+        tuningChoices.removeAllViews();
+        if (tuningDialog.getButton(AlertDialog.BUTTON_NEUTRAL)!=null) tuningDialog.getButton(AlertDialog.BUTTON_NEUTRAL).setEnabled(!model.modesLoading && !model.modeChanging);
+        if (model.modesLoading || model.modes==null && model.modeError.isEmpty()) { tuningStatus.setText("Loading station modes…"); return; }
+        if (!model.modeError.isEmpty()) { tuningStatus.setText(model.modeError); return; }
+        int count=0;
+        if (model.modes!=null && model.modes.available) for (PandoraProtocol.Mode mode:model.modes.choices) {
+            if (!mode.available) continue;
+            count++; boolean selected=model.modes.current!=null && model.modes.current==mode.id;
+            LinearLayout option=row(); option.setPadding(dp(14),dp(12),dp(10),dp(12)); option.setMinimumHeight(dp(64));
+            option.setBackground(new RippleDrawable(ColorStateList.valueOf(0x22ffffff),rounded(selected ? Appearance.blend(SURFACE,ACCENT,.12f) : SURFACE,12),null));
+            LinearLayout copy=column(); copy.addView(text(mode.name,16,TEXT,true));
+            if (!mode.description.isEmpty()) { TextView description=text(mode.description,13,MUTED,false); description.setMaxLines(3); copy.addView(description); }
+            option.addView(copy,new LinearLayout.LayoutParams(0,-2,1));
+            if (selected) { ImageView check=new ImageView(this); check.setImageResource(R.drawable.ic_check); check.setImageTintList(ColorStateList.valueOf(ACCENT)); option.addView(check,new LinearLayout.LayoutParams(dp(24),dp(24))); }
+            option.setContentDescription("Choose "+mode.name); option.setFocusable(true); option.setOnClickListener(v -> { tuningDialog.dismiss(); if (model.playback!=null) model.playback.changeMode(mode.id); });
+            tuningChoices.addView(option); gap(tuningChoices,8);
+        }
+        tuningStatus.setText(count==0 ? "Pandora does not offer modes for this station and subscription." : "Choose the mix for "+model.station.name+".");
+    }
+    private void chooseTheme() {
+        String[] names=new String[Appearance.THEMES.length]; int selected=0;
+        for (int i=0;i<names.length;i++) { names[i]=Appearance.THEMES[i].name; if (Appearance.THEMES[i].id.equals(appearance.theme().id)) selected=i; }
+        new AlertDialog.Builder(this).setTitle("Theme").setSingleChoiceItems(names,selected,(dialog,index) -> {
+            appearance.select(Appearance.THEMES[index]); dialog.dismiss(); render();
+        }).setNegativeButton("Cancel",null).show();
+    }
+    private void chooseAccent() {
+        String[] names={"Theme default","Purple","Blue","Green","Orange","Pink","Cyan","Custom hex…"};
+        int[] colors={appearance.theme().accent,0xffc4adff,0xff7bb6ff,0xff63dba9,0xffffb174,0xffff94ca,0xff67e8f9};
+        new AlertDialog.Builder(this).setTitle("Accent color").setItems(names,(dialog,index) -> {
+            if (index==names.length-1) { customAccent(); return; }
+            if (index==0) appearance.resetAccent(); else appearance.accent(colors[index]); render();
+        }).setNegativeButton("Cancel",null).show();
+    }
+    private void customAccent() {
+        LinearLayout panel=column(); panel.setPadding(dp(24),dp(12),dp(24),0);
+        EditText input=field("#AABBCC",InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS); input.setId(R.id.custom_accent); input.setText(Appearance.hex(ACCENT)); input.selectAll(); panel.addView(input); gap(panel,12);
+        panel.addView(text("Enter a bright six-digit hex color for this dark theme.",13,MUTED,false));
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Custom accent color").setView(panel).setPositiveButton("Apply",null).setNegativeButton("Cancel",null).create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String value=input.getText().toString().trim(); if (!value.startsWith("#")) value="#"+value;
+            if (!value.matches("#[a-fA-F0-9]{6}")) { input.setError("Use six hex digits, for example #7BB6FF."); return; }
+            int color=android.graphics.Color.parseColor(value);
+            if (!appearance.readable(color)) { input.setError("Choose a brighter color so controls stay readable."); return; }
+            appearance.accent(color); dialog.dismiss(); render();
+        })); dialog.show();
+    }
     private View compactPlayer() {
-        LinearLayout card = column(); card.setId(R.id.compact_player); card.setBackground(rounded(0xff2a2138,16)); card.setClipToOutline(true);
+        LinearLayout card = column(); card.setId(R.id.compact_player); card.setBackground(rounded(Appearance.blend(BG,themeTint,.22f),16)); card.setClipToOutline(true);
         LinearLayout strip = row(); strip.setId(R.id.nav_playing); strip.setPadding(dp(12),dp(10),dp(6),dp(10)); strip.setMinimumHeight(dp(68));
         ImageView cover = art(model.track.art,42,true); cover.setId(R.id.compact_artwork); strip.addView(cover);
         LinearLayout copy = column(); copy.setPadding(dp(12),0,dp(8),0);
@@ -443,6 +551,7 @@ public final class MainActivity extends Activity {
         strip.addView(copy,new LinearLayout.LayoutParams(0,-2,1));
         compactPlayControl = icon(R.drawable.ic_play,"Play",false,v -> { if (model.playback != null) model.playback.toggle(); }); compactPlayControl.setId(R.id.compact_play_pause); toolbarIcon(strip,compactPlayControl);
         ImageButton next = icon(R.drawable.ic_next,"Next song",false,v -> { if (model.playback != null) model.playback.next(); }); next.setId(R.id.compact_next); toolbarIcon(strip,next);
+        compactNextControl=next;
         strip.setBackground(new RippleDrawable(ColorStateList.valueOf(0x18ffffff),null,rounded(android.graphics.Color.WHITE,16)));
         strip.setContentDescription("Open now playing: " + model.track.title + ", " + model.track.artist); strip.setFocusable(true); strip.setOnClickListener(v -> openPage(1)); card.addView(strip); return card;
     }
@@ -467,6 +576,9 @@ public final class MainActivity extends Activity {
         }
     }
     private void renderSettings(LinearLayout content) {
+        content.addView(text("Appearance",28,TEXT,true)); gap(content,18);
+        Button theme=button("Theme · "+appearance.theme().name,false,v -> chooseTheme()); theme.setId(R.id.appearance_theme); content.addView(theme); gap(content,10);
+        Button color=button("Accent color · "+Appearance.hex(ACCENT),false,v -> chooseAccent()); color.setId(R.id.appearance_accent); content.addView(color); gap(content,32);
         content.addView(text("Your account",28,TEXT,true)); gap(content,20);
         LinearLayout account = column(); account.setPadding(dp(20),dp(20),dp(20),dp(20)); account.setBackground(rounded(SURFACE,18));
         account.addView(text("Connected to Pandora",17,TEXT,true)); gap(account,10); account.addView(text("Your saved sign-in stays encrypted on this phone.",14,MUTED,false)); gap(account,20);

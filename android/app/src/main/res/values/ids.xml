@@ -1,4 +1,9 @@
 <resources>
+    <item type="id" name="tune_station" />
+    <item type="id" name="tuning_status" />
+    <item type="id" name="appearance_theme" />
+    <item type="id" name="appearance_accent" />
+    <item type="id" name="custom_accent" />
     <item type="id" name="top_toolbar" />
     <item type="id" name="playback_controls" />
     <item type="id" name="compact_player" />

@@ -60,7 +60,7 @@ public class NavigationLayoutTest {
         }
         fail("Navigation did not reach the expected state");
     }
-    private static void screenshot(Context context,String name) throws Exception {
+    static void screenshot(Context context,String name) throws Exception {
         InstrumentationRegistry.getInstrumentation().waitForIdleSync(); Thread.sleep(300);
         String output = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir");
         if (output == null) return;
@@ -69,7 +69,7 @@ public class NavigationLayoutTest {
         try (var out = new FileOutputStream(new File(folder,"redesign-"+name+".png"))) { image.compress(Bitmap.CompressFormat.PNG,100,out); }
         image.recycle();
     }
-    private static void installArtwork(Context context) {
+    static void installArtwork(Context context) {
         Bitmap image = Bitmap.createBitmap(640,640,Bitmap.Config.ARGB_8888); Canvas canvas = new Canvas(image); Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         paint.setShader(new LinearGradient(0,0,640,640,new int[]{0xff142b42,0xff815884,0xffe6ae8a},null,Shader.TileMode.CLAMP)); canvas.drawRect(0,0,640,640,paint); paint.setShader(null);
         paint.setColor(0xfff7d6ad); canvas.drawCircle(430,220,96,paint);
@@ -93,7 +93,7 @@ public class NavigationLayoutTest {
             @Override public void teardown() {}
         });
     }
-    private static AppModel prepare(Context context) throws Exception {
+    static AppModel prepare(Context context) throws Exception {
         InstrumentationRegistry.getInstrumentation().getUiAutomation().grantRuntimePermission(context.getPackageName(),android.Manifest.permission.POST_NOTIFICATIONS);
         PlaybackSmokeTest.FakePandora fake = new PlaybackSmokeTest.FakePandora(PlaybackSmokeTest.silentWav(context,60)) {
             @Override public List<PandoraProtocol.Station> stations() {

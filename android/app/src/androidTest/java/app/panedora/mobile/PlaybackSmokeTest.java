@@ -76,12 +76,14 @@ public class PlaybackSmokeTest {
         @Override public void login(String email,String password) {}
         @Override public List<PandoraProtocol.Station> stations() { return Collections.singletonList(new PandoraProtocol.Station("station", "Night Drive Radio", "")); }
         @Override public PandoraProtocol.Station shuffleStation() { return new PandoraProtocol.Station("shuffle-station","Shuffle Stations","",true); }
+        @Override public PandoraProtocol.Modes stationModes(String station) throws Exception { return PandoraProtocol.Modes.unavailable(); }
+        @Override public PandoraProtocol.Modes setStationMode(String station,long mode,java.util.function.BooleanSupplier current) throws Exception { throw new UnsupportedOperationException("No station modes in this fixture"); }
         @Override public List<PandoraProtocol.Track> playlist(String station,boolean first) {
             int block = fragments.getAndIncrement(); List<PandoraProtocol.Track> tracks = new ArrayList<>();
             for (int i = 1; i <= 3; i++) { int n = block * 3 + i; tracks.add(new PandoraProtocol.Track("song-"+n,"After Hours " + n,"Northbound","Evening Mix",audio,"",3,0)); }
             return tracks;
         }
-        @Override public void resume(boolean takeOver) {}
+        @Override public void resume(boolean takeOver) throws Exception {}
         @Override public String feedback(String token,boolean positive) { feedback.add(token + ":" + positive); return "feedback-" + token; }
         @Override public void deleteFeedback(String id) { removed.add(id); }
         @Override public void started(String station,String token) { started.add(token); }
