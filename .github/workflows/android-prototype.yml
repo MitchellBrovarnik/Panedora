@@ -44,6 +44,13 @@ jobs:
           disable-animations: true
           working-directory: android
           script: |
+            # The headless API 35 launcher can ANR during boot and cover every test.
+            # These settings affect only this disposable emulator; app crashes and
+            # unresponsive views still fail the instrumentation runner.
+            adb shell settings put global hide_error_dialogs 1
+            adb shell am force-stop com.android.launcher3
+            adb shell input keyevent KEYCODE_WAKEUP
+            adb shell wm dismiss-keyguard
             gradle --no-daemon :app:connectedDebugAndroidTest
       - name: Package installable prototype
         if: success()
