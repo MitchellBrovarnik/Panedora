@@ -7,8 +7,8 @@ android {
         applicationId 'app.panedora.mobile.prototype'
         minSdk 26
         targetSdk 36
-        versionCode 1
-        versionName '0.1.0-prototype'
+        versionCode 2
+        versionName '0.1.1-prototype'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
     compileOptions {
@@ -23,6 +23,7 @@ dependencies {
     implementation 'androidx.media3:media3-exoplayer:1.11.1'
     implementation 'androidx.media3:media3-session:1.11.1'
     implementation 'androidx.core:core:1.16.0'
+    implementation 'com.github.bumptech.glide:glide:5.0.9'
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.json:json:20240303'
     androidTestImplementation 'androidx.test:runner:1.6.2'

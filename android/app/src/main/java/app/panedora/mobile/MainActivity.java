@@ -34,6 +34,7 @@ import androidx.media3.session.MediaController;
 import androidx.media3.session.SessionToken;
 import com.google.common.util.concurrent.ListenableFuture;
 import java.util.Locale;
+import java.util.ArrayList;
 
 @UnstableApi
 public final class MainActivity extends Activity {
@@ -46,6 +47,7 @@ public final class MainActivity extends Activity {
     private int page;
     private String filter = "";
     private ScrollView scroll;
+    private View currentRoot;
     private SeekBar seek;
     private TextView elapsed;
     private boolean scrubbing, loginVisible;
@@ -76,6 +78,7 @@ public final class MainActivity extends Activity {
         if (controllerFuture != null) { MediaController.releaseFuture(controllerFuture); controllerFuture = null; }
         super.onStop();
     }
+    @Override protected void onDestroy() { Artwork.clear(currentRoot); super.onDestroy(); }
     @Override protected void onSaveInstanceState(Bundle state) { state.putInt("page", page); state.putString("filter", filter); super.onSaveInstanceState(state); }
     private final Runnable tick = new Runnable() {
         @Override public void run() {
@@ -109,9 +112,18 @@ public final class MainActivity extends Activity {
     private void gap(LinearLayout parent, int height) { View gap = new View(this); parent.addView(gap, new LinearLayout.LayoutParams(1, dp(height))); }
     private LinearLayout.LayoutParams weighted() { LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(50), 1); params.setMargins(dp(4), 0, dp(4), 0); return params; }
     private ImageView art(String url, int size) {
+        return art(url, size, false);
+    }
+    private ImageView art(String url, int size, boolean currentSong) {
         ImageView image = new ImageView(this); image.setScaleType(ImageView.ScaleType.CENTER_CROP);
         image.setBackground(shape(SURFACE, 14)); image.setClipToOutline(true); image.setContentDescription("Artwork");
-        image.setLayoutParams(new LinearLayout.LayoutParams(dp(size), dp(size))); Artwork.load(image, url); return image;
+        image.setLayoutParams(new LinearLayout.LayoutParams(dp(size), dp(size))); Artwork.load(image, url, dp(size), currentSong); return image;
+    }
+    private void showRoot(View root) {
+        View previous = currentRoot; currentRoot = root;
+        setContentView(root); ViewCompat.requestApplyInsets(root);
+        // Start replacement requests first so matching in-flight loads are shared.
+        Artwork.clear(previous);
     }
     private LinearLayout root() {
         LinearLayout root = column(); root.setBackgroundColor(BG);
@@ -142,7 +154,7 @@ public final class MainActivity extends Activity {
             int selected = i; Button item = button(labels[i], page == i, v -> { page = selected; scroll = null; render(); });
             item.setTextSize(12); nav.addView(item, weighted());
         }
-        root.addView(nav); setContentView(root); ViewCompat.requestApplyInsets(root);
+        root.addView(nav); showRoot(root);
         scroll.post(() -> { if (scroll != null) scroll.scrollTo(0, previousY); });
     }
     private void showMessage(LinearLayout content) {
@@ -172,7 +184,7 @@ public final class MainActivity extends Activity {
             verifyButton = button("Verify with Pandora", false, v -> startActivity(new Intent(this, VerificationActivity.class))); form.addView(verifyButton); gap(form,20);
             form.addView(text("Requires Pandora Plus or Premium.\nYour sign-in stays encrypted on this phone.",13,MUTED,false)); gap(form,16);
             form.addView(text("Android prototype · " + BuildConfig.VERSION_NAME,12,MUTED,false));
-            holder.addView(form); root.addView(holder,new LinearLayout.LayoutParams(-1,-1)); setContentView(root); ViewCompat.requestApplyInsets(root);
+            holder.addView(form); root.addView(holder,new LinearLayout.LayoutParams(-1,-1)); showRoot(root);
         }
         loginButton.setEnabled(!model.busy); loginButton.setText(model.busy ? "Signing in…" : "Sign in");
         email.setEnabled(!model.busy); password.setEnabled(!model.busy);
@@ -197,6 +209,8 @@ public final class MainActivity extends Activity {
         });
     }
     private void populateStations(LinearLayout list) {
+        var previous = new ArrayList<View>();
+        for (int i = 0; i < list.getChildCount(); i++) previous.add(list.getChildAt(i));
         list.removeAllViews(); int count = 0;
         for (PandoraProtocol.Station station : model.stations) {
             if (!station.name.toLowerCase(Locale.ROOT).contains(filter.toLowerCase(Locale.ROOT))) continue;
@@ -216,6 +230,7 @@ public final class MainActivity extends Activity {
             list.addView(card,new LinearLayout.LayoutParams(-1,-2)); gap(list,10);
         }
         if (count == 0) list.addView(text(model.stations.isEmpty() ? "No stations yet. Add one in Pandora, then tap Refresh." : "No stations match your search.",15,MUTED,false));
+        for (View removed : previous) Artwork.clear(removed);
     }
     private void notificationPermission() {
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED && !getPreferences(MODE_PRIVATE).getBoolean("notificationsAsked",false)) {
@@ -229,7 +244,7 @@ public final class MainActivity extends Activity {
         // Leave room for the song information, touch controls, navigation, and system bars.
         // Short windows can still scroll; ordinary portrait phones keep the thumbs visible.
         int width = Math.max(160, Math.min(320, Math.min(Math.round(metrics.widthPixels / metrics.density) - 48, Math.round(metrics.heightPixels / metrics.density) - 620)));
-        ImageView cover = art(model.track == null ? "" : model.track.art,width);
+        ImageView cover = art(model.track == null ? "" : model.track.art,width,true); cover.setId(R.id.current_artwork);
         LinearLayout.LayoutParams coverParams = new LinearLayout.LayoutParams(dp(width),dp(width)); coverParams.gravity = Gravity.CENTER_HORIZONTAL;
         content.addView(cover,coverParams); gap(content,24);
         TextView title = text(model.track == null ? (model.loading ? "Loading your station…" : "Choose a station") : model.track.title,26,TEXT,true); title.setId(R.id.now_title); content.addView(title); gap(content,7);
@@ -261,7 +276,8 @@ public final class MainActivity extends Activity {
     }
     private View compactPlayer() {
         LinearLayout strip = row(); strip.setBackground(shape(SURFACE,14)); strip.setPadding(dp(14),dp(10),dp(14),dp(10));
-        strip.addView(art(model.track.art,42)); LinearLayout copy = column(); copy.setPadding(dp(12),0,dp(8),0);
+        ImageView cover = art(model.track.art,42,true); cover.setId(R.id.compact_artwork); strip.addView(cover);
+        LinearLayout copy = column(); copy.setPadding(dp(12),0,dp(8),0);
         TextView title = text(model.track.title,14,TEXT,true); title.setMaxLines(1); title.setEllipsize(android.text.TextUtils.TruncateAt.END); copy.addView(title);
         TextView artist = text(model.track.artist,12,MUTED,false); artist.setMaxLines(1); copy.addView(artist);
         strip.addView(copy,new LinearLayout.LayoutParams(0,-2,1));
