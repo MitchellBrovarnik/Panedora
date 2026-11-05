@@ -79,8 +79,11 @@ public final class PlaybackService extends MediaSessionService {
     void shuffle() { load(new PandoraProtocol.Station("","Shuffle Stations","",true),false); }
     private void load(PandoraProtocol.Station station, boolean takeOver) {
         int request = ++generation; ++resumeRevision;
+        // Player callbacks can request a refill while the old timeline is removed.
+        // Keep that work fenced off until the new station and queue are installed.
+        fetching=true;
         resetModes(); advanceAfterRefill=false;
-        pausePlayback(); wantPlayback = true; artwork.clear(); queue.clear(); seen.clear(); player.clearMediaItems(); fetching = true;
+        pausePlayback(); wantPlayback = true; artwork.clear(); queue.clear(); seen.clear(); player.clearMediaItems();
         model.rememberCurrent(); model.station = station; model.track = null; model.loading = true; model.message = ""; model.takeover = false; reportedToken = ""; model.changed();
         model.io.execute(() -> {
             try {
@@ -263,8 +266,9 @@ public final class PlaybackService extends MediaSessionService {
         });
     }
     void clearPlayback() {
-        ++generation; resetModes(); pausePlayback(); fetching = false; advanceAfterRefill=false; artwork.clear(); queue.clear(); seen.clear(); player.stop(); player.clearMediaItems();
+        ++generation; fetching=true; resetModes(); pausePlayback(); advanceAfterRefill=false; artwork.clear(); queue.clear(); seen.clear();
         model.track = null; model.station = null; model.playing = false; model.loading = false;
+        player.stop(); player.clearMediaItems(); fetching=false;
     }
     @Override public void onTaskRemoved(@Nullable Intent rootIntent) {
         model.rememberCurrent();
