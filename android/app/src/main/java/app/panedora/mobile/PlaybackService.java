@@ -83,7 +83,9 @@ public final class PlaybackService extends MediaSessionService {
         // Keep that work fenced off until the new station and queue are installed.
         fetching=true;
         resetModes(); advanceAfterRefill=false;
-        pausePlayback(); wantPlayback = true; artwork.clear(); queue.clear(); seen.clear(); player.clearMediaItems();
+        pausePlayback(); wantPlayback = true; artwork.clear(); queue.clear(); seen.clear();
+        // Reset the old audio pipeline before replacing its timeline and preparing a new station.
+        player.stop(); player.clearMediaItems();
         model.rememberCurrent(); model.station = station; model.track = null; model.loading = true; model.message = ""; model.takeover = false; reportedToken = ""; model.changed();
         model.io.execute(() -> {
             try {

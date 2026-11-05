@@ -38,7 +38,16 @@ public class AppearanceNotificationTest {
             AtomicReference<Boolean> result=new AtomicReference<>(); ui(() -> result.set(condition.getAsBoolean()));
             if (Boolean.TRUE.equals(result.get())) return; Thread.sleep(50);
         }
-        fail("Appearance or notification did not reach the expected state");
+        AtomicReference<String> state=new AtomicReference<>("");
+        ui(() -> {
+            AppModel model=AppModel.get(ApplicationProvider.getApplicationContext());
+            try {
+                var field=PlaybackService.class.getDeclaredField("player"); field.setAccessible(true);
+                var player=(androidx.media3.common.Player)field.get(model.playback);
+                state.set(" playerState="+player.getPlaybackState()+" ready="+player.getPlayWhenReady()+" suppression="+player.getPlaybackSuppressionReason()+" error="+player.getPlayerError()+" message="+model.message);
+            } catch (Exception error) { state.set(" playback="+model.playback+" message="+model.message); }
+        });
+        fail("Appearance or notification did not reach the expected state"+state.get());
     }
     @Before public void prepare() throws Exception { context.getSharedPreferences("appearance",Context.MODE_PRIVATE).edit().clear().commit(); model=NavigationLayoutTest.prepare(context); }
     @After public void stop() throws Exception {
@@ -87,7 +96,8 @@ public class AppearanceNotificationTest {
         }
         assertNotNull("Destroying the screen leaves the active service",model.playback);
         try (ActivityScenario<MainActivity> reopened=ActivityScenario.launch(MainActivity.nowPlayingIntent(context).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))) {
-            onView(withId(R.id.current_artwork)).check(matches(isDisplayed())); assertSame(current,model.track); assertTrue(model.playing);
+            onView(withId(R.id.current_artwork)).check(matches(isDisplayed())); await(() -> model.playing);
+            assertSame(current,model.track); ui(() -> assertTrue(model.playback.wantsPlayback()));
             NavigationLayoutTest.screenshot(context,"notification-player");
         }
     }
