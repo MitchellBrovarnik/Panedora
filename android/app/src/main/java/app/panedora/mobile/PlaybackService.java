@@ -28,12 +28,15 @@ public final class PlaybackService extends MediaSessionService {
     private AppModel model;
     private final List<PandoraProtocol.Track> queue = new ArrayList<>();
     private final Set<String> seen = new HashSet<>();
-    private int generation, resumeRevision;
-    private boolean fetching, resuming, destroyed, wantPlayback;
+    private volatile int generation;
+    private int resumeRevision;
+    private boolean fetching, resuming, wantPlayback;
+    private volatile boolean destroyed;
+    Artwork.Preloader artwork;
     private String reportedToken = "";
 
     @Override public void onCreate() {
-        super.onCreate(); model = AppModel.get(this); model.playback = this;
+        super.onCreate(); model = AppModel.get(this); model.playback = this; artwork = new Artwork.Preloader(this);
         player = new ExoPlayer.Builder(this).build();
         player.setAudioAttributes(new AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), true);
         player.setHandleAudioBecomingNoisy(true); player.setWakeMode(C.WAKE_MODE_LOCAL);
@@ -73,20 +76,25 @@ public final class PlaybackService extends MediaSessionService {
     @Override public MediaSession onGetSession(@NonNull MediaSession.ControllerInfo controllerInfo) { return session; }
 
     void select(PandoraProtocol.Station station) { load(station, false); }
+    void shuffle() { load(new PandoraProtocol.Station("","Shuffle Stations","",true),false); }
     private void load(PandoraProtocol.Station station, boolean takeOver) {
         int request = ++generation; ++resumeRevision;
-        pausePlayback(); wantPlayback = true; queue.clear(); seen.clear(); player.clearMediaItems(); fetching = true;
+        pausePlayback(); wantPlayback = true; artwork.clear(); queue.clear(); seen.clear(); player.clearMediaItems(); fetching = true;
         model.rememberCurrent(); model.station = station; model.track = null; model.loading = true; model.message = ""; model.takeover = false; reportedToken = ""; model.changed();
         model.io.execute(() -> {
             try {
+                PandoraProtocol.Station selected = station.shuffle ? model.api.shuffleStation() : station;
+                if (destroyed || generation != request) return;
                 model.api.resume(takeOver);
-                List<PandoraProtocol.Track> tracks = model.api.playlist(station.id, true);
+                if (destroyed || generation != request) return;
+                List<PandoraProtocol.Track> tracks = model.api.playlist(selected.id, true);
                 if (tracks.isEmpty()) throw new Exception("Pandora did not return playable songs for this station. Try another station.");
                 model.main.post(() -> {
                     if (!current(request)) return;
+                    model.station = selected; if (selected.shuffle) model.rememberShuffle(selected);
                     fetching = false; append(tracks); player.prepare(); if (wantPlayback) player.play(); model.loading = false; model.changed();
                 });
-            } catch (Exception e) { model.main.post(() -> { if (current(request)) { fetching = false; model.loading = false; model.fail(e, () -> select(station)); } }); }
+            } catch (Exception e) { model.main.post(() -> { if (current(request)) { fetching = false; model.loading = false; model.fail(e, () -> load(station,takeOver)); } }); }
         });
     }
     void resume(boolean takeOver) {
@@ -128,13 +136,14 @@ public final class PlaybackService extends MediaSessionService {
         List<MediaItem> items = new ArrayList<>();
         for (PandoraProtocol.Track track : tracks) {
             if (!seen.add(track.token)) continue;
-            track.stationId = model.station.id;
+            if (track.stationId.isEmpty()) track.stationId = model.station.id;
             queue.add(track);
             MediaMetadata.Builder metadata = new MediaMetadata.Builder().setTitle(track.title).setArtist(track.artist).setAlbumTitle(track.album);
             if (!track.art.isEmpty()) metadata.setArtworkUri(Uri.parse(track.art));
             items.add(new MediaItem.Builder().setMediaId(track.token).setUri(track.audio).setMediaMetadata(metadata.build()).build());
         }
         player.addMediaItems(items);
+        artwork.update(queue,player.getCurrentMediaItemIndex());
     }
     private void currentChanged() {
         int index = player.getCurrentMediaItemIndex();
@@ -144,6 +153,7 @@ public final class PlaybackService extends MediaSessionService {
             model.rememberCurrent();
         }
         model.track = next; reportedToken = ""; model.changed();
+        artwork.update(queue,index);
         if (player.isPlaying()) reportStarted();
         if (queue.size() - index <= 2) refill();
     }
@@ -181,7 +191,7 @@ public final class PlaybackService extends MediaSessionService {
         });
     }
     void clearPlayback() {
-        ++generation; pausePlayback(); fetching = false; queue.clear(); seen.clear(); player.stop(); player.clearMediaItems();
+        ++generation; pausePlayback(); fetching = false; artwork.clear(); queue.clear(); seen.clear(); player.stop(); player.clearMediaItems();
         model.track = null; model.station = null; model.playing = false; model.loading = false;
     }
     @Override public void onTaskRemoved(@Nullable Intent rootIntent) {
@@ -194,6 +204,7 @@ public final class PlaybackService extends MediaSessionService {
     }
     @Override public void onDestroy() {
         destroyed = true; ++generation; ++resumeRevision;
+        if (artwork != null) artwork.clear();
         if (session != null) session.release();
         if (player != null) player.release();
         if (model != null) { model.playback = null; model.playing = model.loading = false; model.changed(); }

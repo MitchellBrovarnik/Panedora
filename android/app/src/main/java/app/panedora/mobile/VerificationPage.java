@@ -59,7 +59,7 @@ final class VerificationPage {
                 const rendered = () => [...box.querySelectorAll('iframe,button,input,[role="button"],canvas')].some(element => {
                     const bounds = element.getBoundingClientRect(); return bounds.width > 4 && bounds.height > 4;
                 });
-                const sources = [c.blockScript]; if (c.alternate) sources.push(c.alternate);
+                const sources = [{url:c.blockScript,route:'pandora'}]; if (c.alternate) sources.push({url:c.alternate,route:'provider'});
                 if (c.alternateFirst) sources.reverse();
                 const load = index => {
                     if (root.dataset.panedoraVerification === 'complete') return;
@@ -68,7 +68,8 @@ final class VerificationPage {
                         clearInterval(watcher); root.dataset.panedoraVerification = 'failed';
                         document.getElementById('failure').hidden = false; return;
                     }
-                    const script = document.createElement('script'); script.src = sources[index];
+                    root.dataset.panedoraRoute = sources[index].route;
+                    const script = document.createElement('script'); script.src = sources[index].url;
                     const fallback = () => {
                         if (generation !== attempt || root.dataset.panedoraVerification === 'complete' || rendered()) return;
                         script.remove(); load(index + 1);
@@ -88,5 +89,8 @@ final class VerificationPage {
     }
     static String stateScript(String pageId) {
         return "(() => {const e=document.documentElement;return window.origin==='" + ORIGIN + "' && e.dataset.panedoraPage===" + JSONObject.quote(pageId) + " ? e.dataset.panedoraVerification : 'loading';})()";
+    }
+    static String routeScript(String pageId) {
+        return "(() => {const e=document.documentElement;return window.origin==='" + ORIGIN + "' && e.dataset.panedoraPage===" + JSONObject.quote(pageId) + " && ['ready','complete'].includes(e.dataset.panedoraVerification) ? e.dataset.panedoraRoute : '';})()";
     }
 }

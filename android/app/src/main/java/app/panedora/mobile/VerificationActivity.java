@@ -29,6 +29,7 @@ public final class VerificationActivity extends Activity {
     private FrameLayout container;
     private TextView status;
     private AppModel model;
+    private VerificationRoutes routes;
     private PandoraClient.ApiException challenge;
     private boolean finished, alternateFirst, widgetReady, loadFailed;
     private int generation;
@@ -39,6 +40,7 @@ public final class VerificationActivity extends Activity {
         super.onCreate(saved); WindowCompat.setDecorFitsSystemWindows(getWindow(),false);
         model = AppModel.get(this); challenge = model.verification;
         if (challenge == null) { finish(); return; }
+        routes = new VerificationRoutes(getSharedPreferences("verification-routes",MODE_PRIVATE)); alternateFirst = routes.alternateFirst();
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setBackgroundColor(Color.rgb(16,16,22));
         ViewCompat.setOnApplyWindowInsetsListener(root,(view,insets) -> {
             var padding = insets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.ime());
@@ -102,6 +104,11 @@ public final class VerificationActivity extends Activity {
             if ("\"ready\"".equals(result) && (!widgetReady || loadFailed)) {
                 widgetReady = true; loadFailed = false; status.setTextColor(0xffbdb9cd);
                 status.setText("Complete the check below. Sign-in will retry when Pandora accepts it.");
+                web.evaluateJavascript(VerificationPage.routeScript(pageId),route -> {
+                    if (finished || request != generation) return;
+                    if ("\"provider\"".equals(route)) routes.remember("provider");
+                    else if ("\"pandora\"".equals(route)) routes.remember("pandora");
+                });
             }
             handler.postDelayed(() -> poll(request),250);
         });

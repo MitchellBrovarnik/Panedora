@@ -37,7 +37,13 @@ public class VerificationWebViewTest {
     private WebView web;
     private Dialog dialog;
     private ActivityScenario<MainActivity> scenario;
-    private volatile boolean silent;
+    private volatile boolean silent, providerFails, primaryRenders;
+    private static final String WIDGET = """
+        const button = document.createElement('button'); button.id = 'fixture-complete';
+        button.textContent = 'Test verification fixture'; button.style.cssText = 'width:240px;height:70px';
+        button.onclick = () => { document.cookie = '_px3=fixture-complete; Path=/; Secure; SameSite=Lax'; window._pxOnMobileCaptchaSuccess(true); };
+        document.getElementById('px-captcha').appendChild(button);
+        """;
     private final AtomicReference<String> consoleError = new AtomicReference<>("");
     private final AtomicReference<String> pageError = new AtomicReference<>("");
     private final java.util.List<String> requests = new java.util.concurrent.CopyOnWriteArrayList<>();
@@ -71,18 +77,10 @@ public class VerificationWebViewTest {
                     requests.add((request.isForMainFrame() ? "main:" : "sub:") + ("data".equals(scheme) ? "data" : url));
                     // Inline documents are local data, not a network fixture.
                     if ("data".equals(scheme) || "about".equals(scheme)) return null;
-                    if (url.startsWith("https://www.pandora.com/Fixture/captcha")) { primary.incrementAndGet(); return response(silent ? 200 : 404,""); }
+                    if (url.startsWith("https://www.pandora.com/Fixture/captcha")) { primary.incrementAndGet(); return primaryRenders ? response(200,WIDGET) : response(silent ? 200 : 404,""); }
                     if (url.startsWith("https://captcha.px-cloud.net/PXFixture/captcha.js")) {
                         alternate.incrementAndGet();
-                        return response(200,silent ? "" : """
-                            const button = document.createElement('button'); button.id = 'fixture-complete';
-                            button.textContent = 'Test verification fixture'; button.style.cssText = 'width:240px;height:70px';
-                            button.onclick = () => {
-                                document.cookie = '_px3=fixture-complete; Path=/; Secure; SameSite=Lax';
-                                window._pxOnMobileCaptchaSuccess(true);
-                            };
-                            document.getElementById('px-captcha').appendChild(button);
-                            """);
+                        return providerFails ? response(404,"") : response(200,silent ? "" : WIDGET);
                     }
                     return response(404,""); // The test must never access Pandora or any external service.
                 }
@@ -113,8 +111,11 @@ public class VerificationWebViewTest {
             "; primary=" + primary.get() + "; alternate=" + alternate.get() + "; console=" + consoleError.get() + "; error=" + pageError.get() + "; requests=" + requests);
     }
     private void load(int timeout) throws Exception {
+        load(timeout,false);
+    }
+    private void load(int timeout,boolean alternateFirst) throws Exception {
         JSONObject challenge = new JSONObject("{\"errorCode\":1215,\"appId\":\"PXFixture\",\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"jsClientSrc\":\"/Fixture/init.js\",\"hostUrl\":\"/Fixture/xhr\",\"blockScript\":\"/Fixture/captcha\",\"altBlockScript\":\"https://captcha.px-cloud.net/PXFixture/captcha.js\"}");
-        String html = VerificationPage.html(403,challenge,"https://www.pandora.com/api/v1/auth/login","fixture-page",timeout,false);
+        String html = VerificationPage.html(403,challenge,"https://www.pandora.com/api/v1/auth/login","fixture-page",timeout,alternateFirst);
         ui(() -> web.loadDataWithBaseURL(VerificationPage.ORIGIN + "/",html,"text/html","UTF-8",VerificationPage.ORIGIN + "/"));
     }
     @Test public void fallbackRendersAndMobileCompletionUsesTheSharedCookieJar() throws Exception {
@@ -130,5 +131,27 @@ public class VerificationWebViewTest {
         silent = true; load(250); state("failed");
         assertEquals(1,primary.get()); assertEquals(1,alternate.get());
         assertEquals("false",evaluate("document.getElementById('failure').hidden"));
+    }
+    @Test public void providerFirstDoesNotWaitForThePandoraRoute() throws Exception {
+        var preferences = ApplicationProvider.<Context>getApplicationContext().getSharedPreferences("verification-routes-fixture",Context.MODE_PRIVATE);
+        preferences.edit().clear().commit(); VerificationRoutes routes = new VerificationRoutes(preferences);
+        long start = android.os.SystemClock.elapsedRealtime();
+        load(12000,routes.alternateFirst()); state("ready");
+        assertEquals("No primary-script timeout before the direct script",0,primary.get()); assertEquals(1,alternate.get());
+        assertEquals("\"provider\"",evaluate(VerificationPage.routeScript("fixture-page")));
+        assertEquals("\"\"",evaluate(VerificationPage.routeScript("stale-page")));
+        System.out.println("Direct verification fixture ready in " + (android.os.SystemClock.elapsedRealtime()-start) + "ms without a 12-second first-route wait.");
+        preferences.edit().clear().commit();
+    }
+    @Test public void aFailedProviderFallsBackAndTheWorkingRouteIsRemembered() throws Exception {
+        var preferences = ApplicationProvider.<Context>getApplicationContext().getSharedPreferences("verification-routes-fixture",Context.MODE_PRIVATE);
+        preferences.edit().clear().commit(); VerificationRoutes routes = new VerificationRoutes(preferences);
+        providerFails = primaryRenders = true; load(2000,routes.alternateFirst()); state("ready");
+        assertEquals(1,alternate.get()); assertEquals(1,primary.get());
+        String route = (String)new org.json.JSONTokener(evaluate(VerificationPage.routeScript("fixture-page"))).nextValue();
+        routes.remember(route); assertFalse(new VerificationRoutes(preferences).alternateFirst());
+        routes.remember(""); assertFalse("Untrusted/unfinished pages cannot change the preference",routes.alternateFirst());
+        routes.remember("provider"); assertTrue(new VerificationRoutes(preferences).alternateFirst());
+        preferences.edit().clear().commit();
     }
 }

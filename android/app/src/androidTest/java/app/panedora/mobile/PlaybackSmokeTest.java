@@ -55,11 +55,14 @@ public class PlaybackSmokeTest {
         try (var out = new FileOutputStream(new File(directory,name + ".png"))) { bitmap.compress(Bitmap.CompressFormat.PNG,100,out); }
     }
     static String silentWav(Context context) throws Exception {
-        int bytes = 8000 * 2 * 3;
+        return silentWav(context,3);
+    }
+    static String silentWav(Context context,int seconds) throws Exception {
+        int bytes = 8000 * 2 * seconds;
         ByteBuffer buffer = ByteBuffer.allocate(44 + bytes).order(ByteOrder.LITTLE_ENDIAN);
         buffer.put("RIFF".getBytes()).putInt(36 + bytes).put("WAVEfmt ".getBytes()).putInt(16).putShort((short)1).putShort((short)1);
         buffer.putInt(8000).putInt(16000).putShort((short)2).putShort((short)16).put("data".getBytes()).putInt(bytes);
-        File file = new File(context.getCacheDir(),"test-song.wav");
+        File file = new File(context.getCacheDir(),"test-song-" + seconds + ".wav");
         try (var out = new FileOutputStream(file)) { out.write(buffer.array()); }
         return Uri.fromFile(file).toString();
     }
@@ -72,6 +75,7 @@ public class PlaybackSmokeTest {
         FakePandora(String audio) { this.audio = audio; }
         @Override public void login(String email,String password) {}
         @Override public List<PandoraProtocol.Station> stations() { return Collections.singletonList(new PandoraProtocol.Station("station", "Night Drive Radio", "")); }
+        @Override public PandoraProtocol.Station shuffleStation() { return new PandoraProtocol.Station("shuffle-station","Shuffle Stations","",true); }
         @Override public List<PandoraProtocol.Track> playlist(String station,boolean first) {
             int block = fragments.getAndIncrement(); List<PandoraProtocol.Track> tracks = new ArrayList<>();
             for (int i = 1; i <= 3; i++) { int n = block * 3 + i; tracks.add(new PandoraProtocol.Track("song-"+n,"After Hours " + n,"Northbound","Evening Mix",audio,"",3,0)); }

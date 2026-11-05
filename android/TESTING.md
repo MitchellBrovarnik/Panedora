@@ -14,6 +14,11 @@ Requires Android 8 or newer and Pandora Plus or Premium.
    Play/pause should keep the cover, controls, and scroll position still.
    After another song starts, open **History** and rate the previous song. The
    current song should keep playing. History currently covers this app session.
+   Try **Shuffle Stations**, then refresh the station list; the shuffle control
+   should remain available. Switching back to a regular station while shuffle
+   is loading should keep the newer station choice.
+   Give upcoming artwork a moment to preload, then skip. Prepared artwork should
+   appear immediately in Playing and in the compact player, without a logo flash.
 5. Lock the phone for at least three full songs. Confirm that music continues and
    track changes update the lock-screen controls. Then try using another app.
 6. Pause/resume with the lock-screen controls, and try headphones/Bluetooth.
@@ -35,4 +40,6 @@ effects, lyrics, tuning, or the desktop mini-players yet.
 
 If verification appears, its widget should load below the title. If loading fails,
 the page should show an error and offer **Reload check**. Complete the real check
-yourself; emulator fixtures cannot verify Pandora's live acceptance.
+yourself; emulator fixtures cannot verify Pandora's live acceptance. Check whether
+the direct-script-first order reduces the wait on your phone; server/network
+delays can still affect the result.

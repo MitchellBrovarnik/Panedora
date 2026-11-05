@@ -118,6 +118,11 @@ final class AppModel {
         if (history.isEmpty() || history.get(0) != track) history.add(0,track);
         if (history.size() > 100) history.remove(history.size()-1);
     }
+    void rememberShuffle(PandoraProtocol.Station selected) {
+        List<PandoraProtocol.Station> updated = new ArrayList<>(); updated.add(selected);
+        for (PandoraProtocol.Station station : stations) if (!station.shuffle && !station.id.equals(selected.id)) updated.add(station);
+        stations = updated;
+    }
     void logout() {
         ++authGeneration;
         if (playback != null) playback.clearPlayback();

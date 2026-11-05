@@ -56,7 +56,7 @@ public final class MainActivity extends Activity {
     private EditText email, password;
     private TextView loginMessage;
     private Button loginButton, verifyButton;
-    private Button playControl, compactPlayControl, refreshControl;
+    private Button playControl, compactPlayControl, refreshControl, shuffleControl;
     private final List<ThumbControls> thumbControls = new ArrayList<>();
     private int renderedPage = -1, renderedHistorySize;
     private PandoraProtocol.Track renderedTrack, renderedHistoryFirst;
@@ -159,7 +159,7 @@ public final class MainActivity extends Activity {
             updateControls(); return;
         }
         loginVisible = false; seek = null; elapsed = null;
-        playControl = compactPlayControl = refreshControl = null; thumbControls.clear();
+        playControl = compactPlayControl = refreshControl = shuffleControl = null; thumbControls.clear();
         int previousY = scroll == null ? 0 : scroll.getScrollY();
         LinearLayout root = root(), header = row(); header.setPadding(dp(20), dp(14), dp(20), dp(12));
         ImageView mark = art("", 32); header.addView(mark);
@@ -190,6 +190,10 @@ public final class MainActivity extends Activity {
         if (playControl != null) { playControl.setText(playing ? "Pause" : "Play"); playControl.setEnabled(model.station != null); }
         if (compactPlayControl != null) compactPlayControl.setText(playing ? "Pause" : "Play");
         if (refreshControl != null) { refreshControl.setText(model.busy ? "Loading…" : "Refresh"); refreshControl.setEnabled(!model.busy); }
+        if (shuffleControl != null) {
+            shuffleControl.setEnabled(model.playback != null);
+            shuffleControl.setText(model.loading && model.track == null && model.station != null && model.station.shuffle ? "Loading shuffle…" : "Shuffle Stations");
+        }
         if (elapsed != null && model.playback != null && !scrubbing) elapsed.setText(model.loading ? "Buffering…" : time(model.playback.position()) + "  /  " + time(model.playback.duration()));
         for (ThumbControls controls : thumbControls) {
             boolean enabled = controls.track != null && !model.feedbackBusy;
@@ -260,6 +264,10 @@ public final class MainActivity extends Activity {
         LinearLayout heading = row(); heading.addView(text("Your stations",27,TEXT,true),new LinearLayout.LayoutParams(0,-2,1));
         Button refresh = button(model.busy ? "Loading…" : "Refresh", false, v -> model.refreshStations()); refreshControl = refresh; refresh.setEnabled(!model.busy); heading.addView(refresh); content.addView(heading); gap(content,8);
         content.addView(text("Pick a station and settle in.",14,MUTED,false)); gap(content,20);
+        shuffleControl = button("Shuffle Stations",model.station != null && model.station.shuffle,v -> {
+            if (model.playback == null) return;
+            notificationPermission(); page = 1; scroll = null; model.playback.shuffle();
+        }); shuffleControl.setId(R.id.shuffle_stations); content.addView(shuffleControl); gap(content,18);
         EditText search = field("Find a station",InputType.TYPE_CLASS_TEXT); search.setText(filter); content.addView(search); gap(content,18);
         LinearLayout list = column(); list.setId(R.id.station_list); content.addView(list);
         populateStations(list);
@@ -274,6 +282,7 @@ public final class MainActivity extends Activity {
         for (int i = 0; i < list.getChildCount(); i++) previous.add(list.getChildAt(i));
         list.removeAllViews(); int count = 0;
         for (PandoraProtocol.Station station : model.stations) {
+            if (station.shuffle) continue; // Shuffle has its permanent control above the station list.
             if (!station.name.toLowerCase(Locale.ROOT).contains(filter.toLowerCase(Locale.ROOT))) continue;
             count++;
             LinearLayout card = row(); card.setPadding(dp(12),dp(12),dp(12),dp(12)); card.setBackground(new RippleDrawable(ColorStateList.valueOf(0x22ffffff),shape(SURFACE,14),null));
@@ -301,10 +310,7 @@ public final class MainActivity extends Activity {
     }
     private void renderPlayer(LinearLayout content) {
         content.addView(text(model.station == null ? "Now Playing" : model.station.name,15,ACCENT,true)); gap(content,22);
-        var metrics = getResources().getDisplayMetrics();
-        // Leave room for the song information, touch controls, navigation, and system bars.
-        // Short windows can still scroll; ordinary portrait phones keep the thumbs visible.
-        int width = Math.max(160, Math.min(320, Math.min(Math.round(metrics.widthPixels / metrics.density) - 48, Math.round(metrics.heightPixels / metrics.density) - 620)));
+        int width = Artwork.playerSizeDp(this);
         ImageView cover = art(model.track == null ? "" : model.track.art,width,true); cover.setId(R.id.current_artwork);
         LinearLayout.LayoutParams coverParams = new LinearLayout.LayoutParams(dp(width),dp(width)); coverParams.gravity = Gravity.CENTER_HORIZONTAL;
         content.addView(cover,coverParams); gap(content,24);

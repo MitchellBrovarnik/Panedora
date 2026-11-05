@@ -2,7 +2,7 @@
 
 A separate native Android prototype. The desktop app and website are unchanged.
 
-This build focuses on Pandora sign-in, stations, history, rating/undo, seeking, and
+This build focuses on Pandora sign-in, stations/shuffle, history, rating/undo, seeking, and
 continuous playback through Android Media3. The Stations / Playing / History / Settings
 layout is made for touch and uses Panedora's dark purple palette.
 
@@ -13,7 +13,14 @@ including pending playlist/resume requests, without signing out. The phone
 talks directly to Pandora using the desktop client's REST payloads. Credentials
 are encrypted with Android Keystore; backup and cleartext networking are disabled.
 Pandora verification is displayed for the user to complete, using the same cookie
-store as the API. Taking playback from another device requires a user choice.
+store as the API. It starts with Pandora's supplied direct provider script and
+remembers the route that renders the check, with the other route retained as a
+fallback. Taking playback from another device requires a user choice.
+
+Shuffle uses Pandora's `/v1/station/shuffle` endpoint, as the desktop app does.
+The player preloads decoded artwork for the current song and next two queued
+songs, at both main-player and compact-player sizes. These requests share the
+image cache and release their targets when the queue changes or playback ends.
 
 ## Build
 

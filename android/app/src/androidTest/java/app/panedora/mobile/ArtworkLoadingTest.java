@@ -43,6 +43,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static androidx.test.espresso.Espresso.onView;
 import static androidx.test.espresso.action.ViewActions.click;
 import static androidx.test.espresso.matcher.ViewMatchers.withId;
+import static androidx.test.espresso.matcher.ViewMatchers.withContentDescription;
 import static org.junit.Assert.*;
 
 /** Exercises the real image loader/caches with deterministic delayed image responses. */
@@ -170,5 +171,49 @@ public class ArtworkLoadingTest {
         } finally {
             ui(() -> modelRef.get().logout()); context.stopService(new Intent(context,PlaybackService.class));
         }
+    }
+    @Test public void queuedCoverAppearsOnSkipWithoutAPlaceholderOrAnotherDownload() throws Exception {
+        Fixture first = fixture(Color.BLUE,false), next = fixture(Color.GREEN,false), third = fixture(Color.RED,false);
+        PlaybackSmokeTest.FakePandora fake = new PlaybackSmokeTest.FakePandora(PlaybackSmokeTest.silentWav(context,60)) {
+            @Override public List<PandoraProtocol.Track> playlist(String station,boolean start) {
+                List<PandoraProtocol.Track> tracks = super.playlist(station,start), result = new ArrayList<>();
+                for (int i = 0; i < tracks.size(); i++) {
+                    var track = tracks.get(i); String art = i == 0 ? first.url : i == 1 ? next.url : third.url;
+                    result.add(new PandoraProtocol.Track(track.token,track.title,track.artist,track.album,track.audio,art,track.seconds,0));
+                }
+                return result;
+            }
+        };
+        InstrumentationRegistry.getInstrumentation().getUiAutomation().grantRuntimePermission(context.getPackageName(),android.Manifest.permission.POST_NOTIFICATIONS);
+        AtomicReference<AppModel> reference = new AtomicReference<>();
+        ui(() -> { AppModel model = AppModel.get(context); model.credentials.clear(); model.api = fake; model.signedIn = true; model.stations = fake.stations(); reference.set(model); });
+        AppModel model = reference.get();
+        try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+            AtomicReference<MainActivity> activity = new AtomicReference<>(); scenario.onActivity(activity::set);
+            await(() -> model.playback != null); onView(withContentDescription("Play Night Drive Radio")).perform(click());
+            await(() -> model.playing && model.track != null); ui(() -> model.playback.pausePlayback());
+            await(() -> model.playback.artwork.ready(next.url)); next.allowNetwork = false;
+            assertEquals("Large/compact preloads share the image download",1,next.hits.get());
+            ui(() -> {
+                model.playback.next();
+                assertTrue("Skip displays the decoded cover in the same UI turn",hasColor(activity.get().findViewById(R.id.current_artwork),Color.GREEN));
+                ImageView compact = target(); Artwork.load(compact,next.url,Math.round(42 * context.getResources().getDisplayMetrics().density),true);
+                assertTrue("The compact cover is also already decoded",hasColor(compact,Color.GREEN));
+            });
+            assertEquals("Skipping does not fetch again",1,next.hits.get());
+            ui(model::logout); assertFalse(model.playback != null && model.playback.artwork.ready(next.url));
+        } finally { ui(model::logout); context.stopService(new Intent(context,PlaybackService.class)); }
+    }
+    @Test public void coverPreloadingIsBoundedAndMovesWithTheQueue() throws Exception {
+        List<Fixture> covers = new ArrayList<>(); List<PandoraProtocol.Track> queue = new ArrayList<>();
+        for (int i = 0; i < 8; i++) { Fixture cover = fixture(Color.BLUE,true); covers.add(cover); queue.add(new PandoraProtocol.Track("track-"+i,"Song","Artist","Album","",cover.url,180,0)); }
+        Artwork.Preloader preloader = new Artwork.Preloader(context);
+        try {
+            ui(() -> preloader.update(queue,0)); await(() -> covers.subList(0,3).stream().allMatch(f -> f.hits.get() == 1));
+            for (int i = 3; i < covers.size(); i++) assertEquals("Only current plus next two are fetched",0,covers.get(i).hits.get());
+            ui(() -> preloader.update(queue,3)); await(() -> covers.subList(3,6).stream().allMatch(f -> f.hits.get() == 1));
+            for (int i = 0; i < 3; i++) assertEquals("Old pending covers are cancelled",0,covers.get(i).release.getCount());
+            assertEquals(0,covers.get(6).hits.get()); assertEquals(0,covers.get(7).hits.get());
+        } finally { ui(preloader::clear); }
     }
 }

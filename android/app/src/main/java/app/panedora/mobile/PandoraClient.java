@@ -100,6 +100,11 @@ final class PandoraClient implements PandoraGateway {
         authToken = token; cookies.flush();
     }
     @Override public List<PandoraProtocol.Station> stations() throws Exception { return PandoraProtocol.stations(request("/v1/station/getStations", PandoraProtocol.body("pageSize", 250, "startIndex", 0))); }
+    @Override public PandoraProtocol.Station shuffleStation() throws Exception {
+        PandoraProtocol.Station station = PandoraProtocol.station(request("/v1/station/shuffle",new JSONObject()),true);
+        if (station == null) throw new Exception("Pandora did not return your shuffle station. Please try again.");
+        return station;
+    }
     @Override public List<PandoraProtocol.Track> playlist(String station, boolean first) throws Exception { return PandoraProtocol.tracks(request("/v1/playlist/getFragment", PandoraProtocol.playlistBody(station, first))); }
     @Override public void resume(boolean takeOver) throws Exception { request("/v1/station/playbackResumed", PandoraProtocol.body("forceActive", takeOver)); }
     @Override public String feedback(String token, boolean positive) throws Exception {

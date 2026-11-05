@@ -14,7 +14,9 @@ import java.util.Locale;
 final class PandoraProtocol {
     static final class Station {
         final String id, name, art;
-        Station(String id, String name, String art) { this.id = id; this.name = name; this.art = art; }
+        final boolean shuffle;
+        Station(String id, String name, String art) { this(id,name,art,false); }
+        Station(String id, String name, String art, boolean shuffle) { this.id = id; this.name = name; this.art = art; this.shuffle = shuffle; }
     }
     static final class Track {
         final String token, title, artist, album, audio, art;
@@ -79,9 +81,16 @@ final class PandoraProtocol {
         JSONArray list = value.optJSONArray("stations");
         for (int i = 0; list != null && i < list.length(); i++) {
             JSONObject item = list.optJSONObject(i);
-            if (item != null && !item.optString("stationId").isEmpty()) result.add(new Station(item.optString("stationId"), item.optString("name", "Station"), artwork(item.optJSONArray("art"))));
+            Station station = station(item,false); if (station != null) result.add(station);
         }
         return result;
+    }
+    static Station station(JSONObject value, boolean forceShuffle) {
+        if (value == null || value.isNull("stationId") || value.optString("stationId").trim().isEmpty()) return null;
+        String name = value.optString("name","Station");
+        boolean shuffle = forceShuffle || value.optBoolean("isShuffle") || value.optBoolean("isQuickMix") ||
+            "QUICKMIX".equals(value.optString("stationType")) || Arrays.asList("Shuffle","QuickMix","Shuffle Stations").contains(name);
+        return new Station(value.optString("stationId"),shuffle ? "Shuffle Stations" : name,artwork(value.optJSONArray("art")),shuffle);
     }
     static List<Track> tracks(JSONObject value) {
         List<Track> result = new ArrayList<>();

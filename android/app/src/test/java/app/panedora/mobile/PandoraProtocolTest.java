@@ -43,4 +43,14 @@ public class PandoraProtocolTest {
         assertEquals("correct",PandoraProtocol.matchingFeedback(feedback,track));
         track.musicId = ""; assertEquals("",PandoraProtocol.matchingFeedback(feedback,track));
     }
+    @Test public void shuffleRecognizesServerFlagsAndTheDedicatedEndpoint() throws Exception {
+        for (String fields : new String[]{"\"isQuickMix\":true","\"isShuffle\":true","\"stationType\":\"QUICKMIX\"","\"name\":\"Shuffle\""}) {
+            var station = PandoraProtocol.station(new JSONObject("{\"stationId\":\"shuffle-7\"," + fields + "}"),false);
+            assertTrue(station.shuffle); assertEquals("Shuffle Stations",station.name);
+        }
+        assertTrue(PandoraProtocol.station(new JSONObject("{\"stationId\":\"shuffle-8\"}"),true).shuffle);
+        assertFalse(PandoraProtocol.station(new JSONObject("{\"stationId\":\"normal\",\"name\":\"Radio\"}"),false).shuffle);
+        assertNull(PandoraProtocol.station(new JSONObject("{\"stationId\":null}"),true));
+        assertNull(PandoraProtocol.station(new JSONObject("{\"stationId\":\" \"}"),true));
+    }
 }
