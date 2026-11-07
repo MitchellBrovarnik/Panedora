@@ -185,6 +185,12 @@ function endMiniPlayerMove() {
     saveMiniBoundsNow();
 }
 
+function sendMiniPlayerMode() {
+    const mode = { isMini: isMiniPlayer, legacy: classicMiniActive };
+    sendToUI('UI:MINI_MODE', mode);
+    return mode;
+}
+
 ipcMain.handle('WINDOW:TOGGLE_MINI', async () => {
     if (!uiWindow) return { isMini: false };
 
@@ -239,8 +245,7 @@ ipcMain.handle('WINDOW:TOGGLE_MINI', async () => {
     }
 
     // Notify the renderer about the mode change
-    sendToUI('UI:MINI_MODE', { isMini: isMiniPlayer, legacy });
-    return { isMini: isMiniPlayer, legacy };
+    return sendMiniPlayerMode();
 });
 
 // Window control handlers for custom title bar
@@ -1000,6 +1005,9 @@ ipcMain.handle('APP:UPDATE_RESPONSE', async (event, { version, action } = {}) =>
 });
 
 ipcMain.handle('APP:INIT', async () => {
+    // Ctrl+R replaces the renderer, but the native mini window stays open.
+    // Restore its actual layout and expand control before sign-in can delay it.
+    sendMiniPlayerMode();
     try {
         // Always do a fresh login with saved credentials on startup.
         // Auth tokens expire between sessions, so restoring a stale token
