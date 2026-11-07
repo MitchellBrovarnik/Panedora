@@ -52,6 +52,9 @@ app.whenReady().then(async () => {
     let artistOnlyAvailable = false;
     let premiumAccount = false;
     let loseModeResponse = false;
+    let issuedSessions = 0;
+    let currentAuthToken = null;
+    let modePlaybackOwner = null;
     const modeData = () => ({
         interactiveRadioAvailable: !modesUnavailable,
         currentModeId: activeMode,
@@ -132,7 +135,15 @@ app.whenReady().then(async () => {
             });
         }
         const body = request.method === 'POST' ? JSON.parse(await request.text()) : {};
-        calls.push({ path: url.pathname, host: url.hostname, body });
+        const auth = request.headers.get('X-AuthToken');
+        calls.push({ path: url.pathname, host: url.hostname, body, auth });
+        // Model a real account's stream owner for the repeated Artist Only test.
+        // A login creates a new session; it must not silently replace that owner.
+        if (modePlaybackOwner && [
+            '/api/v1/interactiveradio/getAvailableModesSimple',
+            '/api/v1/interactiveradio/setAndGetAvailableModes',
+            '/api/v1/playlist/getFragment'
+        ].includes(url.pathname) && auth !== modePlaybackOwner) return json({ errorString: 'STREAM_VIOLATION' }, 429);
         switch (url.pathname) {
             case '/repos/MitchellBrovarnik/Panedora/releases/latest':
                 return json({ tag_name: releaseTag, draft: false, prerelease: false,
@@ -140,7 +151,8 @@ app.whenReady().then(async () => {
                         name, browser_download_url: 'https://github.com/MitchellBrovarnik/Panedora/releases/download/' + releaseTag + '/' + name
                     })) });
             case '/api/v1/auth/login':
-                return json({ authToken: 'fixture-token', config: premiumAccount
+                currentAuthToken = 'fixture-session-' + ++issuedSessions;
+                return json({ authToken: currentAuthToken, config: premiumAccount
                     ? { branding: 'PandoraPremium', flags: ['onDemand'] }
                     : { branding: 'PandoraPlus' } });
             case '/api/v1/station/getStations':
@@ -1275,6 +1287,26 @@ app.whenReady().then(async () => {
     await waitFor(() => run("AppState.playerState.trackToken === 'tuned-5-fixture-track-1' && !document.querySelector('audio').paused"), 'Artist Only playback');
     assert.equal(await run("document.querySelector('audio').src"), reusedAudioURL);
     assert.equal(await run("document.querySelector('audio').currentTime < 10"), true, 'A fresh track token restarts even a reused audio URL');
+
+    modePlaybackOwner = currentAuthToken;
+    const loginsBeforeRepeatedTuning = issuedSessions;
+    const takeoversBeforeRepeatedTuning = calls.filter(c => c.path.endsWith('/playbackResumed') && c.body.forceActive).length;
+    const approvalsBeforeRepeatedTuning = calls.filter(c => c.path.endsWith('/playbackResumed')).length;
+    for (const modeId of [0, 5, 1091989, 5]) {
+        await run(`document.getElementById('np-mode-select').click(); document.getElementById('np-mode-option-${modeId}').click()`);
+        await waitFor(() => run(`document.getElementById('stream-conflict-dialog').open ||
+            (!AppState.playerState.stationModes.changing && AppState.playerState.stationModes.currentModeId === ${modeId} && !document.querySelector('audio').paused)`),
+            'repeated playing mode ' + modeId);
+        assert.equal(await run("document.getElementById('stream-conflict-dialog').open"), false,
+            'Returning to Artist Only must not create a competing login or show the device prompt');
+    }
+    assert.equal(issuedSessions, loginsBeforeRepeatedTuning, 'Repeated Artist Only changes keep the verified login');
+    assert.equal(calls.filter(c => c.path.endsWith('/playbackResumed')).length, approvalsBeforeRepeatedTuning,
+        'Already-playing mode changes do not request another playback approval');
+    assert.equal(calls.filter(c => c.path.endsWith('/playbackResumed') && c.body.forceActive).length, takeoversBeforeRepeatedTuning,
+        'Tuning must not force a device takeover');
+    await capture('artist-only-session-continuity');
+    modePlaybackOwner = null;
 
     await run("document.querySelector('audio').pause()");
     await waitFor(() => run('!AppState.playerState.isPlaying'), 'normal pause of the new song');

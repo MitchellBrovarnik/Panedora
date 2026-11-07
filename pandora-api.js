@@ -108,6 +108,7 @@ class PandoraAPI {
                     endpoint !== '/v1/auth/login' && this.onSessionExpired && !sessionRefreshUsed) {
                     sessionRefreshUsed = true;
                     const relogged = await this.onSessionExpired({ isCurrent });
+                    PandoraAPI.assertCurrent(isCurrent);
                     if (relogged) continue;
                 }
                 throw error;
@@ -451,20 +452,10 @@ class PandoraAPI {
             if (!offered.available || !selected?.available) {
                 return { ...offered, success: false, modeRequestSent: false, error: 'Choose a mode available for your station and subscription.' };
             }
-            if (selected.premiumOnly) {
-                // Re-confirm the subscription before every Premium-only change,
-                // including an account downgraded since the menu was loaded.
-                const creds = config.getCredentials();
-                if (!creds?.email || !creds?.password) {
-                    this.premiumAuthToken = null;
-                    return { success: false, modeRequestSent: false, error: 'Sign in again to confirm your Pandora Premium subscription.' };
-                }
-                const login = await this.login(creds.email, creds.password, { isCurrent, refreshSession: true });
-                PandoraAPI.assertCurrent(isCurrent);
-                if (!login.success || !this.hasPremiumAccess()) {
-                    return { success: false, modeRequestSent: false, error: 'This mode requires a verified Pandora Premium subscription.' };
-                }
-            }
+            // Eligibility is tied to the current verified login and Pandora's
+            // fresh station offer. Signing in again here replaces the session
+            // that owns the playing stream and can create a self-conflict.
+            // Real expiry still renews through request() and the gate below.
             const response = await this.request('/v1/interactiveradio/setAndGetAvailableModes', { stationId, modeId }, {
                 isCurrent,
                 beforeRequest: () => {

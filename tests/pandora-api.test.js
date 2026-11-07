@@ -40,7 +40,7 @@ function setup(responses) {
 
 const blocked = () => ({ status: 403, body: { ...challenge } });
 const paid = () => ({ status: 200, body: { authToken: 'new-token', listenerId: 'listener', config: { branding: 'PandoraPlus' } } });
-const premium = () => ({ status: 200, body: { authToken: 'premium-token', config: { branding: 'PandoraPremium', flags: ['onDemand'] } } });
+const premium = (token = 'premium-token') => ({ status: 200, body: { authToken: token, config: { branding: 'PandoraPremium', flags: ['onDemand'] } } });
 
 test('artwork ignores missing URLs and retains valid resolutions in descending size order', () => {
     const API = setup([]).api.constructor;
@@ -63,6 +63,45 @@ function modeResponse(currentModeId = 0) {
         ]
     };
 }
+
+test('repeated Artist Only changes keep the active listening session', async () => {
+    const { api, electron, calls } = setup([]);
+    let logins = 0;
+    let owner = null;
+    let mode = 0;
+    electron.net.fetch = async (url, options) => {
+        calls.push({ url, ...options });
+        const endpoint = new URL(url).pathname;
+        const body = JSON.parse(options.body);
+        const token = options.headers['X-AuthToken'];
+        let status = 200;
+        let response = {};
+        if (endpoint.endsWith('/auth/login')) {
+            response = { authToken: `premium-session-${++logins}`, config: { branding: 'PandoraPremium', flags: ['onDemand'] } };
+        } else if (endpoint.endsWith('/playbackResumed') && !owner) owner = token;
+        else if (token !== owner) {
+            status = 429;
+            response = { errorString: 'STREAM_VIOLATION' };
+        } else if (endpoint.endsWith('/getAvailableModesSimple') || endpoint.endsWith('/setAndGetAvailableModes')) {
+            if (endpoint.endsWith('/setAndGetAvailableModes')) mode = body.modeId;
+            response = modeResponse(mode);
+            response.availableModes.find(item => item.modeId === 5).isModeAvailable = true;
+        } else if (endpoint.endsWith('/getFragment')) response = { tracks: [] };
+        else assert.fail(`Unexpected endpoint: ${endpoint}`);
+        return { ok: status === 200, status, text: async () => JSON.stringify(response) };
+    };
+    assert.equal((await api.login('test@example.invalid', 'test-password')).success, true);
+    assert.equal((await api.playbackResumed(false)).success, true);
+    for (const modeId of [5, 1091989, 5, 0, 5]) {
+        const changed = await api.setStationMode('station-1', modeId);
+        assert.equal(changed.success, true, `Mode ${modeId} must reuse the session that owns playback`);
+        assert.equal(changed.streamConflict, undefined);
+        assert.equal((await api.getPlaylist('station-1', false)).streamConflict, undefined);
+        assert.equal(api.authToken, owner);
+    }
+    assert.equal(logins, 1, 'Changing modes must not sign in again');
+    assert.equal(calls.some(call => JSON.parse(call.body).forceActive === true), false);
+});
 
 test('station modes use the interactive-radio endpoint and normalize actual IDs and restrictions', async () => {
     for (const nested of [false, true]) {
@@ -153,36 +192,47 @@ test('verified Premium still requires an eligible station and does not depend on
     }
 });
 
-test('Premium-only selections recheck the account and require Pandora to confirm the mode', async () => {
+test('Premium-only selections reuse the verified login and require Pandora to confirm the mode', async () => {
     const available = modeResponse();
     available.availableModes.find(mode => mode.modeId === 5).isModeAvailable = true;
     const confirmed = { ...available, currentModeId: 5 };
     const { api, calls } = setup([
-        premium(), { status: 200, body: available }, premium(), { status: 200, body: confirmed }
+        premium(), { status: 200, body: available }, { status: 200, body: confirmed }
     ]);
     await api.login('test@example.invalid', 'test-password');
     assert.equal((await api.setStationMode('station-1', 5)).success, true);
     assert.deepEqual(calls.slice(1).map(call => new URL(call.url).pathname), [
         '/api/v1/interactiveradio/getAvailableModesSimple',
-        '/api/v1/auth/login',
         '/api/v1/interactiveradio/setAndGetAvailableModes'
     ]);
+    assert.equal(calls[2].headers['X-AuthToken'], 'premium-token');
 });
 
-test('downgrades, failed verification and missing credentials block Premium mode requests', async () => {
+test('verified Premium mode changes do not require another copy of the saved password', async () => {
     const available = modeResponse();
     available.availableModes.find(mode => mode.modeId === 5).isModeAvailable = true;
-    for (const nextLogin of [paid(), { status: 401, body: { message: 'Session expired' } }, null]) {
+    const { api, state, calls } = setup([premium(), { status: 200, body: available }, { status: 200, body: { ...available, currentModeId: 5 } }]);
+    await api.login('test@example.invalid', 'test-password');
+    state.credentials = null;
+    assert.equal((await api.setStationMode('station-1', 5)).success, true);
+    assert.equal(calls.filter(call => call.url.endsWith('/auth/login')).length, 1);
+});
+
+test('failed or unavailable renewal cannot retry an expired Premium mode request', async () => {
+    const available = modeResponse();
+    available.availableModes.find(mode => mode.modeId === 5).isModeAvailable = true;
+    for (const nextLogin of [{ status: 401, body: { message: 'Session expired' } }, null]) {
         const { api, state, calls } = setup([
-            premium(), { status: 200, body: available }, ...(nextLogin ? [nextLogin] : []),
-            { status: 200, body: available }
+            premium(), { status: 200, body: available }, { status: 401, body: { errorCode: 1000 } }, ...(nextLogin ? [nextLogin] : [])
         ]);
         await api.login('test@example.invalid', 'test-password');
         if (!nextLogin) state.credentials = null;
+        api.onSessionExpired = async options => state.credentials
+            ? (await api.login(state.credentials.email, state.credentials.password, { ...options, refreshSession: true })).success
+            : false;
         assert.equal((await api.setStationMode('station-1', 5)).success, false);
-        assert.equal(calls.some(call => call.url.endsWith('/setAndGetAvailableModes')), false);
-        assert.equal(api.hasPremiumAccess(), false);
-        assert.equal((await api.getStationModes('station-1')).modes.find(mode => mode.id === 5).available, false);
+        assert.equal(calls.filter(call => call.url.endsWith('/setAndGetAvailableModes')).length, 1);
+        assert.equal(calls.filter(call => call.url.endsWith('/auth/login')).length, nextLogin ? 2 : 1);
     }
 });
 
@@ -217,7 +267,7 @@ test('an expired Premium mode request cannot retry after reauthentication downgr
     const available = modeResponse();
     available.availableModes.find(mode => mode.modeId === 5).isModeAvailable = true;
     const { api, calls } = setup([
-        premium(), { status: 200, body: available }, premium(),
+        premium(), { status: 200, body: available },
         { status: 401, body: { errorCode: 1000 } }, paid(),
         { status: 200, body: { ...available, currentModeId: 5 } }
     ]);
@@ -236,9 +286,9 @@ test('an eligible Premium mode still retries successfully after session renewal 
         const available = modeResponse();
         available.availableModes.find(mode => mode.modeId === 5).isModeAvailable = true;
         const { api, calls } = setup([
-            premium(), { status: 200, body: available }, premium(),
+            premium(), { status: 200, body: available },
             verification ? blocked() : { status: 401, body: { errorCode: 1000 } },
-            ...(verification ? [] : [premium()]),
+            ...(verification ? [] : [premium('renewed-premium-token')]),
             { status: 200, body: { ...available, currentModeId: 5 } }
         ]);
         await api.login('test@example.invalid', 'test-password');
@@ -247,10 +297,11 @@ test('an eligible Premium mode still retries successfully after session renewal 
         assert.equal((await api.setStationMode('station-1', 5)).success, true);
         assert.equal(calls.filter(call => call.url.endsWith('/setAndGetAvailableModes')).length, 2);
         assert.equal(api.hasPremiumAccess(), true);
+        assert.equal(calls.at(-1).headers['X-AuthToken'], verification ? 'premium-token' : 'renewed-premium-token');
     }
 });
 
-test('logging out during a Premium check cannot restore credentials or submit the mode', async () => {
+test('logging out during an expired Premium request cannot restore credentials or retry the setter', async () => {
     const available = modeResponse();
     available.availableModes.find(mode => mode.modeId === 5).isModeAvailable = true;
     let completeLogin;
@@ -258,10 +309,12 @@ test('logging out during a Premium check cannot restore credentials or submit th
     const checking = new Promise(resolve => { loginStarted = resolve; });
     const { api, state, calls } = setup([
         premium(), { status: 200, body: available },
+        { status: 401, body: { errorCode: 1000 } },
         () => { loginStarted(); return new Promise(resolve => { completeLogin = resolve; }); },
         { status: 200, body: { ...available, currentModeId: 5 } }
     ]);
     await api.login('test@example.invalid', 'test-password');
+    api.onSessionExpired = async options => (await api.login('test@example.invalid', 'test-password', { ...options, refreshSession: true })).success;
     const change = api.setStationMode('station-1', 5);
     await checking;
     api.logout();
@@ -270,11 +323,11 @@ test('logging out during a Premium check cannot restore credentials or submit th
     assert.equal(api.isAuthenticated(), false);
     assert.equal(api.hasPremiumAccess(), false);
     assert.equal(state.credentials, null);
-    assert.equal(calls.some(call => call.url.endsWith('/setAndGetAvailableModes')), false);
+    assert.equal(calls.filter(call => call.url.endsWith('/setAndGetAvailableModes')).length, 1);
 });
 
-test('a cancelled station change stops after preflight, Premium verification or CAPTCHA', async () => {
-    for (const stage of ['preflight', 'premium', 'captcha']) {
+test('a cancelled station change stops after preflight, session renewal or CAPTCHA', async () => {
+    for (const stage of ['preflight', 'renewal', 'captcha']) {
         const available = modeResponse();
         available.availableModes.find(mode => mode.modeId === 5).isModeAvailable = true;
         let complete;
@@ -284,20 +337,21 @@ test('a cancelled station change stops after preflight, Premium verification or 
         const { api, calls } = setup([
             premium(),
             stage === 'preflight' ? deferred : { status: 200, body: available },
-            stage === 'premium' ? deferred : premium(),
-            blocked()
+            stage === 'renewal' ? { status: 401, body: { errorCode: 1000 } } : blocked(),
+            ...(stage === 'renewal' ? [deferred] : [])
         ]);
         await api.login('test@example.invalid', 'test-password');
+        api.onSessionExpired = async options => (await api.login('test@example.invalid', 'test-password', { ...options, refreshSession: true })).success;
         api.onVerificationRequired = deferred;
         let current = true;
         const changing = api.setStationMode('station-1', 5, { isCurrent: () => current });
         await waiting;
         current = false;
-        complete(stage === 'preflight' ? { status: 200, body: available } : stage === 'premium' ? premium() : true);
+        complete(stage === 'preflight' ? { status: 200, body: available } : stage === 'renewal' ? premium() : true);
         const result = await changing;
         assert.equal(result.success, false);
         assert.equal(result.cancelled, true);
-        assert.equal(calls.filter(call => call.url.endsWith('/setAndGetAvailableModes')).length, stage === 'captcha' ? 1 : 0);
+        assert.equal(calls.filter(call => call.url.endsWith('/setAndGetAvailableModes')).length, stage === 'preflight' ? 0 : 1);
         assert.equal(api.hasPremiumAccess(), true, 'Station cancellation must not erase the existing account proof');
     }
 });
@@ -306,14 +360,14 @@ test('eligibility and cancellation are checked again after asynchronous cookie a
     for (const cancel of [false, true]) {
         const available = modeResponse();
         available.availableModes.find(mode => mode.modeId === 5).isModeAvailable = true;
-        const { api, calls, electron, cookies } = setup([premium(), { status: 200, body: available }, premium()]);
+        const { api, calls, electron, cookies } = setup([premium(), { status: 200, body: available }]);
         await api.login('test@example.invalid', 'test-password');
         let finishCookieRead;
         let started;
         const waiting = new Promise(resolve => { started = resolve; });
         let reads = 0;
         electron.session.defaultSession.cookies.get = async () => {
-            if (++reads === 3) {
+            if (++reads === 2) {
                 started();
                 return new Promise(resolve => { finishCookieRead = resolve; });
             }
