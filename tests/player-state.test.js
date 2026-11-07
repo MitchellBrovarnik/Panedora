@@ -1346,6 +1346,44 @@ function miniWindow(s) {
     return { log, state, toggle: () => s.handlers.get('WINDOW:TOGGLE_MINI')({}) };
 }
 
+for (const layout of ['full', 'wide', 'classic']) {
+    test(`renderer initialization restores the active ${layout} window layout before sign-in`, async () => {
+        let legacy = layout === 'classic';
+        const s = setup({
+            getLegacyMiniplayer: () => legacy,
+            getCredentials: () => ({ email: 'fixture@example.invalid', password: 'fixture' })
+        });
+        const { log, state, toggle } = miniWindow(s);
+        const fullBounds = { ...state.bounds };
+        if (layout !== 'full') await toggle();
+        const activeBounds = { ...state.bounds };
+        legacy = !legacy; // A changed preference must not reinterpret an already-open mini player.
+
+        for (let reload = 0; reload < 2; reload++) {
+            let finishLogin;
+            s.api.login = () => new Promise(resolve => { finishLogin = resolve; });
+            s.messages.length = 0;
+            log.length = 0;
+            const initialized = s.handlers.get('APP:INIT')({ sender: s.window.webContents });
+            try {
+                assert.equal(s.messages[0]?.name, 'UI:MINI_MODE', 'Restore the native layout before waiting for sign-in');
+                assert.deepEqual(JSON.parse(JSON.stringify(s.messages[0])), {
+                    name: 'UI:MINI_MODE', data: { isMini: layout !== 'full', legacy: layout === 'classic' }
+                }, 'Send the actual native layout before authentication can delay or fail');
+                assert.deepEqual(state.bounds, activeBounds, 'Restoring the UI must not resize or toggle the native window');
+                assert.deepEqual(log, [], 'Keep the original full-window bounds and constraints intact');
+            } finally {
+                finishLogin({ success: false, error: 'Fixture offline' });
+                await initialized;
+            }
+        }
+        if (layout !== 'full') {
+            assert.deepEqual({ ...await toggle() }, { isMini: false, legacy: false });
+            assert.deepEqual(state.bounds, fullBounds, 'One click still expands to the original full window after repeated reloads');
+        }
+    });
+}
+
 test('toggling the mini player sizes the window for the classic or wide layout and restores it', async () => {
     let legacy = true;
     const saved = [];

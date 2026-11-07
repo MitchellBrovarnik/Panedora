@@ -53,6 +53,7 @@ app.whenReady().then(async () => {
     let premiumAccount = false;
     let loseModeResponse = false;
     let issuedSessions = 0;
+    let loginGate = null;
     let currentAuthToken = null;
     let modePlaybackOwner = null;
     const modeData = () => ({
@@ -151,6 +152,7 @@ app.whenReady().then(async () => {
                         name, browser_download_url: 'https://github.com/MitchellBrovarnik/Panedora/releases/download/' + releaseTag + '/' + name
                     })) });
             case '/api/v1/auth/login':
+                if (loginGate) await loginGate;
                 currentAuthToken = 'fixture-session-' + ++issuedSessions;
                 return json({ authToken: currentAuthToken, config: premiumAccount
                     ? { branding: 'PandoraPremium', flags: ['onDemand'] }
@@ -1624,6 +1626,70 @@ app.whenReady().then(async () => {
     await exerciseNaturalMiniArtwork();
     await exerciseNaturalMiniArtwork(true);
     await exerciseAudioRecovery();
+
+    // Ctrl+R reloads the renderer without recreating the native mini window.
+    // Exercise both layouts with sign-in held, then click the real expand control.
+    for (const legacy of [false, true]) {
+        const layout = legacy ? 'classic' : 'wide';
+        const expandId = legacy ? 'classic-expand' : 'mini-player-btn';
+        const fullBounds = win.getBounds();
+        for (let reload = 0; reload < 2; reload++) {
+            await run(`window.api.settings.setLegacyMiniplayer(${legacy})`);
+            await run('window.api.window.toggleMini()');
+            await waitFor(() => run("document.body.classList.contains('mini-mode')"), layout + ' mini entry before reload');
+            const miniBounds = win.getBounds();
+            const minimum = win.getMinimumSize();
+            const maximum = win.getMaximumSize();
+            // Changing the next-entry preference must not change the layout of this open window.
+            await run(`window.api.settings.setLegacyMiniplayer(${!legacy})`);
+            let finishLogin;
+            loginGate = new Promise(resolve => { finishLogin = resolve; });
+            try {
+                const loaded = new Promise(resolve => win.webContents.once('did-finish-load', resolve));
+                win.reload(); await loaded;
+                await waitFor(() => run(`document.body.classList.contains('mini-mode') &&
+                    document.body.classList.contains('classic-mini') === ${legacy}`), layout + ' mini layout restored before sign-in');
+                assert.equal(await run('AppState.isLoggedIn'), false, 'Mini restoration must not wait for authentication');
+                assert.deepEqual(win.getBounds(), miniBounds, 'Reload must not resize or move the mini window');
+                assert.deepEqual(win.getMinimumSize(), minimum);
+                assert.deepEqual(win.getMaximumSize(), maximum);
+                assert.equal(win.isAlwaysOnTop(), true);
+                assert.equal(await run("getComputedStyle(document.querySelector('.custom-titlebar')).display"), 'none',
+                    'The full-app title bar must not cover the mini controls after reload');
+                if (reload === 0) {
+                    finishLogin(); loginGate = null;
+                    await waitFor(() => run('AppState.isLoggedIn && AppState.stations.length > 0'), layout + ' sign-in in mini mode');
+                    assert.equal(await run("document.body.classList.contains('mini-mode')"), true,
+                        'Finishing sign-in must keep the mini layout');
+                    assert.equal(await run("document.body.classList.contains('classic-mini')"), legacy);
+                    await capture(layout + '-mini-after-reload');
+                }
+                const expand = await run(`(() => {
+                    const button = document.getElementById('${expandId}');
+                    const box = button.getBoundingClientRect();
+                    const x = Math.floor(box.left + box.width / 2), y = Math.floor(box.top + box.height / 2);
+                    return { x, y, reachable: box.width > 0 && box.height > 0 && x >= 0 && y >= 0 &&
+                        x < innerWidth && y < innerHeight && button.contains(document.elementFromPoint(x, y)) };
+                })()`);
+                assert.equal(expand.reachable, true, layout + ' expand button must be visible and clickable after reload');
+                win.focus();
+                win.webContents.sendInputEvent({ type: 'mouseDown', x: expand.x, y: expand.y, button: 'left', clickCount: 1 });
+                win.webContents.sendInputEvent({ type: 'mouseUp', x: expand.x, y: expand.y, button: 'left', clickCount: 1 });
+                await waitFor(() => run("!document.body.classList.contains('mini-mode')"), layout + ' expands after reload');
+                assert.deepEqual(win.getBounds(), fullBounds, 'Expand restores the original full window');
+                assert.deepEqual(win.getMinimumSize(), [900, 600]);
+                assert.equal(win.isAlwaysOnTop(), false);
+            } finally {
+                finishLogin(); loginGate = null;
+            }
+            await waitFor(() => run('AppState.isLoggedIn && AppState.stations.length > 0'), layout + ' sign-in after expanding');
+            assert.equal(await run("document.body.classList.contains('mini-mode')"), false,
+                'A late sign-in cannot put the expanded window back in mini mode');
+        }
+    }
+    await run('window.api.settings.setLegacyMiniplayer(false)');
+    console.log('Repeated renderer reloads in wide and classic mini mode passed: layout, visible controls, pending sign-in, mouse expansion, original bounds and window constraints.');
+
     // Real audio -> renderer -> isolated preload -> main -> actual local IPC frames.
     assert.equal(discordServer.connections.length, 0, 'Discord is opt-in throughout normal playback');
     stressTracks = null; freshTracks = null; activeMode = 0; canStream = true;
