@@ -52,9 +52,10 @@
     }
     function rememberSong() {
         const song = currentSong();
-        history.unshift({ trackToken: song.id, songTitle: song.title, artistName: song.artist,
+        // Match desktop history: chronological data, reversed by the shared UI.
+        history.push({ trackToken: song.id, songTitle: song.title, artistName: song.artist,
             coverArt: song.image, feedback: ratings.get(song.id) === 'thumbUp' ? 'liked' : ratings.get(song.id) === 'thumbDown' ? 'disliked' : null });
-        history = history.slice(0, 8);
+        history = history.slice(-8);
     }
     function publishSong(time = 0) {
         const song = currentSong(), station = stations[stationIndex];
