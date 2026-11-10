@@ -1,0 +1,76 @@
+name: Android prototype
+on:
+  pull_request:
+    paths: ['android/**', '.github/workflows/android-prototype.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: android-prototype-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Build APK and run unit tests
+        working-directory: android
+        run: gradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest :app:testDebugUnitTest :app:lintDebug
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Test native playback and mobile screens
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          working-directory: android
+          script: |
+            # The headless API 35 launcher can ANR during boot and cover every test.
+            # These settings affect only this disposable emulator; app crashes and
+            # unresponsive views still fail the instrumentation runner.
+            adb shell settings put global hide_error_dialogs 1
+            adb shell am force-stop com.android.launcher3
+            adb shell input keyevent KEYCODE_WAKEUP
+            adb shell wm dismiss-keyguard
+            gradle --no-daemon :app:connectedDebugAndroidTest
+      - name: Package installable prototype
+        if: success()
+        run: |
+          mkdir -p android-apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk android-apk/Panedora-Android-Prototype.apk
+          cp android/TESTING.md android-apk/TESTING.md
+          sha256sum android-apk/Panedora-Android-Prototype.apk > android-apk/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: Panedora-Android-Prototype
+          path: android-apk/
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Android-test-reports
+          path: |
+            android/app/build/reports/
+            android/app/build/outputs/androidTest-results/
+            android/app/build/outputs/connected_android_test_additional_output/
+          retention-days: 14
