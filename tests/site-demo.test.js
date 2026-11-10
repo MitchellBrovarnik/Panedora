@@ -123,6 +123,35 @@ test('each search result starts that exact sample song once, with mouse or keybo
     assert.equal(s.forbidden(), 0);
 });
 
+test('Recently Played shows the newest songs first after skips, station switches and reopening', async t => {
+    const s = await setup(t), d = s.document;
+    const titles = () => Array.from(d.querySelectorAll('.np-history .history-title'), node => node.textContent);
+    s.api.renderPage('nowplaying');
+    await s.w.api.content.playItem({ type: 'station', id: 'evening-mix' });
+    await s.w.api.player.next();
+    await s.w.api.player.next();
+    assert.deepEqual(titles(), ['Slow Motion', 'Last Light', 'After Hours']);
+    await s.w.api.content.playItem({ type: 'station', id: 'focus' });
+    const switched = ['Window Seat', 'Slow Motion', 'Last Light', 'After Hours'];
+    assert.deepEqual(titles(), switched, 'Switching stations puts the song just played at the top');
+    s.api.renderPage('home');
+    s.api.renderPage('nowplaying');
+    assert.deepEqual(titles(), switched, 'Reopening the player keeps the same order');
+
+    for (const id of ['focus-1', 'focus-2', 'coastline-0', 'coastline-1', 'coastline-2', 'golden-hour-0']) {
+        await s.w.api.content.playItem({ type: 'song', id });
+    }
+    const recent = ['Daybreak', 'Salt Air', 'Blue Horizon', 'Small Hours', 'Soft Focus', 'Quiet Current', 'Window Seat', 'Slow Motion'];
+    assert.deepEqual(titles(), recent, 'Keep the eight most recent past songs when older entries fall out');
+    d.querySelector('.np-history .history-thumb-up').click();
+    await tick();
+    assert.equal(s.state.track, 'Sunday Morning', 'Rating history does not change the current song');
+    assert.ok(d.querySelector('.np-history .history-item[data-token="coastline-2"] .history-thumb-up.liked'),
+        'The top row still rates the matching recent song');
+    assert.deepEqual(titles(), recent, 'Feedback updates keep newest-first order');
+    assert.equal(s.forbidden(), 0);
+});
+
 test('confirmed station removal immediately updates Library, Home, Search and the sidebar', async t => {
     const s = await setup(t), d = s.document;
     const confirm = async button => {
