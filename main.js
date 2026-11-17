@@ -95,7 +95,11 @@ function createUIWindow() {
         saved: config.getKeyboardShortcuts(),
         save: config.setKeyboardShortcuts,
         execute: action => sendToUI('UI:PLAYBACK_SHORTCUT', action),
-        update: settings => sendToUI('UI:SHORTCUT_SETTINGS', settings)
+        update: settings => {
+            if (!uiWindow || uiWindow.isDestroyed()) return;
+            uiWindow.webContents.setIgnoreMenuShortcuts(settings.recording !== null);
+            sendToUI('UI:SHORTCUT_SETTINGS', settings);
+        }
     });
     uiWindow.webContents.on('before-input-event', (event, input) => keyboardShortcuts?.handleInput(event, input));
     uiWindow.on('blur', () => keyboardShortcuts?.record(null));

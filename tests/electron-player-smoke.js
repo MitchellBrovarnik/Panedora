@@ -1725,7 +1725,8 @@ x11.XCloseDisplay(display)
         await waitFor(() => run("!document.getElementById('shortcut-background').disabled"), 'keyboard shortcut settings load');
         assert.equal(await run("document.getElementById('shortcut-background').checked"), true);
         assert.deepEqual((await settings()).bindings, {});
-        const entries = { toggle: 'K', next: 'N', prev: 'P', thumbUp: 'U', thumbDown: 'D' };
+        // Ctrl+Shift+R is also an Electron reload accelerator. The recorder must receive it.
+        const entries = { toggle: 'R', next: 'N', prev: 'P', thumbUp: 'U', thumbDown: 'D' };
         for (const [action, key] of Object.entries(entries)) {
             await run(`document.querySelector('[data-record-shortcut="${action}"]').click()`);
             await waitFor(async () => (await settings()).recording === action, 'recording ' + action);
@@ -1741,10 +1742,10 @@ x11.XCloseDisplay(display)
             await otherWindow.loadURL('about:blank');
             otherWindow.focus();
             await waitFor(() => otherWindow.isFocused() && !win.isFocused(), 'another window has focus');
-            osChord('K');
+            osChord('R');
             await waitFor(() => run("document.querySelector('audio').paused"), 'background Play/Pause');
             assert.equal(otherWindow.isFocused(), true, 'Background shortcuts do not steal focus');
-            osChord('K');
+            osChord('R');
             await waitFor(() => run("!document.querySelector('audio').paused"), 'background resume approval');
             osChord('N');
             await waitFor(() => run("AppState.playerState.track === 'Fixture Song 2'"), 'background Next');
@@ -1758,9 +1759,9 @@ x11.XCloseDisplay(display)
         for (const key of Object.values(entries)) assert.equal(globalShortcut.isRegistered('Ctrl+Shift+' + key), false);
         await run("window.api.content.playItem({type:'station', id:'fixture-station'})");
         await waitFor(() => run("AppState.playerState.track === 'Fixture Song 1' && !document.querySelector('audio').paused"), 'focused shortcut fixture playback');
-        osChord('K');
+        osChord('R');
         await waitFor(() => run("document.querySelector('audio').paused"), 'focused shortcut still works');
-        osChord('K');
+        osChord('R');
         await waitFor(() => run("!document.querySelector('audio').paused"), 'focused resume');
 
         await run("document.querySelector('audio').currentTime = 12");

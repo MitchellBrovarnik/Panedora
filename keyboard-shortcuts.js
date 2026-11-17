@@ -154,14 +154,14 @@ class KeyboardShortcuts {
 
     handleInput(event, input) {
         if (this.recording) {
-            // Tab leaves the recorder and retains its normal focus navigation.
-            if (input.type === 'keyDown' && input.key === 'Tab' && !input.control && !input.alt && !input.meta) {
-                this.record(null);
-                return;
-            }
-            event.preventDefault();
             if (input.type === 'keyDown' && !input.isAutoRepeat) {
                 if (input.key === 'Escape') {
+                    event.preventDefault();
+                    this.record(null);
+                    return;
+                }
+                // Tab leaves the recorder and retains its normal focus navigation.
+                if (input.key === 'Tab' && !input.control && !input.alt && !input.meta) {
                     this.record(null);
                     return;
                 }
@@ -174,12 +174,14 @@ class KeyboardShortcuts {
                     action !== this.recording && binding === accelerator)) {
                     this.message = 'That shortcut is already assigned to another action.';
                 } else {
-                    // Wait for release so the recorded key doesn't trigger its new action.
+                    // Cancelling keyDown here also suppresses keyUp in Chromium.
+                    // The window ignores menu shortcuts and the page cancels keyDown.
                     this.pendingKey = { code: input.code || input.key, accelerator };
                     return;
                 }
                 this.update(this.status());
             } else if (input.type === 'keyUp' && this.pendingKey?.code === (input.code || input.key)) {
+                event.preventDefault();
                 const action = this.recording;
                 const bindings = { ...this.preferences.bindings, [action]: this.pendingKey.accelerator };
                 this.applyPreferences({ ...this.preferences, bindings }, action);

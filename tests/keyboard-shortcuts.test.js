@@ -50,8 +50,9 @@ test('shortcuts start blank with background scope on and record without changing
     assert.equal(s.input('k'), false, 'Typing is unaffected by default');
 
     s.shortcuts.record('thumbUp');
-    s.input('k', { control: true, shift: true });
-    s.input('k', { control: true, shift: true, isAutoRepeat: true });
+    assert.equal(s.input('k', { control: true, shift: true }), false, 'Chromium must receive keydown to emit keyup');
+    assert.equal(s.input('k', { control: true, shift: true, isAutoRepeat: true }), false,
+        'Holding the key must not prevent the recorder from receiving its release');
     assert.equal(s.registrations.size, 0, 'Wait for key release before registering');
     s.input('k', { type: 'keyUp' });
     assert.deepEqual(s.latest.bindings, { thumbUp: 'Ctrl+Shift+K' });

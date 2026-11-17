@@ -2976,6 +2976,12 @@ function initAPIListeners() {
             shortcutSettings = settings;
             updateKeyboardShortcutsSettings();
         };
+        document.addEventListener('keydown', event => {
+            if (!shortcutSettings?.recording) return;
+            if (event.key === 'Tab' && !event.ctrlKey && !event.altKey && !event.metaKey) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+        }, true);
         shortcuts.onSettings(applySettings);
         shortcuts.onAction(action => {
             if (!AppState.isLoggedIn || document.querySelector('dialog[open]')) return;
