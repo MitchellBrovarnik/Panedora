@@ -1726,12 +1726,23 @@ x11.XCloseDisplay(display)
         assert.equal(await run("document.getElementById('shortcut-background').checked"), true);
         assert.deepEqual((await settings()).bindings, {});
         // Ctrl+Shift+R is also an Electron reload accelerator. The recorder must receive it.
-        const entries = { toggle: 'R', next: 'N', prev: 'P', thumbUp: 'U', thumbDown: 'D' };
+        const entries = { toggle: 'R', next: 'N', prev: 'P', thumbUp: 'H', thumbDown: 'D' };
         for (const [action, key] of Object.entries(entries)) {
             await run(`document.querySelector('[data-record-shortcut="${action}"]').click()`);
             await waitFor(async () => (await settings()).recording === action, 'recording ' + action);
-            osChord(key);
-            await waitFor(async () => (await settings()).bindings[action] === 'Ctrl+Shift+' + key, 'saved shortcut ' + action);
+            const received = [];
+            const observeInput = (_event, input) => received.push({ type: input.type, key: input.key, code: input.code, composing: input.isComposing });
+            win.webContents.on('before-input-event', observeInput);
+            try {
+                osChord(key);
+                await waitFor(async () => (await settings()).recording !== action, 'recorded shortcut ' + action);
+                const current = await settings();
+                assert.equal(current.bindings[action], 'Ctrl+Shift+' + key, current.message);
+            } catch (error) {
+                throw new Error('Could not record ' + action + ' from ' + JSON.stringify(received), { cause: error });
+            } finally {
+                win.webContents.removeListener('before-input-event', observeInput);
+            }
             assert.equal(globalShortcut.isRegistered('Ctrl+Shift+' + key), true, action + ' works in the background by default');
         }
         assert.equal(await run("document.querySelector('audio').paused"), false, 'Recording shortcuts leaves playback alone');
@@ -1772,7 +1783,7 @@ x11.XCloseDisplay(display)
         await run('window.api.player.next()');
         await run('window.api.player.next()');
         await waitFor(() => run("AppState.playerState.track === 'Fixture Song 3' && !document.querySelector('audio').paused"), 'unrated shortcut fixture song');
-        osChord('U');
+        osChord('H');
         await waitFor(() => run("AppState.playerState.feedback === 'thumbUp'"), 'focused Thumbs Up uses ordinary feedback');
         await waitFor(() => run("Date.now() - _cooldowns.thumb >= 1500"), 'thumb cooldown');
         osChord('D');

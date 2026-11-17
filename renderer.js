@@ -1245,7 +1245,7 @@ function keyboardShortcutsHtml() {
             <div class="setting-row">
               <div>
                 <span class="setting-label">${label}</span>
-                <p class="setting-help" data-shortcut-unavailable="${action}" hidden>Works only in Panedora. The background shortcut is unavailable.</p>
+                <p class="setting-help" data-shortcut-unavailable="${action}" hidden>Could not register this shortcut in the background.</p>
               </div>
               <div class="shortcut-actions">
                 <button type="button" class="shortcut-button" data-record-shortcut="${action}"
