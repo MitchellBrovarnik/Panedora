@@ -2926,6 +2926,29 @@ body.mini-mode .stream-dialog-actions button { padding: 8px 10px; border-radius:
 .discord-sharing-toggle:focus-visible, .setting-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
 .discord-sharing-toggle:disabled, .setting-toggle:disabled { opacity: 0.5; cursor: default; }
 .settings-section .setting-row + .setting-row { margin-top: 12px; }
+.shortcut-actions {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+    flex-shrink: 0;
+}
+.shortcut-button {
+    padding: 7px 10px;
+    border: 1px solid var(--glass-border);
+    border-radius: 7px;
+    color: var(--text-1);
+    background: var(--glass);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+.shortcut-button:hover:not(:disabled) { background: var(--glass-hover); }
+.shortcut-button[aria-pressed="true"] { border-color: var(--accent); }
+.shortcut-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.shortcut-button:disabled { opacity: 0.45; cursor: default; }
+#shortcut-status { max-width: 640px; }
+
 
 .settings-section {
     padding: 8px 0;

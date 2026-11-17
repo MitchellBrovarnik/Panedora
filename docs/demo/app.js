@@ -755,6 +755,9 @@ const DOM = {
 // ============================================================================
 
 function renderPage(page) {
+    if (AppState.currentPage === 'settings' && page !== 'settings') {
+        void window.api?.shortcuts?.record(null).catch(() => {});
+    }
     AppState.currentPage = page;
 
     // Update nav highlighting
@@ -1671,6 +1674,108 @@ function renderDiscordSettings() {
         messages[discordStatus?.status] || 'Loading…';
 }
 
+const SHORTCUT_CONTROLS = {
+    toggle: { label: 'Play / Pause', run: () => DOM.playPauseBtn.click() },
+    next: { label: 'Next Track', run: () => DOM.nextBtn.click() },
+    prev: { label: 'Previous Track', run: () => DOM.prevBtn.click() },
+    thumbUp: { label: 'Thumbs Up', run: () => handleThumb(true) },
+    thumbDown: { label: 'Thumbs Down', run: () => handleThumb(false) }
+};
+const NUMPAD_SHORTCUT_LABELS = {
+    numdec: 'Numpad Decimal', numadd: 'Numpad +', numsub: 'Numpad −',
+    nummult: 'Numpad ×', numdiv: 'Numpad ÷'
+};
+let shortcutSettings = null;
+
+function keyboardShortcutsHtml() {
+    return `
+        <section class="settings-section" id="keyboard-shortcuts">
+          <h2 class="section-title">Keyboard Shortcuts</h2>
+          <div class="setting-row">
+            <div>
+              <label class="setting-label" for="shortcut-background">Work in background</label>
+              <p class="setting-help" id="shortcut-background-help">Use custom shortcuts while another app has focus.</p>
+            </div>
+            <input class="setting-toggle" id="shortcut-background" type="checkbox" role="switch"
+                aria-describedby="shortcut-background-help" checked disabled>
+          </div>
+          ${Object.entries(SHORTCUT_CONTROLS).map(([action, { label }]) => `
+            <div class="setting-row">
+              <div>
+                <span class="setting-label">${label}</span>
+                <p class="setting-help" data-shortcut-unavailable="${action}" hidden>Works only in Panedora. The background shortcut is unavailable.</p>
+              </div>
+              <div class="shortcut-actions">
+                <button type="button" class="shortcut-button" data-record-shortcut="${action}"
+                    aria-label="Set shortcut for ${label}" aria-pressed="false" disabled>Set shortcut</button>
+                <button type="button" class="shortcut-button" data-clear-shortcut="${action}"
+                    aria-label="Clear ${label} shortcut" disabled>Clear</button>
+              </div>
+            </div>`).join('')}
+          <p class="setting-help" id="shortcut-status" role="status"></p>
+        </section>`;
+}
+
+function updateKeyboardShortcutsSettings() {
+    const section = document.getElementById('keyboard-shortcuts');
+    if (!section || !shortcutSettings) return;
+    const { background, bindings, unavailable, recording, message } = shortcutSettings;
+    const backgroundToggle = document.getElementById('shortcut-background');
+    const metaKey = window.api.platform === 'darwin' ? 'Command' : window.api.platform === 'win32' ? 'Win' : 'Super';
+    backgroundToggle.checked = background;
+    backgroundToggle.disabled = false;
+    for (const [action, { label }] of Object.entries(SHORTCUT_CONTROLS)) {
+        const accelerator = bindings[action];
+        const keys = accelerator?.replace('Super+', metaKey + '+').split('+').map(key => {
+            if (/^num[0-9]$/.test(key)) return 'Numpad ' + key.slice(-1);
+            return NUMPAD_SHORTCUT_LABELS[key] || key;
+        }).join(' + ');
+        const button = section.querySelector(`[data-record-shortcut="${action}"]`);
+        const active = recording === action;
+        button.disabled = false;
+        button.textContent = active ? 'Press keys…' : keys || 'Set shortcut';
+        button.setAttribute('aria-label', active ? `Cancel setting shortcut for ${label}`
+            : keys ? `Change shortcut for ${label}, ${keys}` : `Set shortcut for ${label}`);
+        button.setAttribute('aria-pressed', String(active));
+        section.querySelector(`[data-clear-shortcut="${action}"]`).disabled = !accelerator;
+        section.querySelector(`[data-shortcut-unavailable="${action}"]`).hidden = !unavailable.includes(action);
+    }
+    document.getElementById('shortcut-status').textContent = message ||
+        (recording ? `Press the new shortcut for ${SHORTCUT_CONTROLS[recording].label}. Press Esc to cancel.` : '');
+}
+
+async function changeKeyboardShortcuts(change) {
+    try {
+        if (await change()) return;
+    } catch (error) {
+        console.error('[UI] Could not update keyboard shortcuts:', error);
+    }
+    updateKeyboardShortcutsSettings();
+    showErrorToast('Could not update keyboard shortcuts. Please try again.');
+}
+
+function bindKeyboardShortcutsSettings() {
+    const section = document.getElementById('keyboard-shortcuts');
+    if (!section) return;
+    const shortcuts = window.api.shortcuts;
+    document.getElementById('shortcut-background').addEventListener('change', event => {
+        const enabled = event.target.checked;
+        void changeKeyboardShortcuts(() => shortcuts.setBackground(enabled));
+    });
+    for (const button of section.querySelectorAll('[data-record-shortcut]')) {
+        button.addEventListener('click', () => {
+            const action = button.dataset.recordShortcut;
+            void changeKeyboardShortcuts(() => shortcuts.record(shortcutSettings?.recording === action ? null : action));
+        });
+    }
+    for (const button of section.querySelectorAll('[data-clear-shortcut]')) {
+        button.addEventListener('click', () => {
+            void changeKeyboardShortcuts(() => shortcuts.clear(button.dataset.clearShortcut));
+        });
+    }
+    updateKeyboardShortcutsSettings();
+}
+
 function renderSettingsPage() {
     const currentTheme = AppState.currentTheme || localStorage.getItem('panedora-theme') || 'midnight';
     const currentEffect = AppState.currentEffect || localStorage.getItem('panedora-effect') || 'aurora';
@@ -1732,6 +1837,7 @@ function renderSettingsPage() {
           <input class="setting-toggle" id="legacy-miniplayer-toggle" type="checkbox" role="switch" aria-describedby="legacy-miniplayer-description">
         </div>
       </section>
+      ${window.api?.shortcuts ? keyboardShortcutsHtml() : ''}
       <section class="settings-section">
         <h2 class="section-title">Discord</h2>
         <div class="discord-setting">
@@ -1775,6 +1881,8 @@ function renderSettingsPage() {
         <div class="theme-grid" style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));">${lyricsStyleButtons}</div>
       </section>
     </div>`;
+
+    bindKeyboardShortcutsSettings();
 
     const legacyToggle = document.getElementById('legacy-miniplayer-toggle');
     legacyToggle.checked = useLegacyMiniplayer;
@@ -3319,6 +3427,23 @@ function initEventListeners() {
 // ============================================================================
 
 function initAPIListeners() {
+    const shortcuts = window.api.shortcuts;
+    if (shortcuts) {
+        const applySettings = settings => {
+            if (!settings) return;
+            shortcutSettings = settings;
+            updateKeyboardShortcutsSettings();
+        };
+        shortcuts.onSettings(applySettings);
+        shortcuts.onAction(action => {
+            if (!AppState.isLoggedIn || document.querySelector('dialog[open]')) return;
+            if (Object.hasOwn(SHORTCUT_CONTROLS, action)) SHORTCUT_CONTROLS[action].run();
+        });
+        void shortcuts.get().then(settings => {
+            if (!shortcutSettings) applySettings(settings);
+        }).catch(() => showErrorToast('Could not load keyboard shortcuts.'));
+    }
+
     let discordStatusRevision = 0;
     window.api.discord?.onStatus(status => {
         discordStatusRevision++;

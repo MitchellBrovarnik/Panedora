@@ -72,6 +72,7 @@ function setup(config = { getRememberedShuffle: () => null, rememberShuffle() {}
                 getArtUrls: art => (art || []).map(image => image.url).filter(Boolean)
             };
             if (name === './update-checker') return require('../update-checker');
+            if (name === './keyboard-shortcuts') return require('../keyboard-shortcuts');
             if (name === './discord-presence') return require('../discord-presence');
             if (name === './discord-config.json') return require('../discord-config.json');
             if (name === './config') return config;

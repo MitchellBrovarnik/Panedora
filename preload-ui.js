@@ -44,6 +44,19 @@ contextBridge.exposeInMainWorld('api', {
         }
     },
 
+    shortcuts: {
+        get: () => ipcRenderer.invoke('SHORTCUTS:GET'),
+        record: action => ipcRenderer.invoke('SHORTCUTS:RECORD', action),
+        clear: action => ipcRenderer.invoke('SHORTCUTS:CLEAR', action),
+        setBackground: enabled => ipcRenderer.invoke('SHORTCUTS:SET_BACKGROUND', enabled),
+        onSettings: callback => {
+            ipcRenderer.on('UI:SHORTCUT_SETTINGS', (_event, settings) => callback(settings));
+        },
+        onAction: callback => {
+            ipcRenderer.on('UI:PLAYBACK_SHORTCUT', (_event, action) => callback(action));
+        }
+    },
+
     settings: {
         getVolume: () => ipcRenderer.invoke('SETTINGS:GET_VOLUME'),
         saveVolume: volume => ipcRenderer.invoke('SETTINGS:SAVE_VOLUME', volume),
