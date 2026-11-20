@@ -99,10 +99,14 @@ app.whenReady().then(async () => {
     }));
     const catalogIds = ['TR:101', 'TR:102'];
     const catalogAnnotations = {
-        'AR:1': { name: 'Catalog Artist' },
-        'AL:10': { name: 'Catalog Album', artistName: 'Catalog Artist', tracks: catalogIds },
-        'TR:101': { name: 'Song (studio)', artistName: 'Catalog Artist', albumId: 'AL:10' },
-        'TR:102': { name: 'Song (live)', artistName: 'Catalog Artist', albumId: 'AL:10' }
+        'AR:1': { name: 'Catalog Artist', icon: { artUrl: 'images/catalog-artist.svg' } },
+        'AL:10': { name: 'Catalog Album', artistName: 'Catalog Artist', tracks: catalogIds,
+            icon: { artUrl: 'images/catalog-album.svg' } },
+        'TR:101': { name: 'Song (studio)', artistName: 'Catalog Artist', albumId: 'AL:10',
+            icon: { artUrl: 'images/catalog-studio.svg' } },
+        'TR:102': { name: 'Song (live)', artistName: 'Catalog Artist', albumId: 'AL:10',
+            icon: { artUrl: 'images/catalog-live.svg' } },
+        'SF:1:10': { name: 'Catalog Station', icon: { artUrl: 'images/catalog-station.svg' } }
     };
     let catalogIndex = 0;
     const catalogItem = () => {
@@ -1729,9 +1733,16 @@ app.whenReady().then(async () => {
     // Drive the normal Search rows through Chromium's actual audio element.
     await run("renderPage('search'); window.api.content.search('catalog')");
     await waitFor(() => run("!!document.querySelector('#search-albums .card')"), 'Premium album results');
+    const covers = '#search-songs img, #search-albums img, #search-artists img, #search-stations img';
+    await run(`document.querySelectorAll('${covers}').forEach(image => { image.loading = 'eager'; })`);
+    await waitFor(() => run(`Array.from(document.querySelectorAll('${covers}')).every(image =>
+        image.complete && image.naturalWidth > 0 && image.currentSrc.startsWith('https://content-images.p-cdn.com/images/catalog-'))`),
+        'song, album, artist and station covers load in Search before playback');
     const catalogCallsAt = calls.length;
     await run("document.querySelector('#search-artists .card').click()");
     await waitFor(() => run("document.querySelectorAll('#search-songs .track-row').length === 2 && !!document.getElementById('artist-radio')"), 'artist catalog');
+    await waitFor(() => run("Array.from(document.querySelectorAll('#search-songs img, #search-albums img')).every(image => image.complete && image.naturalWidth > 0 && image.currentSrc.startsWith('https://content-images.p-cdn.com/'))"),
+        'artist song and album covers load before selecting a recording');
     await run("document.querySelectorAll('#search-songs .track-row')[1].click()");
     await waitFor(() => run("AppState.playerState.track === 'Song (live)' && document.querySelector('audio')?.currentTime > 0.1"), 'chosen recording plays real audio');
     assert.equal(await run("document.getElementById('next-btn').disabled"), true, 'Single selection has no next track');

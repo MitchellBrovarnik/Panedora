@@ -593,6 +593,44 @@ test('Premium search and artist pages use catalog IDs and preserve the returned 
     assert.equal(calls.filter(c => c.url.includes('/auth/login')).length, 1);
 });
 
+test('catalog artwork resolves relative CDN paths before searching or browsing an artist can play anything', async () => {
+    const cover = 'images/b3/a9/46/6c/75054460b58f2a55e151db9a/';
+    const annotations = {
+        'TR:22': { name: 'Song', icon: { artUrl: cover + '_500W_500H.jpg' } },
+        'AL:42': { name: 'Album', icon: { artId: cover } },
+        'AR:1': { name: 'Artist', icon: { artUrl: '//content-images.p-cdn.com/images/artist.jpg' } },
+        'SF:1:1': { name: 'Station', icon: { artUrl: 'https://fixture.invalid/station.jpg?width=500&height=500' } },
+        'TR:23': { name: 'Missing cover' }
+    };
+    const { api, calls } = setup([premium(),
+        catalogOK({ results: Object.keys(annotations), annotations }),
+        catalogOK({ artistDetails: { topTracks: ['TR:22'], topAlbums: ['AL:42'] }, annotations })]);
+    await api.login('test', 'test');
+    const results = await api.search('song');
+    const expectedCover = 'https://content-images.p-cdn.com/' + cover + '_500W_500H.jpg';
+    assert.equal(results.songs[0].image, expectedCover);
+    assert.equal(results.albums[0].image, expectedCover);
+    assert.equal(results.artists[0].image, 'https://content-images.p-cdn.com/images/artist.jpg');
+    assert.equal(results.stations[0].image, annotations['SF:1:1'].icon.artUrl);
+    assert.equal(results.songs[1].image, null);
+    const artist = await api.catalog.artist('AR:1');
+    assert.equal(artist.songs[0].image, expectedCover);
+    assert.equal(artist.albums[0].image, expectedCover);
+    assert.equal(calls.some(call => /playback|createStation/.test(call.url)), false);
+});
+
+test('catalog playback also resolves relative artwork and preserves supplied absolute URLs', async () => {
+    for (const [artUrl, expected] of [
+        ['images/cover.jpg', 'https://content-images.p-cdn.com/images/cover.jpg'],
+        ['https://fixture.invalid/cover.jpg?width=500&height=500', 'https://fixture.invalid/cover.jpg?width=500&height=500']
+    ]) {
+        const { api } = setup([premium(), catalogOK(catalogReply({ artUrl }))]);
+        await api.login('test', 'test');
+        const track = await api.catalog.start({ albumId: 'AL:42', ids: ['TR:22'] }, 0);
+        assert.equal(track.albumArt[0].url, expected);
+    }
+});
+
 test('a song requests its album plus the exact recording with the verified session', async () => {
     const { api, calls } = setup([premium(), catalogOK({ 'TR:22': { albumId: 'AL:42', rightsInfo: { hasInteractive: true } } }),
         catalogOK(catalogReply())]);

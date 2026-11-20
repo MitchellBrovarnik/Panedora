@@ -3,13 +3,30 @@ const TRACK = /^TR:\d+$/;
 const ALBUM = /^AL:\d+$/;
 const ARTIST = /^AR:\d+$/;
 
+function catalogArtwork(item) {
+    const artId = item?.icon?.artId || item?.artId;
+    const sources = [item?.artUrl, item?.icon?.artUrl, artId ? `${artId}_500W_500H.jpg` : null];
+    for (const source of sources) {
+        if (typeof source !== 'string' || !source.trim()) continue;
+        try {
+            // Catalog annotations can contain CDN-relative paths. Resolving them
+            // against the app's file URL leaves every Search cover unreadable.
+            const url = new URL(source.trim(), 'https://content-images.p-cdn.com/');
+            if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) continue;
+            url.protocol = 'https:';
+            return url.href;
+        } catch { /* Try the other artwork supplied for this item. */ }
+    }
+    return null;
+}
+
 function catalogRows(ids, annotations) {
     const results = { songs: [], albums: [], artists: [], stations: [], onDemand: true };
     for (const entry of ids || []) {
         const id = typeof entry === 'string' ? entry : entry?.pandoraId;
         const item = annotations?.[id] || entry;
         if (!id || !item?.name) continue;
-        const common = { id, name: item.name, image: item.icon?.artUrl || null, artist: item.artistName || '' };
+        const common = { id, name: item.name, image: catalogArtwork(item), artist: item.artistName || '' };
         if (TRACK.test(id)) results.songs.push({ ...common, type: 'song', title: item.name, duration: item.duration });
         else if (ALBUM.test(id)) results.albums.push({ ...common, type: 'album' });
         else if (ARTIST.test(id)) results.artists.push({ ...common, type: 'artist' });
@@ -58,7 +75,7 @@ function readTrack(reply, selection, position) {
         throw new Error('Pandora did not provide playable audio for this recording.');
     }
     url.protocol = 'https:';
-    const art = item.artUrl || metadata.icon?.artUrl;
+    const art = catalogArtwork(item) || catalogArtwork(metadata);
     return { catalogId: id, sourceIndex: item.index, songTitle: item.songName || metadata.name,
         albumTitle: item.albumName || metadata.albumName, artistName: item.artistName || metadata.artistName,
         trackLength: item.duration || metadata.duration || 0, albumArt: art ? [{ url: art }] : [],
