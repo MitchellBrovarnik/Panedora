@@ -1254,7 +1254,7 @@ function keyboardShortcutsHtml() {
 function updateKeyboardShortcutsSettings() {
     const section = document.getElementById('keyboard-shortcuts');
     if (!section || !shortcutSettings) return;
-    const { background, bindings, unavailable, recording, message } = shortcutSettings;
+    const { background, bindings, unavailable, recording, message, messageAction } = shortcutSettings;
     const backgroundToggle = document.getElementById('shortcut-background');
     const metaKey = window.api.platform === 'darwin' ? 'Command' : window.api.platform === 'win32' ? 'Win' : 'Super';
     backgroundToggle.checked = background;
@@ -1275,12 +1275,12 @@ function updateKeyboardShortcutsSettings() {
         section.querySelector(`[data-clear-shortcut="${action}"]`).disabled = !accelerator;
         section.querySelector(`[data-shortcut-unavailable="${action}"]`).hidden = !unavailable.includes(action);
         const recordingHelp = section.querySelector(`[data-shortcut-recording="${action}"]`);
-        recordingHelp.hidden = !active;
-        recordingHelp.textContent = active
+        const showMessage = active || messageAction === action && !!message;
+        recordingHelp.hidden = !showMessage;
+        recordingHelp.textContent = showMessage
             ? message || 'Press Ctrl, Alt, or Command plus a key, or a function key. Esc cancels.' : '';
     }
-    document.getElementById('shortcut-status').textContent = message ||
-        (recording ? `Press the new shortcut for ${SHORTCUT_CONTROLS[recording].label}. Press Esc to cancel.` : '');
+    document.getElementById('shortcut-status').textContent = messageAction ? '' : message || '';
 }
 
 async function changeKeyboardShortcuts(change) {
