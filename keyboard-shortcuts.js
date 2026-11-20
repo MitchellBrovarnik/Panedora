@@ -71,6 +71,7 @@ class KeyboardShortcuts {
         this.recording = null;
         this.pendingKey = null;
         this.message = '';
+        this.messageAction = null;
         this.syncBackground();
     }
 
@@ -79,7 +80,8 @@ class KeyboardShortcuts {
         const unavailable = background && !this.recording
             ? Object.keys(bindings).filter(action => !this.registered.has(action))
             : [];
-        return { background, bindings: { ...bindings }, unavailable, recording: this.recording, message: this.message };
+        return { background, bindings: { ...bindings }, unavailable, recording: this.recording,
+            message: this.message, messageAction: this.messageAction };
     }
 
     syncBackground() {
@@ -111,6 +113,7 @@ class KeyboardShortcuts {
         this.recording = action;
         this.pendingKey = null;
         this.message = '';
+        this.messageAction = action;
         // Release only Panedora's shortcuts so their keys reach the recorder.
         this.syncBackground();
         this.update(this.status());
@@ -129,12 +132,21 @@ class KeyboardShortcuts {
         return this.applyPreferences({ ...this.preferences, bindings });
     }
 
+    capture(action, input) {
+        if (!this.recording || action !== this.recording ||
+            !['keyDown', 'keyUp'].includes(input?.type) || typeof input.key !== 'string' ||
+            typeof input.code !== 'string') return false;
+        this.handleInput({ preventDefault() {} }, input);
+        return true;
+    }
+
     applyPreferences(preferences, recordedAction = null) {
         const previous = this.preferences;
         this.preferences = preferences;
         this.recording = null;
         this.pendingKey = null;
         this.message = '';
+        this.messageAction = recordedAction;
         this.syncBackground();
         if (recordedAction && preferences.background && !this.registered.has(recordedAction)) {
             this.message = 'That shortcut is unavailable in the background. Try another combination or turn Work in background off.';
@@ -174,9 +186,9 @@ class KeyboardShortcuts {
                     action !== this.recording && binding === accelerator)) {
                     this.message = 'That shortcut is already assigned to another action.';
                 } else {
-                    // Cancelling keyDown here also suppresses keyUp in Chromium.
-                    // The window ignores menu shortcuts and the page cancels keyDown.
                     this.pendingKey = { code: input.code || input.key, accelerator };
+                    this.message = 'Release the keys to save.';
+                    this.update(this.status());
                     return;
                 }
                 this.update(this.status());

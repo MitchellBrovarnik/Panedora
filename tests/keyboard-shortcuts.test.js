@@ -124,3 +124,18 @@ test('background registration problems remain visible and allow focused use of e
     assert.equal(s.latest.bindings.thumbUp, 'F9');
     assert.equal(s.registrations.has('F9'), true);
 });
+
+test('recording messages accept only the active action and valid key events', () => {
+    const s = setup();
+    const down = { type: 'keyDown', key: 'k', code: 'KeyK', control: true, alt: true };
+    assert.equal(s.shortcuts.capture('thumbUp', down), false);
+    s.shortcuts.record('thumbUp');
+    assert.equal(s.shortcuts.capture('toggle', down), false);
+    assert.equal(s.shortcuts.capture('thumbUp', { type: 'keyDown', key: 42 }), false);
+    assert.equal(s.shortcuts.capture('thumbUp', down), true);
+    assert.match(s.latest.message, /Release/);
+    s.shortcuts.capture('thumbUp', { type: 'keyUp', key: 'k', code: 'KeyK' });
+    assert.deepEqual(s.shortcuts.status().bindings, { thumbUp: 'Ctrl+Alt+K' });
+    assert.equal(s.shortcuts.capture('thumbUp', down), false, 'Late events cannot become playback commands');
+    assert.deepEqual(s.actions, []);
+});
