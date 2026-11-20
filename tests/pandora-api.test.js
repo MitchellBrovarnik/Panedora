@@ -665,3 +665,14 @@ test('an unidentified source cannot play, and a server-confirmed album end compl
     await api.catalog.event(selection, { catalogId: 'TR:22', sourceIndex: 0 }, 'ended', 180);
     assert.equal(calls.some(c => c.url.endsWith('/playback/current')), false);
 });
+
+
+test('a rights refusal in a successful HTTP response also stops catalog playback and event reporting', async () => {
+    const revokedTrack = catalogReply();
+    revokedTrack.annotations = { 'TR:22': { rightsInfo: { hasInteractive: false } } };
+    const { api } = setup([premium(), catalogOK(revokedTrack), catalogOK({ errorString: 'NO_ENTITLEMENTS', errorCode: 0 })]);
+    await api.login('test', 'test');
+    const selection = { albumId: 'AL:42', ids: ['TR:22'] };
+    await assert.rejects(api.catalog.start(selection, 0), /unavailable/);
+    await assert.rejects(api.catalog.event(selection, { catalogId: 'TR:22', sourceIndex: 0 }, 'progress', 30), /did not grant/);
+});

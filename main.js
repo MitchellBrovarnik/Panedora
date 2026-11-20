@@ -580,6 +580,7 @@ function matchesCurrentTrack(expected) {
 async function pauseCatalog(elapsed) {
     const session = catalogSession;
     const track = currentPlaylist[currentTrackIndex];
+    if (!session || session.finished || !track) return;
     if (Number.isFinite(elapsed)) session.elapsed = elapsed;
     try {
         await api.catalog.event(session.selection, track, 'pause', session.elapsed, () => session === catalogSession);

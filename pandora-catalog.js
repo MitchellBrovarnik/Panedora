@@ -41,6 +41,10 @@ function readTrack(reply, selection, position) {
     const item = reply?.item;
     if (streamViolation(item)) throw playbackError(reply);
     const id = selection.ids[position];
+    const metadata = reply?.annotations?.[id] || {};
+    if (metadata.rightsInfo?.hasInteractive === false || item?.rightsInfo?.hasInteractive === false) {
+        throw new Error('This recording is unavailable for on-demand playback.');
+    }
     const sources = [item?.sourceId, reply?.source?.pandoraId].filter(Boolean);
     if (item?.type !== 'Track' || item.pandoraId !== id || !sources.length ||
         sources.some(source => source !== selection.albumId) ||
@@ -54,7 +58,6 @@ function readTrack(reply, selection, position) {
         throw new Error('Pandora did not provide playable audio for this recording.');
     }
     url.protocol = 'https:';
-    const metadata = reply.annotations?.[id] || {};
     const art = item.artUrl || metadata.icon?.artUrl;
     return { catalogId: id, sourceIndex: item.index, songTitle: item.songName || metadata.name,
         albumTitle: item.albumName || metadata.albumName, artistName: item.artistName || metadata.artistName,
@@ -75,7 +78,13 @@ class PandoraCatalog {
         };
         beforeRequest();
         try {
-            return await this.api.request(path, data, { isCurrent, beforeRequest });
+            const reply = await this.api.request(path, data, { isCurrent, beforeRequest });
+            beforeRequest();
+            // Some web endpoints report an entitlement or playback error in a 200 response.
+            if (!reply || reply.errorString || reply.error || reply.errors?.length || Number(reply.errorCode) > 0) {
+                throw reply;
+            }
+            return reply;
         } catch (err) {
             if (err?.cancelled || !this.api.hasPremiumAccess()) throw err;
             throw playbackError(err);
