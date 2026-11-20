@@ -253,6 +253,12 @@ module.exports = {
     getCsrfToken: () => getConfig().csrfToken,
     setCsrfToken: (token) => setConfig('csrfToken', token),
 
+    // A stable player identity prevents each catalog selection looking like another device.
+    getPlaybackDeviceId: () => {
+        if (!getConfig().playbackDeviceId) setConfig('playbackDeviceId', crypto.randomUUID());
+        return getConfig().playbackDeviceId;
+    },
+
     // Listener ID (user ID)
     getListenerId: () => getConfig().listenerId,
     setListenerId: (id) => setConfig('listenerId', id),

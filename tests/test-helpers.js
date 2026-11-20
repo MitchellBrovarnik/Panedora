@@ -3,10 +3,11 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 function loadModule(filename, mocks) {
+    const sourceRequire = require('node:module').createRequire(filename);
     const module = { exports: {} };
     vm.runInNewContext(fs.readFileSync(filename, 'utf8'), {
         module, exports: module.exports,
-        require: name => Object.hasOwn(mocks, name) ? mocks[name] : require(name),
+        require: name => Object.hasOwn(mocks, name) ? mocks[name] : sourceRequire(name),
         __dirname: path.dirname(filename),
         URL, AbortController, setTimeout, clearTimeout,
         console: { log() {}, warn() {}, error() {} }
