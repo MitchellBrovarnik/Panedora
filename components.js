@@ -25,7 +25,7 @@ function createCard(image, title, subtitle, dataId, { removable = false, browse 
     </div>`;
 }
 
-function createTrackRow(index, title, artist, duration, coverArt, dataId, action = '') {
+function createTrackRow(index, title, artist, duration, coverArt, dataId, showRadio = false) {
   const placeholder = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect fill='%23282828' width='40' height='40'/%3E%3C/svg%3E`;
   const id = `track_${Math.random().toString(36).slice(2, 11)}`;
 
@@ -39,7 +39,8 @@ function createTrackRow(index, title, artist, duration, coverArt, dataId, action
           <span class="track-artist">${escapeHtml(artist)}</span>
         </div>
       </div>
-      <div class="track-duration">${escapeHtml(duration || '--:--')}</div>${action}
+      <div class="track-duration">${escapeHtml(duration || '--:--')}</div>
+      ${showRadio ? '<button type="button" class="catalog-radio">Start radio</button>' : ''}
     </div>`;
 }
 

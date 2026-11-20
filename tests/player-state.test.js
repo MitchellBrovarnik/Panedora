@@ -1640,7 +1640,7 @@ test('refreshing expired catalog audio reloads the same track and honors a pause
     const s = catalogPlayer();
     await s.select('album:AL:1');
     let finish;
-    s.api.catalog.current = () => new Promise(resolve => { finish = resolve; });
+    s.api.catalog.start = () => new Promise(resolve => { finish = resolve; });
     const recovering = s.handlers.get('PLAYER:RECOVER_AUDIO')({ sender: s.window.webContents }, s.position(12));
     await tick();
     await s.command('pause');

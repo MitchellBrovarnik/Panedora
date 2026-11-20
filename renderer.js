@@ -583,7 +583,7 @@ function renderSearchPage() {
         html += `<section class="search-section"><h2 class="section-title">${view ? 'Top songs' : 'Songs'}</h2>
             <div class="track-list" id="search-songs">${songs.map((song, index) => createTrackRow(index + 1,
                 song.title, song.artist, onDemand === false ? 'Start radio' : song.duration ? formatTime(song.duration) : '--:--', song.image || song.coverArt,
-                song.id, onDemand ? '<button type="button" class="catalog-radio">Start radio</button>' : ''
+                song.id, onDemand
             )).join('')}</div></section>`;
     }
     for (const [items, key, label] of [[albums, 'albums', 'Albums'], [artists, 'artists', 'Artists'], [stations, 'stations', 'Stations']]) {

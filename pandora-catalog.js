@@ -18,11 +18,19 @@ function catalogRows(ids, annotations) {
     return results;
 }
 
+function streamViolation(item) {
+    return item?.type === 'SimStreamViolation' || item?.type === 'SimStreamViolationItem';
+}
+
 function playbackError(err) {
     if (err?.cancelled) return err;
-    if (['SimStreamViolation', 'SimStreamViolationItem'].includes(err?.item?.type) || /STREAM_VIOLATION|SIMULTANEOUS/.test(err?.errorString || '')) {
+    if (streamViolation(err?.item) || /STREAM_VIOLATION|SIMULTANEOUS/.test(err?.errorString || '')) {
         return new Error('Pandora is playing on another device. Pause it there and try this selection again.');
     }
+    if (err?.errorString === 'SOURCE_ENDED') {
+        return Object.assign(new Error('This selection has finished.'), { code: 'SOURCE_ENDED' });
+    }
+    if (err?.errorCode === 1215) return new Error('Pandora verification is required. Please try again.');
     if (err?.errorString === 'NO_ENTITLEMENTS' || err?.status === 403) {
         return new Error('Pandora did not grant on-demand playback for this selection on your account.');
     }
@@ -31,10 +39,11 @@ function playbackError(err) {
 
 function readTrack(reply, selection, position) {
     const item = reply?.item;
-    if (['SimStreamViolation', 'SimStreamViolationItem'].includes(item?.type)) throw playbackError(reply);
+    if (streamViolation(item)) throw playbackError(reply);
     const id = selection.ids[position];
-    if (item?.type !== 'Track' || item.pandoraId !== id ||
-        [item.sourceId, reply?.source?.pandoraId].some(source => source && source !== selection.albumId) ||
+    const sources = [item?.sourceId, reply?.source?.pandoraId].filter(Boolean);
+    if (item?.type !== 'Track' || item.pandoraId !== id || !sources.length ||
+        sources.some(source => source !== selection.albumId) ||
         item.playerStyle === 'NON_INTERACTIVE') {
         throw new Error('Pandora did not return the requested recording. Choose another track or try again.');
     }
@@ -50,7 +59,7 @@ function readTrack(reply, selection, position) {
     return { catalogId: id, sourceIndex: item.index, songTitle: item.songName || metadata.name,
         albumTitle: item.albumName || metadata.albumName, artistName: item.artistName || metadata.artistName,
         trackLength: item.duration || metadata.duration || 0, albumArt: art ? [{ url: art }] : [],
-        trackToken: item.trackToken, audioURL: url.href, interactions: item.interactions || [] };
+        trackToken: item.trackToken, audioURL: url.href, interactions: Array.isArray(item.interactions) ? item.interactions : [] };
 }
 
 class PandoraCatalog {
@@ -138,8 +147,14 @@ class PandoraCatalog {
         if (action === 'pause') Object.assign(data, { pandoraId: track.catalogId, sync: false });
         if (action === 'next') data.checkOnly = false;
         if (nextPosition !== undefined) Object.assign(data, { includeItem: true, includeSource: true });
-        const reply = await this.playback(paths[action], data, isCurrent);
-        if (['SimStreamViolation', 'SimStreamViolationItem'].includes(reply?.item?.type)) throw playbackError(reply);
+        let reply;
+        try {
+            reply = await this.playback(paths[action], data, isCurrent);
+        } catch (error) {
+            if (action === 'ended' && nextPosition === undefined && error.code === 'SOURCE_ENDED') return;
+            throw error;
+        }
+        if (streamViolation(reply?.item)) throw playbackError(reply);
         if (nextPosition === undefined) return;
         // An acknowledgement can be empty after Pandora has advanced its cursor.
         return reply?.item ? readTrack(reply, selection, nextPosition) : this.current(selection, nextPosition, isCurrent);

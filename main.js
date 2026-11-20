@@ -635,7 +635,9 @@ async function changeCatalogTrack(action, { id, elapsed } = {}) {
             position = 0;
             track = await api.catalog.start(selection, position, isCurrent);
         } else if (action === 'resume' || action === 'refresh') {
-            track = await api.catalog.current(selection, position, isCurrent);
+            track = action === 'refresh'
+                ? await api.catalog.start(selection, position, isCurrent)
+                : await api.catalog.current(selection, position, isCurrent);
             resumeAt = Number.isFinite(elapsed) ? elapsed : previous.elapsed;
             // The verified current item can keep using its buffered audio on a normal resume.
             if (action === 'resume' && track.trackToken === oldTrack.trackToken) track.audioURL = oldTrack.audioURL;
@@ -1224,6 +1226,7 @@ ipcMain.handle('PLAYER:CMD', async (event, { action, value }) => {
             if (catalogSession) return changeCatalogTrack(value?.natural ? 'ended' : 'next', value);
             return await skipTrack();
         case 'prev':
+            if (catalogSession && value && !matchesCurrentTrack(value)) return getCurrentState();
             if (catalogSession) return changeCatalogTrack('previous', value);
             return await replayTrack();
         case 'thumbUp':

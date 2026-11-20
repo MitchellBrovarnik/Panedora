@@ -652,3 +652,16 @@ test('an empty ended acknowledgement reads the cursor once and checks the next r
     assert.deepEqual(calls.slice(-2).map(c => new URL(c.url).pathname), ['/api/v1/event/ended', '/api/v1/playback/current']);
     assert.equal(JSON.parse(calls.at(-2).body).elapsedTime, 126);
 });
+
+
+test('an unidentified source cannot play, and a server-confirmed album end completes normally', async () => {
+    const unidentified = catalogReply({ sourceId: undefined });
+    delete unidentified.source;
+    const { api, calls } = setup([premium(), catalogOK(unidentified),
+        { status: 400, body: { errorString: 'SOURCE_ENDED' } }]);
+    await api.login('test', 'test');
+    const selection = { albumId: 'AL:42', ids: ['TR:22'] };
+    await assert.rejects(api.catalog.start(selection, 0), /requested recording/);
+    await api.catalog.event(selection, { catalogId: 'TR:22', sourceIndex: 0 }, 'ended', 180);
+    assert.equal(calls.some(c => c.url.endsWith('/playback/current')), false);
+});
