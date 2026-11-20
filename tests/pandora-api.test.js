@@ -26,6 +26,7 @@ function setup(responses) {
     };
     const config = {
         getAuthToken: () => state.authToken,
+        getPlaybackDeviceId: () => 'test-device',
         getCsrfToken: () => state.csrfToken,
         getCredentials: () => state.credentials,
         setAuthToken: value => { state.authToken = value; },
@@ -568,4 +569,86 @@ test('a rejected takeover stops after one request', async () => {
     assert.equal(result.success, false);
     assert.equal(result.streamConflict, true);
     assert.equal(calls.length, 1);
+});
+
+const catalogOK = body => ({ status: 200, body });
+function catalogReply(changes = {}) {
+    return { source: { pandoraId: 'AL:42' }, item: { type: 'Track', pandoraId: 'TR:22', sourceId: 'AL:42',
+        index: 2, audioUrl: 'http://fixture.invalid/approved.mp4', trackToken: 'recording-token',
+        songName: 'Live recording', duration: 180, interactions: ['SKIP', 'SEEK'], ...changes } };
+}
+
+test('Premium search and artist pages use catalog IDs and preserve the returned order', async () => {
+    const annotations = { 'TR:21': { name: 'Song', artistName: 'Artist' }, 'TR:22': { name: 'Song (live)' },
+        'AL:42': { name: 'Record' }, 'AR:1': { name: 'Artist' } };
+    const { api, calls } = setup([premium(), catalogOK({ results: ['TR:22', 'AL:42', 'AR:1', 'TR:21'], annotations }),
+        catalogOK({ artistDetails: { topTracks: ['TR:21', 'TR:22'], topAlbums: ['AL:42'] }, annotations })]);
+    await api.login('test', 'test');
+    const search = await api.search('artist');
+    assert.deepEqual(search.songs.map(s => s.id), ['TR:22', 'TR:21']);
+    assert.equal(search.albums[0].id, 'AL:42');
+    const artist = await api.catalog.artist(search.artists[0].id);
+    assert.deepEqual(artist.songs.map(s => s.id), ['TR:21', 'TR:22']);
+    assert.equal(artist.albums[0].name, 'Record');
+    assert.equal(calls.filter(c => c.url.includes('/auth/login')).length, 1);
+});
+
+test('a song requests its album plus the exact recording with the verified session', async () => {
+    const { api, calls } = setup([premium(), catalogOK({ 'TR:22': { albumId: 'AL:42', rightsInfo: { hasInteractive: true } } }),
+        catalogOK(catalogReply())]);
+    await api.login('test', 'test');
+    const selection = await api.catalog.selection('TR:22');
+    const track = await api.catalog.start(selection, 0);
+    assert.deepEqual(selection.ids, ['TR:22']);
+    assert.deepEqual(JSON.parse(calls.at(-1).body), { sourceId: 'AL:42', itemId: 'TR:22',
+        includeItem: true, includeSource: true, deviceUuid: 'test-device' });
+    assert.equal(track.audioURL, 'https://fixture.invalid/approved.mp4');
+    assert.equal(track.sourceIndex, 2, 'A single song can be the third track on the remote album');
+    assert.equal(track.songTitle, 'Live recording');
+    assert.equal(calls.at(-1).headers['X-AuthToken'], 'premium-token');
+    assert.ok(calls.at(-1).url.endsWith('/v1/playback/source'));
+});
+
+test('wrong source, wrong recording, missing identity, radio, and simultaneous streams never supply audio', async () => {
+    for (const [change, pattern] of [[{ pandoraId: 'TR:23' }, /recording/], [{ pandoraId: undefined }, /recording/],
+        [{ sourceId: 'ST:0:42' }, /recording/], [{ type: 'AudioAd' }, /recording/],
+        [{ playerStyle: 'NON_INTERACTIVE' }, /recording/], [{ type: 'SimStreamViolation' }, /another device/],
+        [{ audioUrl: 'file:///etc/hosts' }, /playable audio/]]) {
+        const { api } = setup([premium(), catalogOK(catalogReply(change))]);
+        await api.login('test', 'test');
+        await assert.rejects(api.catalog.start({ albumId: 'AL:42', ids: ['TR:22'] }, 0), pattern);
+    }
+});
+
+test('restored tokens, Plus, restricted tracks and a server entitlement refusal cannot start catalog audio', async () => {
+    const { api, calls } = setup([paid(), premium(), catalogOK({ 'TR:22': { rightsInfo: { hasInteractive: false } } }),
+        { status: 400, body: { errorString: 'NO_ENTITLEMENTS' } }]);
+    await assert.rejects(api.catalog.selection('TR:22'), /Premium/);
+    assert.equal(calls.length, 0);
+    await api.login('test', 'test');
+    await assert.rejects(api.catalog.start({ albumId: 'AL:42', ids: ['TR:22'] }, 0), /Premium/);
+    assert.equal(calls.length, 1);
+    await api.login('test', 'test');
+    await assert.rejects(api.catalog.selection('TR:22'), /unavailable/);
+    await assert.rejects(api.catalog.start({ albumId: 'AL:42', ids: ['TR:22'] }, 0), /did not grant/);
+    assert.equal(calls.some(c => /getFragment|createStation/.test(c.url)), false);
+});
+
+test('a Premium downgrade during auth recovery prevents replaying the source mutation', async () => {
+    const { api, calls } = setup([premium(), { status: 401, body: {} }, paid()]);
+    await api.login('test', 'test');
+    api.onSessionExpired = async options => (await api.login('test', 'test', { ...options, refreshSession: true })).success;
+    await assert.rejects(api.catalog.start({ albumId: 'AL:42', ids: ['TR:22'] }, 0), /Premium/);
+    assert.equal(calls.filter(c => c.url.endsWith('/playback/source')).length, 1);
+});
+
+test('an empty ended acknowledgement reads the cursor once and checks the next recording', async () => {
+    const { api, calls } = setup([premium(), catalogOK({ 'AL:42': { tracks: ['TR:21', 'TR:22'] } }),
+        catalogOK({}), catalogOK(catalogReply())]);
+    await api.login('test', 'test');
+    const selection = await api.catalog.selection('AL:42');
+    const next = await api.catalog.event(selection, { catalogId: 'TR:21', sourceIndex: 0 }, 'ended', 126, () => true, 1);
+    assert.equal(next.catalogId, 'TR:22');
+    assert.deepEqual(calls.slice(-2).map(c => new URL(c.url).pathname), ['/api/v1/event/ended', '/api/v1/playback/current']);
+    assert.equal(JSON.parse(calls.at(-2).body).elapsedTime, 126);
 });

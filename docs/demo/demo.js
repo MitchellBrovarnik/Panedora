@@ -101,8 +101,6 @@
         const rows = document.querySelectorAll('#search-songs .track-row');
         rows.forEach((row, i) => {
             row.tabIndex = 0; row.setAttribute('role', 'button'); row.setAttribute('aria-label', 'Preview ' + AppState.searchResults.songs[i].title);
-            // The renderer already binds each row to playItem with that song.
-            row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); row.click(); } });
         });
         if (!AppState.searchResults.songs.length && !AppState.searchResults.stations.length) {
             DOM.pageContent.innerHTML = createEmptyState('No sample matches', 'Try “Night”, “Focus”, or “After Hours”.');

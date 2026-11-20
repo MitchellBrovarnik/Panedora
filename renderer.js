@@ -210,7 +210,16 @@ function loadPlayerArtwork(image, sources, trackKey, images = [], preload = fals
     load(0);
 }
 
-function nextPlayerTrack() {
+function catalogPosition() {
+    const state = AppState.playerState;
+    if (!state.onDemand) return undefined;
+    return { trackToken: state.trackToken, playbackGeneration: state.playbackGeneration,
+        elapsed: document.querySelector('audio')?.currentTime || 0 };
+}
+
+function nextPlayerTrack(natural = false) {
+    const position = catalogPosition();
+    if (position) return window.api.player.next({ ...position, natural });
     return window.api.player.next({ trackToken: AppState.playerState.trackToken,
         playbackGeneration: AppState.playerState.playbackGeneration });
 }
@@ -221,7 +230,7 @@ function pausePlayerPlayback() {
     // Keep the user's intent even while a fresh playlist is being requested.
     if (audio?.error || AppState.playerState.stationLoading) {
         updatePlayerUI({ isPlaying: false });
-        window.api.player.pause();
+        window.api.player.pause(catalogPosition());
     }
     audio?.pause();
 }
@@ -260,6 +269,7 @@ const AppState = {
     stations: [],
     searchResults: null,
     searchQuery: '',
+    catalogArtist: null,
     isLoading: true,
     isLoggedIn: false,
     effectSpeed: 1
@@ -348,7 +358,7 @@ function updateFooterThumbVisibility() {
     const thumbs = document.getElementById('mini-thumbs');
     const expandedPlayerVisible = AppState.currentPage === 'nowplaying' &&
         !document.body.classList.contains('mini-mode');
-    if (thumbs) thumbs.style.display = expandedPlayerVisible ? 'none' : '';
+    if (thumbs) thumbs.style.display = expandedPlayerVisible || AppState.playerState.onDemand ? 'none' : '';
 }
 
 function renderHomePage() {
@@ -541,101 +551,82 @@ function updateHomeGrids() {
     }
 }
 
+async function openCatalogArtist(artist) {
+    const view = { artist, results: null };
+    AppState.catalogArtist = view;
+    renderSearchPage();
+    try {
+        const result = await window.api.content.artist(artist.id);
+        if (result.error) throw new Error(result.error);
+        view.results = result;
+    } catch (error) {
+        view.error = error.message || 'Could not load this artist.';
+    }
+    if (AppState.catalogArtist === view && AppState.currentPage === 'search') renderSearchPage();
+}
+
 function renderSearchPage() {
-    if (!AppState.searchResults) {
-        DOM.pageContent.innerHTML = `
-      <div class="empty-state fade-in">
-        <h3>Search Pandora</h3>
-        <p>Find your favorite songs, artists, and stations</p>
-      </div>`;
+    const view = AppState.catalogArtist;
+    if (!view && !AppState.searchResults) {
+        DOM.pageContent.innerHTML = createEmptyState('Search Pandora', 'Find songs, artists, albums, and stations');
         return;
     }
-
-    const { songs, artists, stations } = AppState.searchResults;
-    let html = '<div class="fade-in">';
-
-    // Songs section
-    if (songs && songs.length > 0) {
-        let tracksHtml = '';
-        songs.forEach((song, index) => {
-            tracksHtml += createTrackRow(
-                index + 1,
-                song.title,
-                song.artist,
-                '--:--',
-                song.image || song.coverArt
-            );
-        });
-        html += `
-      <section class="search-section">
-        <h2 class="section-title">Songs</h2>
-        <div class="track-list" id="search-songs">${tracksHtml}</div>
-      </section>`;
+    const results = view ? view.results : AppState.searchResults;
+    const { songs = [], albums = [], artists = [], stations = [], onDemand } = results || {};
+    let html = '';
+    if (view) {
+        html += `<button class="back-btn" id="catalog-back">← Search results</button>
+            <div class="catalog-artist-heading"><h2>${escapeHtml(view.artist.name)}</h2>
+            <button class="catalog-radio" id="artist-radio">Start artist radio</button></div>`;
     }
-
-    // Artists section
-    if (artists && artists.length > 0) {
-        let artistCards = '';
-        artists.forEach(artist => {
-            artistCards += createCard(artist.image, artist.name, 'Artist');
-        });
-        html += `
-      <section class="search-section">
-        <h2 class="section-title">Artists</h2>
-        <div class="card-grid" id="search-artists">${artistCards}</div>
-      </section>`;
+    if (songs.length) {
+        html += `<section class="search-section"><h2 class="section-title">${view ? 'Top songs' : 'Songs'}</h2>
+            <div class="track-list" id="search-songs">${songs.map((song, index) => createTrackRow(index + 1,
+                song.title, song.artist, onDemand === false ? 'Start radio' : song.duration ? formatTime(song.duration) : '--:--', song.image || song.coverArt,
+                song.id, onDemand ? '<button type="button" class="catalog-radio">Start radio</button>' : ''
+            )).join('')}</div></section>`;
     }
-
-    // Stations section
-    if (stations && stations.length > 0) {
-        let stationCards = '';
-        stations.forEach(station => {
-            stationCards += createCard(station.image, station.name, 'Station');
-        });
-        html += `
-      <section class="search-section">
-        <h2 class="section-title">Stations</h2>
-        <div class="card-grid" id="search-stations">${stationCards}</div>
-      </section>`;
+    for (const [items, key, label] of [[albums, 'albums', 'Albums'], [artists, 'artists', 'Artists'], [stations, 'stations', 'Stations']]) {
+        if (!items.length) continue;
+        html += `<section class="search-section"><h2 class="section-title">${label}</h2>
+            <div class="card-grid" id="search-${key}">${items.map(item => createCard(item.image, item.name,
+                key === 'albums' ? item.artist || 'Album' : key === 'artists' ? (onDemand === false ? 'Artist radio' : 'Artist') : 'Station', item.id,
+                { browse: key === 'artists' && onDemand })).join('')}</div></section>`;
     }
-
-    if (!songs?.length && !artists?.length && !stations?.length) {
-        html += createEmptyState('No results found', `No results for "${AppState.searchQuery}"`);
+    if (!songs.length && !albums.length && !artists.length && !stations.length) {
+        if (view && !results && !view.error) html += createLoadingSpinner('Loading artist…');
+        else if (view) html += createEmptyState('No catalog results', view.error || 'Pandora returned no songs or albums for this artist.');
+        else html += createEmptyState('No results found', `No results for "${AppState.searchQuery}"`);
     }
-
-    html += '</div>';
-    DOM.pageContent.innerHTML = html;
-
-    // Attach click handlers — Songs
-    document.querySelectorAll('#search-songs .track-row').forEach((row, index) => {
-        row.addEventListener('click', () => {
-            if (songs[index]) {
-                window.api.content.playItem(songs[index]);
-            }
-        });
+    DOM.pageContent.innerHTML = `<div class="fade-in">${html}</div>`;
+    document.getElementById('catalog-back')?.addEventListener('click', () => {
+        AppState.catalogArtist = null;
+        renderSearchPage();
     });
-
-    // Attach click handlers — Artists
-    document.querySelectorAll('#search-artists .card').forEach((card, index) => {
-        card.addEventListener('click', () => {
-            if (artists[index]) {
-                window.api.content.playItem(artists[index]);
-            }
+    const play = async item => {
+        try {
+            const result = await window.api.content.playItem(item);
+            if (result?.error) showErrorToast(result.error);
+        } catch { showErrorToast('Could not play this selection. Please try again.'); }
+    };
+    document.getElementById('artist-radio')?.addEventListener('click', () => play(view.artist));
+    const bindRows = (selector, items, activate) => {
+        DOM.pageContent.querySelectorAll(selector).forEach((row, index) => {
+            row.addEventListener('click', event => activate(items[index], event.target.closest('button')));
+            row.addEventListener('keydown', event => {
+                if (event.target === row && (event.key === 'Enter' || event.key === ' ')) {
+                    event.preventDefault();
+                    activate(items[index], null);
+                }
+            });
         });
-    });
-
-    // Attach click handlers — Stations
-    document.querySelectorAll('#search-stations .card').forEach((card, index) => {
-        card.addEventListener('click', () => {
-            if (stations[index]) {
-                const s = stations[index];
-
-                // Use playItem with the best available ID for station creation
-                const stationSeed = s.stationId || s.stationFactoryPandoraId || s.pandoraId || s.id;
-                window.api.content.playItem({ ...s, type: 'station', id: stationSeed });
-            }
-        });
-    });
+    };
+    bindRows('#search-songs .track-row', songs, (song, button) => play({ ...song,
+        type: button ? 'song-radio' : onDemand ? 'catalog-track' : 'song' }));
+    bindRows('#search-albums .card', albums, album => play(album));
+    bindRows('#search-artists .card', artists, artist => onDemand ? openCatalogArtist(artist) : play(artist));
+    bindRows('#search-stations .card', stations, station => play({ ...station, type: 'station',
+        id: station.stationId || station.stationFactoryPandoraId || station.pandoraId || station.id }));
 }
 
 function renderLibraryPage() {
@@ -1408,7 +1399,7 @@ function historyItemHtml(h) {
                 <span class="history-title">${escapeHtml(h.songTitle)}</span>
                 <span class="history-artist">${escapeHtml(h.artistName)}</span>
             </div>
-            <div class="mini-thumbs history-thumbs">
+            <div class="mini-thumbs history-thumbs" ${h.stationFeedback === false ? 'hidden' : ''}>
                 <button class="mini-thumb-btn history-thumb-btn history-thumb-up ${liked ? 'liked' : ''}" data-thumb="up"
                     aria-label="Thumb Up" aria-pressed="${liked}" title="Thumb Up">${HISTORY_THUMB_UP_ICON}</button>
                 <button class="mini-thumb-btn history-thumb-btn history-thumb-down ${disliked ? 'disliked' : ''}" data-thumb="down"
@@ -1469,9 +1460,9 @@ function renderNowPlayingPage() {
                     <img id="np-large-art" src="${PLAYER_ART_PLACEHOLDER}" alt="Album Art" />
                 </div>
                 <div class="np-track-info">
-                    <h2 class="np-track" id="np-large-title">${track || 'Not Playing'}</h2>
-                    <p class="np-artist" id="np-large-artist">${artist || 'Select a station'}</p>
-                    <p class="np-album" id="np-large-album">${album || ''}</p>
+                    <h2 class="np-track" id="np-large-title">${escapeHtml(track || 'Not Playing')}</h2>
+                    <p class="np-artist" id="np-large-artist">${escapeHtml(artist || 'Select a station')}</p>
+                    <p class="np-album" id="np-large-album">${escapeHtml(album || '')}</p>
                 </div>
 
                 <div class="np-feedback-row">
@@ -2165,6 +2156,11 @@ function updatePlayerUI(state) {
         AppState.playerState.coverArtSources = [];
     }
     AppState.playerState = { ...AppState.playerState, ...state };
+    document.body.classList.toggle('catalog-playing', !!AppState.playerState.onDemand);
+    for (const button of [DOM.nextBtn, document.getElementById('classic-next')]) {
+        if (button) button.disabled = !!AppState.playerState.onDemand && !AppState.playerState.catalogCanSkip;
+    }
+    updateFooterThumbVisibility();
     updateActiveStation();
     renderStreamPrompt();
     if (AppState.currentPage === 'nowplaying') {
@@ -2294,6 +2290,7 @@ function restoreProgressPosition() {
 }
 
 function seekToFraction(fraction) {
+    if (AppState.playerState.onDemand && !AppState.playerState.catalogCanSeek) return;
     const audioEl = document.querySelector('audio');
     if (audioEl && audioEl.duration) {
         audioEl.currentTime = fraction * audioEl.duration;
@@ -2330,7 +2327,8 @@ function createProgressScrubber(bar) {
     };
 
     bar.addEventListener('pointerdown', event => {
-        if (event.button !== 0 || event.isPrimary === false || pointerId !== null) return;
+        if (event.button !== 0 || event.isPrimary === false || pointerId !== null ||
+            (AppState.playerState.onDemand && !AppState.playerState.catalogCanSeek)) return;
         pointerId = event.pointerId;
         progressScrubbing = true;
         activeProgressScrub = { cancel };
@@ -2572,7 +2570,7 @@ function createVolumeControl(slider, popover, thumbPx = VOLUME_THUMB_PX) {
 
 let feedbackPending = false;
 async function handleThumb(isPositive) {
-    if (feedbackPending || !AppState.playerState.trackToken || !rateLimitOk('thumb')) return;
+    if (AppState.playerState.onDemand || feedbackPending || !AppState.playerState.trackToken || !rateLimitOk('thumb')) return;
     feedbackPending = true;
     try {
         const wanted = isPositive ? 'thumbUp' : 'thumbDown';
@@ -2717,6 +2715,7 @@ function initEventListeners() {
 
     // Search input
     DOM.searchInput.addEventListener('input', (e) => {
+        AppState.catalogArtist = null;
         debouncedSearch(e.target.value);
     });
 
@@ -2777,7 +2776,7 @@ function initEventListeners() {
     DOM.prevBtn.addEventListener('click', () => {
         if (!rateLimitOk('prev')) return;
         const audioEl = document.querySelector('audio');
-        if (audioEl && audioEl.currentTime > 3) {
+        if (audioEl && audioEl.currentTime > 3 && (!AppState.playerState.onDemand || AppState.playerState.catalogCanSeek)) {
             // If more than 3 sec in, restart current track
             audioEl.currentTime = 0;
             if (audioEl.paused) {
@@ -2785,7 +2784,7 @@ function initEventListeners() {
             }
         } else {
             // Otherwise go to previous track
-            window.api.player.prev();
+            window.api.player.prev(catalogPosition());
         }
     });
 
@@ -2885,6 +2884,17 @@ function initAPIListeners() {
     let discordHasPlayed = false;
     let lastDiscordPosition = 0;
     let lastDiscordReport = 0;
+    let catalogStarted = false;
+    let lastCatalogReport = 0;
+    const reportCatalogPlayback = () => {
+        if (!AppState.playerState.onDemand || !AppState.playerState.isPlaying || AppState.playerState.stationLoading ||
+            currentAudioToken !== AppState.playerState.trackToken || currentAudioGeneration !== AppState.playerState.playbackGeneration ||
+            currentAudio.paused || currentAudio.ended || currentAudio.error || currentAudio.seeking || currentAudio.readyState < 2) return;
+        if (catalogStarted && Date.now() - lastCatalogReport < 30000) return;
+        window.api.player.catalogEvent({ ...catalogPosition(), kind: catalogStarted ? 'progress' : 'started' });
+        catalogStarted = true;
+        lastCatalogReport = Date.now();
+    };
     const reportDiscordPlayback = () => {
         if (!currentAudio || !window.api.discord || currentAudioToken !== AppState.playerState.trackToken ||
             currentAudioGeneration !== AppState.playerState.playbackGeneration) return;
@@ -2920,7 +2930,7 @@ function initAPIListeners() {
     const stopRecovery = () => {
         cancelRecovery();
         updatePlayerUI({ isPlaying: false });
-        window.api.player.pause();
+        window.api.player.pause(catalogPosition());
         showErrorToast('Audio could not be loaded after refreshing the songs. Check your connection and press Play to try again.');
     };
     const requestFreshPlaylist = () => {
@@ -2932,6 +2942,7 @@ function initAPIListeners() {
         failedAudioRevision = audioRevision;
         const revision = audioRevision;
         const expected = { trackToken: currentAudioToken, playbackGeneration: AppState.playerState.playbackGeneration };
+        if (AppState.playerState.onDemand) expected.elapsed = currentAudio.currentTime;
         window.api.player.recoverAudio(expected).catch(() => {
             if (revision === audioRevision && expected.playbackGeneration === AppState.playerState.playbackGeneration &&
                 AppState.isLoggedIn && AppState.playerState.isPlaying && !AppState.playerState.streamBlocked) stopRecovery();
@@ -2981,7 +2992,9 @@ function initAPIListeners() {
                 }
 
                 // Sync time with UI
+                currentAudio.addEventListener('playing', reportCatalogPlayback);
                 currentAudio.addEventListener('timeupdate', () => {
+                    reportCatalogPlayback();
                     // A queued media event can be handled after the source/readiness
                     // changed. Actual progress also proves playback, so one missed
                     // 'playing' event cannot silence Discord reports indefinitely.
@@ -3013,7 +3026,7 @@ function initAPIListeners() {
                     if (!currentAudio.ended || endedRevision === audioRevision || !currentAudio.getAttribute('src')) return;
                     endedRevision = audioRevision;
                     console.log('[UI] Track ended naturally, requesting next');
-                    nextPlayerTrack();
+                    nextPlayerTrack(true);
                 });
 
                 currentAudio.addEventListener('error', (e) => {
@@ -3029,6 +3042,11 @@ function initAPIListeners() {
 
                     failedAudioRevision = audioRevision;
                     consecutiveErrors++;
+                    if (AppState.playerState.onDemand) {
+                        if (freshPlaylistTried) stopRecovery();
+                        else requestFreshPlaylist();
+                        return;
+                    }
 
                     // Try two queued alternatives, then replace the stale queue.
                     // Only one fresh playlist is automatic until audio succeeds.
@@ -3062,10 +3080,12 @@ function initAPIListeners() {
                 currentAudio.addEventListener('pause', () => {
                     // Ignore pause events if the track just ended (the 'ended' handler takes over)
                     if (currentAudio.ended || !currentAudio.paused || currentAudio.error || !currentAudio.getAttribute('src')) return;
+                    if (!AppState.playerState.isPlaying && AppState.playerState.stationLoading) return;
+                    catalogStarted = false;
                     cancelRecovery();
                     AppState.playerState.isPlaying = false;
                     updatePlayerUI({ isPlaying: false });
-                    window.api.player.pause();
+                    window.api.player.pause(catalogPosition());
                 });
                 currentAudio.addEventListener('playing', playbackSucceeded);
 
@@ -3076,13 +3096,13 @@ function initAPIListeners() {
                     });
                     navigator.mediaSession.setActionHandler('previoustrack', () => {
                         if (!rateLimitOk('prev')) return;
-                        if (currentAudio && currentAudio.currentTime > 3) {
+                        if (currentAudio && currentAudio.currentTime > 3 && (!AppState.playerState.onDemand || AppState.playerState.catalogCanSeek)) {
                             currentAudio.currentTime = 0;
                             if (currentAudio.paused) {
                                 window.api.player.play();
                             }
                         } else {
-                            window.api.player.prev();
+                            window.api.player.prev(catalogPosition());
                         }
                     });
                     navigator.mediaSession.setActionHandler('play', () => {
@@ -3112,7 +3132,9 @@ function initAPIListeners() {
                 DOM.currentTime.textContent = '0:00';
                 DOM.totalTime.textContent = formatTime(state.duration || 0);
                 syncClassicProgress();
+                catalogStarted = false;
                 currentAudio.src = state.audioURL;
+                if (state.resumeAt > 0 && state.catalogCanSeek) currentAudio.currentTime = state.resumeAt;
                 if (state.isPlaying !== false) currentAudio.play().then(() => {
                     if (revision !== audioRevision || currentAudio.paused) return;
                     playbackSucceeded();
@@ -3275,6 +3297,8 @@ function initAPIListeners() {
             currentAudioToken = null;
             cancelRecovery();
 
+            AppState.catalogArtist = null;
+            AppState.searchResults = null;
             // Clear physical UI text and artwork
             if (DOM.nowPlayingTitle) DOM.nowPlayingTitle.textContent = 'Not Playing';
             if (DOM.nowPlayingArtist) DOM.nowPlayingArtist.textContent = '--';

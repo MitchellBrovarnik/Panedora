@@ -1535,3 +1535,118 @@ test('screen correction waits for drag release or a settled move and never moves
     lateCallback();
     assert.deepEqual(state.bounds, { ...fullBounds, x: -300, y: -50 });
 });
+
+function catalogPlayer() {
+    const s = setup();
+    s.api.hasPremiumAccess = () => true;
+    const ids = ['TR:21', 'TR:22'];
+    function song(id) {
+        return { ...track(0, id), catalogId: id, sourceIndex: ids.indexOf(id), interactions: ['SKIP', 'PREVIOUS', 'SEEK'] };
+    }
+    s.api.catalog = {
+        selection: async id => ({ albumId: 'AL:1', ids: id.startsWith('AL:') ? ids : [id] }),
+        start: async (selection, index) => song(selection.ids[index]),
+        current: async (selection, index) => song(selection.ids[index]),
+        event: async (selection, item, action, elapsed, isCurrent, next) => {
+            s.calls.push([action, item.catalogId, elapsed]);
+            if (next !== undefined) return song(selection.ids[next]);
+        }
+    };
+    const sender = { sender: s.window.webContents };
+    s.select = uri => s.handlers.get('NAV:PLAY_URI')(sender, uri);
+    s.command = (action, value) => s.handlers.get('PLAYER:CMD')(sender, { action, value });
+    s.position = elapsed => ({ trackToken: s.getCurrentState().trackToken, playbackGeneration: s.getCurrentState().playbackGeneration, elapsed });
+    return s;
+}
+
+test('a single search song plays exactly once, reports completion and never opens or refills a station', async () => {
+    const s = catalogPlayer();
+    await s.select('catalog-track:TR:22');
+    const state = s.getCurrentState();
+    assert.equal(state.trackToken, 'TR:22');
+    assert.equal(state.stationId, null);
+    assert.equal(state.catalogCanSkip, false);
+    assert.equal(state.history[0].stationFeedback, false);
+    assert.equal((await s.thumbUp()).success, false);
+    assert.equal((await s.command('next', { ...s.position(20), natural: false })).success, false);
+    await s.command('next', { ...s.position(180), natural: true });
+    assert.equal(s.getCurrentState().isPlaying, false);
+    assert.deepEqual(s.calls, [['ended', 'TR:22', 180]]);
+    await s.command('play');
+    assert.equal(s.getCurrentState().trackToken, 'TR:22');
+    assert.equal(s.getCurrentState().isPlaying, true);
+    assert.deepEqual(Array.from((await s.handlers.get('PLAYER:GET_MORE_TRACKS')()).tracks), []);
+});
+
+test('album transport preserves the selected order, pauses the active catalog item and returns to radio', async () => {
+    const s = catalogPlayer();
+    await s.select('album:AL:1');
+    assert.equal(s.getCurrentState().catalogCanSkip, true);
+    await s.command('pause', s.position(37));
+    assert.deepEqual(s.calls.at(-1), ['pause', 'TR:21', 37]);
+    await s.command('play');
+    const resumed = s.messages.filter(m => m.data.resumePlayback).at(-1);
+    assert.equal(resumed.data.resumeAt, 37);
+    const old = s.position(181);
+    await s.command('next', { ...old, natural: true });
+    assert.equal(s.getCurrentState().trackToken, 'TR:22');
+    await s.command('next', { ...old, natural: true });
+    assert.equal(s.calls.filter(c => c[0] === 'ended').length, 1);
+    await s.command('prev', s.position(1));
+    assert.equal(s.getCurrentState().trackToken, 'TR:21');
+    await s.command('next', s.position(18));
+    await s.command('next', { ...s.position(180), natural: true });
+    assert.equal(s.getCurrentState().isPlaying, false);
+    const station = await s.select('station:station-2');
+    assert.equal(station.stationId, 'station-2');
+    assert.equal(station.onDemand, false);
+    assert.equal(station.isPlaying, true);
+});
+
+test('a slow catalog selection cannot take over after a newer station choice or logout', async () => {
+    for (const cancel of ['station', 'logout']) {
+        const s = catalogPlayer();
+        let finish;
+        s.api.catalog.start = () => new Promise(resolve => { finish = resolve; });
+        const pending = s.select('catalog-track:TR:21');
+        await tick();
+        if (cancel === 'station') await s.select('station:station-2');
+        else await s.handlers.get('AUTH:LOGOUT')();
+        finish({ ...track(0, 'late'), catalogId: 'TR:21' });
+        await pending;
+        assert.equal(s.getCurrentState().onDemand, false);
+        assert.notEqual(s.getCurrentState().trackToken, 'late');
+    }
+});
+
+test('catalog read or playback denial keeps radio available and never creates a fallback station', async () => {
+    const s = catalogPlayer();
+    s.seed([track()]);
+    s.api.catalog.selection = async () => { throw new Error('This track is unavailable.'); };
+    const before = s.getCurrentState();
+    await s.select('catalog-track:TR:21');
+    assert.equal(s.getCurrentState().isPlaying, true);
+    assert.equal(s.getCurrentState().playbackGeneration, before.playbackGeneration);
+    s.api.catalog.selection = async () => ({ albumId: 'AL:1', ids: ['TR:21'] });
+    s.api.catalog.start = async () => { throw new Error('Pandora did not grant on-demand playback.'); };
+    await s.select('catalog-track:TR:21');
+    assert.equal(s.getCurrentState().stationId, 'station-1');
+    assert.equal(s.getCurrentState().isPlaying, false);
+    assert.equal(s.messages.at(-2).data.message, 'Pandora did not grant on-demand playback.');
+    assert.equal(s.started.length, 0);
+});
+
+test('refreshing expired catalog audio reloads the same track and honors a pause while waiting', async () => {
+    const s = catalogPlayer();
+    await s.select('album:AL:1');
+    let finish;
+    s.api.catalog.current = () => new Promise(resolve => { finish = resolve; });
+    const recovering = s.handlers.get('PLAYER:RECOVER_AUDIO')({ sender: s.window.webContents }, s.position(12));
+    await tick();
+    await s.command('pause');
+    finish({ ...track(0, 'renewed'), catalogId: 'TR:21', interactions: ['SEEK'] });
+    await recovering;
+    assert.equal(s.getCurrentState().isPlaying, false);
+    assert.equal(s.getCurrentState().trackToken, 'renewed');
+    assert.equal(s.messages.at(-1).data.resumeAt, 12);
+});
