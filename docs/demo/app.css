@@ -3554,3 +3554,21 @@ body.mini-mode #mini-player-btn svg {
 body.mini-mode #mini-player-btn:hover {
     opacity: 1;
 }
+
+/* A catalog selection has no station to rate or tune. */
+body.catalog-playing .np-feedback-row,
+body.catalog-playing .classic-thumbs,
+body.catalog-playing #mini-thumbs,
+.history-thumbs[hidden] { display: none; }
+.catalog-radio {
+    color: var(--text-2);
+    background: transparent;
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    padding: 5px 10px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.catalog-radio:hover, .catalog-radio:focus-visible { color: var(--text-1); border-color: currentColor; }
+.track-row:has(.catalog-radio) { grid-template-columns: 24px minmax(0, 1fr) auto auto; }
+.catalog-artist-heading { display: flex; align-items: center; gap: 16px; margin: 12px 0 22px; }

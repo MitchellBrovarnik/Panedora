@@ -35,6 +35,7 @@ function setup({ deferPlay = false, withDiscord = false, volume } = {}) {
     const playRequests = [];
     const toasts = [];
     const discordReports = [];
+    const catalogReports = [];
     const timers = new Set();
     const testWindow = { addEventListener() {} };
     let visualizerInits = 0;
@@ -69,6 +70,7 @@ function setup({ deferPlay = false, withDiscord = false, volume } = {}) {
     const api = {
         player: { play: async () => { resumeRequests++; return { success: true }; },
             pause: async () => { pauseRequests++; return { success: true }; },
+            catalogEvent: value => catalogReports.push(value),
             recoverAudio: async expected => { recoveryRequests.push(expected); return { success: true }; },
             next: async expected => { nextRequests.push(expected); } },
         onState: listener => { onState = listener; },
@@ -99,7 +101,7 @@ function setup({ deferPlay = false, withDiscord = false, volume } = {}) {
         get audio() { return audio; },
         get resumeRequests() { return resumeRequests; },
         get pauseRequests() { return pauseRequests; }, get visualizerInits() { return visualizerInits; },
-        nextRequests, recoveryRequests, playRequests, timers, toasts, discordReports,
+        nextRequests, recoveryRequests, playRequests, timers, toasts, discordReports, catalogReports,
         fireTimers: () => { for (const timer of [...timers]) { timers.delete(timer); timer.callback(); } }
     };
 }
@@ -377,4 +379,19 @@ test('a remembered mute is applied before the first song starts and survives tra
     s.state({ audioURL: 'https://fixture.invalid/next.wav', isPlaying: true });
     assert.equal(s.audio.volume, 0);
     assert.equal(s.node('volume-slider').value, '0');
+});
+
+
+test('catalog media errors refresh the same recording and never schedule a station skip', () => {
+    const s = setup();
+    s.state({ onDemand: true, isPlaying: true, catalogCanSeek: true });
+    s.audio.currentTime = 9;
+    s.audio.dispatch('playing');
+    assert.equal(s.catalogReports[0].kind, 'started');
+    s.audio.error = { code: 2 };
+    s.audio.dispatch('error');
+    assert.equal(s.recoveryRequests[0].elapsed, 9);
+    assert.equal(s.recoveryRequests[0].trackToken, 'saved-track');
+    s.fireTimers();
+    assert.equal(s.nextRequests.length, 0);
 });

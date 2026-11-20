@@ -8,6 +8,7 @@ const filesToCopy = [
     'main.js',
     'keyboard-shortcuts.js',
     'pandora-api.js',
+    'pandora-catalog.js',
     'pandora-verification.js',
     'update-checker.js',
     'discord-rpc.js',

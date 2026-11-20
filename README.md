@@ -86,7 +86,7 @@ Your selected effect is saved and restored automatically on next launch.
 ### Station Library
 *   **Home Screen:** Displays a time-aware greeting ("Good Morning", "Good Afternoon", "Good Evening") and organizes your stations into two grids: "Jump Back In" (your 6 most recently played) and "More from Your Collection" (the next 6 by recency).
 *   **Full Library View:** The Library page shows all your stations sorted alphabetically with a live filter input — type to narrow down results instantly as you type, with a debounced update and preserved cursor position.
-*   **Search:** Search for songs, artists, and stations. Results are organized into separate sections. Selecting a song currently starts a station based on that song; it does not guarantee playback of that exact track, including on Premium accounts.
+*   **Search.** On Pandora Premium, select a song to play that recording, an album to play its tracks in order, or an artist to browse their top songs and albums. Choose **Start radio** to build a station from a song. Plus accounts can start song and artist stations.
 
 ### Robust Session Management
 *   **Secure Authentication:** Signs in directly with Pandora, generating and managing the required auth tokens and CSRF tokens for all subsequent requests.
@@ -157,7 +157,7 @@ You do **not** need to compile the application locally. Simply navigate to the R
 
 ## Current Limitations
 
-*   **On-Demand Song Playback:** Pandora Premium supports playing available songs on demand; Plus primarily provides station listening and replay ([Pandora's subscription/API comparison](https://developer.pandora.com/docs/getting-started/pandora-subscriptions-and-apis/)). Panedora currently uses station playback for song search results and has not implemented verified Premium on-demand playback. A Premium subscription alone therefore does not make exact-song selection work in this client. Use Pandora's official app or website for direct song playback.
+*   **On-demand availability.** Playing a specific recording requires a verified Pandora Premium session and on-demand rights for that recording. Panedora checks the track and album returned by Pandora before playing. A single-song selection stops when the song ends. Album playback stops at the end of the album. Pandora can decline a selection because of licensing, subscription status, or an active stream on another device. [Pandora subscription comparison](https://developer.pandora.com/docs/getting-started/pandora-subscriptions-and-apis/)
 
 ## Privacy and Security
 

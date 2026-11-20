@@ -4,6 +4,7 @@
  */
 
 const config = require('./config');
+const { PandoraCatalog } = require('./pandora-catalog');
 
 class PandoraAPI {
     constructor() {
@@ -12,6 +13,7 @@ class PandoraAPI {
         this.authToken = config.getAuthToken();
         // Stored tokens alone do not prove a Premium subscription.
         this.premiumAuthToken = null;
+        this.catalog = new PandoraCatalog(this, () => config.getPlaybackDeviceId());
         this.sessionGeneration = 0;
         this.loginGeneration = 0;
         this.onSessionExpired = null; // Callback for main process
@@ -701,6 +703,14 @@ class PandoraAPI {
             return { songs: [], artists: [], stations: [] };
         }
 
+        if (this.hasPremiumAccess()) {
+            try {
+                return await this.catalog.search(query);
+            } catch (err) {
+                if (err?.cancelled) return { songs: [], artists: [], stations: [] };
+                // Existing station search still works if catalog search is unavailable.
+            }
+        }
         try {
             const response = await this.request('/v1/search/fullSearch', {
                 query,
@@ -714,18 +724,24 @@ class PandoraAPI {
             let items = [];
             if (response.items) {
                 items = response.items;
-            } else if (response.tracks || response.artists) {
+            } else if (response.tracks || response.artists || response.albums || response.stations) {
                 // Fallback to old structure if present
                 items = [
                     ...(response.tracks || []).map(t => ({ ...t, type: 'song' })),
                     ...(response.artists || []).map(a => ({ ...a, type: 'artist' })),
+                    ...(response.albums || []).map(a => ({ ...a, type: 'album' })),
                     ...(response.stations || []).map(s => ({ ...s, type: 'station' }))
                 ];
             }
 
             const results = {
+                onDemand: this.hasPremiumAccess(),
+                albums: this.hasPremiumAccess() ? items.filter(i => i.type === 'album' || i.type === 'AL').map(a => ({
+                    id: a.pandoraId, name: a.name || a.albumTitle, artist: a.artistName,
+                    image: PandoraAPI.getHighResArt(a.art || a.albumArt), type: 'album'
+                })) : [],
                 songs: items.filter(i => i.type === 'song' || i.type === 'TR' || i.type === 'track').map(t => ({
-                    id: t.pandoraId || t.musicId,
+                    id: t.pandoraId || (/^S\d+$/.test(t.musicId) ? 'TR:' + t.musicId.slice(1) : t.musicId),
                     title: t.songTitle || t.name,
                     artist: t.artistName,
                     album: t.albumTitle,

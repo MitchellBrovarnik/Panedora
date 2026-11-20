@@ -36,6 +36,9 @@ let keyboardShortcuts = null;
 // Current state
 let currentStations = [];
 let currentStation = null;
+let catalogSession = null;
+let selectionRevision = 0;
+let searchRevision = 0;
 let currentPlaylist = [];
 let currentTrackIndex = 0;
 let songHistory = []; // Track played songs for history display
@@ -131,6 +134,7 @@ function createUIWindow() {
         clearTimeout(miniBoundsTimer);
         miniBoundsTimer = null;
         playbackGeneration++;
+        selectionRevision++;
         discordPresence?.setPlayerState(null);
         cancelStreamPrompt();
         verification.cancel();
@@ -327,6 +331,10 @@ function getCurrentState() {
         stationName: currentStation?.name || null,
         stationId: currentStation?.stationId || null,
         playbackGeneration,
+        onDemand: !!catalogSession,
+        catalogCanSeek: !!track?.interactions?.includes('SEEK'),
+        catalogCanSkip: !!catalogSession && catalogSession.position + 1 < catalogSession.selection.ids.length &&
+            !!track?.interactions?.includes('SKIP'),
         isShuffle: isShuffleStation(currentStation),
         stationLoading,
         audioRecovery: audioRecovery?.generation === playbackGeneration,
@@ -345,8 +353,8 @@ function getCurrentState() {
         streamPrompt: streamPrompt?.generation === playbackGeneration
             ? { id: streamPrompt.id, pending: !streamPrompt.resolveChoice } : null,
         feedback: currentFeedback, // Send current feedback to UI
-        trackIndex: currentTrackIndex,
-        playlistLength: currentPlaylist.length,
+        trackIndex: catalogSession?.position ?? currentTrackIndex,
+        playlistLength: catalogSession?.selection.ids.length ?? currentPlaylist.length,
         history: songHistory.slice(-20) // Send last 20 played
     };
 }
@@ -364,6 +372,7 @@ function rememberTrack(track) {
     const feedback = feedbackForTrack(track);
     songHistory.push({
         songTitle: track.songTitle,
+        stationFeedback: !track.catalogId,
         artistName: track.artistName,
         albumTitle: track.albumTitle,
         coverArt: PandoraAPI.getHighResArt(track.albumArt),
@@ -461,6 +470,10 @@ async function resumePlayer() {
         await changing.promise;
         return { success: changing.generation === playbackGeneration && !streamReclaimed && !isPaused };
     }
+    if (catalogSession) {
+        if (!isPaused) return { success: true };
+        return changeCatalogTrack(catalogSession.finished || catalogSession.needsRestart ? 'restart' : 'resume');
+    }
     if (!currentStation) return { success: false, error: 'Select a station first.' };
     if (streamReclaimed) {
         await showStreamConflict(currentStation.stationId);
@@ -505,13 +518,15 @@ async function resumePlayer() {
     return operation.promise;
 }
 
-async function pausePlayer() {
+async function pausePlayer(position) {
+    if (position?.trackToken && !matchesCurrentTrack(position)) return { success: false };
     pauseRevision++;
     const wasPlaying = !isPaused && !streamReclaimed;
     isPaused = true;
     const track = currentPlaylist[currentTrackIndex];
-    if (wasPlaying && currentStation && track?.trackToken) {
-        await api.playbackPaused(currentStation.stationId, track.trackToken);
+    if (wasPlaying && track?.trackToken) {
+        if (catalogSession) await pauseCatalog(position?.elapsed);
+        else if (currentStation) await api.playbackPaused(currentStation.stationId, track.trackToken);
     }
     return { success: true };
 }
@@ -576,6 +591,118 @@ async function loadStations() {
     return currentStations;
 }
 
+function matchesCurrentTrack(expected) {
+    return expected?.trackToken === currentPlaylist[currentTrackIndex]?.trackToken &&
+        expected.playbackGeneration === playbackGeneration;
+}
+
+async function pauseCatalog(elapsed) {
+    const session = catalogSession;
+    const track = currentPlaylist[currentTrackIndex];
+    if (!session || session.finished || !track) return;
+    if (Number.isFinite(elapsed)) session.elapsed = elapsed;
+    try {
+        await api.catalog.event(session.selection, track, 'pause', session.elapsed, () => session === catalogSession);
+    } catch {
+        // The local audio is already paused. A resume rechecks Pandora's current item.
+    }
+}
+
+async function changeCatalogTrack(action, { id, elapsed } = {}) {
+    const requestRevision = selectionRevision;
+    let requestedSelection;
+    if (action === 'select') {
+        const selected = () => requestRevision === selectionRevision;
+        try {
+            requestedSelection = await api.catalog.selection(id, selected);
+        } catch (error) {
+            if (selected()) sendToUI('UI:ERROR', { message: error.message || 'Could not find this recording.' });
+            return { success: false };
+        }
+        if (!selected()) return { success: false };
+    }
+    const previous = catalogSession;
+    const oldTrack = currentPlaylist[currentTrackIndex];
+    if (action !== 'select' && (!previous || stationLoading)) return { success: false };
+    if (action === 'next' && (!oldTrack.interactions.includes('SKIP') ||
+        previous.position + 1 >= previous.selection.ids.length)) return { success: false };
+    if (action === 'previous' && (previous.position === 0 || !oldTrack.interactions.includes('PREVIOUS'))) {
+        return { success: false };
+    }
+
+    const generation = ++playbackGeneration;
+    const isCurrent = () => generation === playbackGeneration && (action !== 'select' || selectionRevision === requestRevision);
+    const revision = pauseRevision;
+    const wasPlaying = !isPaused && !streamReclaimed;
+    cancelStreamPrompt();
+    stationLoading = true;
+    isPaused = true;
+    resetStationModes();
+    playlistRefill = null;
+    sendPlayerState({ ...getCurrentState(), pausePlayback: true, audioRecovery: action === 'refresh' });
+    try {
+        let selection = previous?.selection;
+        let position = previous?.position ?? 0;
+        let track;
+        let resumeAt = 0;
+        if (action === 'select') {
+            selection = requestedSelection;
+            if (wasPlaying && previous) await pauseCatalog(elapsed);
+            else if (wasPlaying && currentStation && oldTrack?.trackToken) {
+                await api.playbackPaused(currentStation.stationId, oldTrack.trackToken);
+            }
+            if (!isCurrent()) return { success: false };
+            position = 0;
+            track = await api.catalog.start(selection, position, isCurrent);
+        } else if (action === 'resume' || action === 'refresh') {
+            track = action === 'refresh'
+                ? await api.catalog.start(selection, position, isCurrent)
+                : await api.catalog.current(selection, position, isCurrent);
+            resumeAt = Number.isFinite(elapsed) ? elapsed : previous.elapsed;
+            // The verified current item can keep using its buffered audio on a normal resume.
+            if (action === 'resume' && track.trackToken === oldTrack.trackToken) track.audioURL = oldTrack.audioURL;
+        } else if (action === 'restart') {
+            if (previous.finished) position = 0;
+            track = await api.catalog.start(selection, position, isCurrent);
+        } else {
+            const nextPosition = position + (action === 'previous' ? -1 : 1);
+            const finished = nextPosition === selection.ids.length;
+            track = await api.catalog.event(selection, oldTrack, action, elapsed ?? previous.elapsed,
+                isCurrent, finished ? undefined : nextPosition);
+            if (finished) {
+                if (!isCurrent()) return { success: false };
+                previous.finished = true;
+                return { success: true };
+            }
+            position = nextPosition;
+        }
+        if (!isCurrent()) return { success: false };
+        catalogSession = { selection, position, elapsed: resumeAt, finished: false };
+        currentStation = null;
+        currentPlaylist = [track];
+        currentTrackIndex = 0;
+        streamReclaimed = false;
+        isPaused = revision !== pauseRevision;
+        rememberTrack(track);
+        stationLoading = false;
+        const buffered = action === 'resume' && track.trackToken === oldTrack.trackToken;
+        sendPlayerState({ ...getCurrentState(), reloadAudio: !buffered, resumePlayback: buffered && !isPaused,
+            resumeAt, audioRecovery: action === 'refresh' });
+        return { success: true };
+    } catch (error) {
+        if (isCurrent()) {
+            if (previous) previous.needsRestart = true;
+            sendToUI('UI:ERROR', { message: error.message || 'Could not play this selection.' });
+        }
+        return { success: false };
+    } finally {
+        if (generation === playbackGeneration && stationLoading) {
+            stationLoading = false;
+            sendPlayerState({ ...getCurrentState(), pausePlayback: true });
+        }
+    }
+}
+
 async function playStation(stationId, startingAtTrackId = null) {
     const generation = ++playbackGeneration;
     const selected = currentStations.find(station => station.stationId === stationId);
@@ -593,10 +720,12 @@ async function playStation(stationId, startingAtTrackId = null) {
     const previousTrack = currentPlaylist[currentTrackIndex];
     isPaused = true;
     sendPlayerState({ ...getCurrentState(), pausePlayback: true });
-    if (!streamReclaimed && currentStation && previousTrack?.trackToken) {
+    if (catalogSession && previousTrack) await pauseCatalog();
+    else if (!streamReclaimed && currentStation && previousTrack?.trackToken) {
         await api.playbackPaused(currentStation.stationId, previousTrack.trackToken);
     }
     if (generation !== playbackGeneration) return getCurrentState();
+    catalogSession = null;
     currentStation = currentStations.find(s => s.stationId === stationId) || { stationId };
     streamReclaimed = false;
     currentPlaylist = [];
@@ -672,6 +801,10 @@ function refillPlaylist(generation = playbackGeneration) {
 }
 
 function recoverAudio(expected) {
+    if (catalogSession) {
+        if (!matchesCurrentTrack(expected) || isPaused) return Promise.resolve({ success: false });
+        return changeCatalogTrack('refresh', expected);
+    }
     if (!expected || expected.playbackGeneration !== playbackGeneration ||
         expected.trackToken !== currentPlaylist[currentTrackIndex]?.trackToken ||
         !currentStation || isPaused || streamReclaimed) return Promise.resolve({ success: false });
@@ -910,6 +1043,7 @@ async function replayTrack() {
 
 async function setTrackFeedback(isPositive) {
     const track = currentPlaylist[currentTrackIndex];
+    if (track?.catalogId) return { success: false, error: 'Thumbs are available on stations.' };
     if (!track?.trackToken) return { success: false, error: 'No track selected.' };
     const rating = isPositive ? 1 : -1;
     if (feedbackForTrack(track) === (isPositive ? 'thumbUp' : 'thumbDown')) return { success: true };
@@ -938,6 +1072,7 @@ async function setTrackFeedback(isPositive) {
 async function setHistoryFeedback(isPositive, trackToken) {
     const histItem = songHistory.find(h => h.trackToken === trackToken);
     if (!histItem) return { success: false, error: 'That song is no longer in your history.' };
+    if (histItem.stationFeedback === false) return { success: false, error: 'Thumbs are available on stations.' };
     const wanted = isPositive ? 'liked' : 'disliked';
     if (histItem.feedback === wanted) return { success: true };
     const result = await api.addFeedback(trackToken, isPositive);
@@ -1071,6 +1206,8 @@ ipcMain.handle('AUTH:LOGIN', async (event, { username, password }) => {
 // Logout
 ipcMain.handle('AUTH:LOGOUT', async () => {
     playbackGeneration++;
+    selectionRevision++;
+    searchRevision++;
     discordPresence?.setPlayerState(null);
     cancelStreamPrompt();
     stationLoading = false;
@@ -1078,7 +1215,8 @@ ipcMain.handle('AUTH:LOGOUT', async () => {
     try {
         // Tell Pandora to stop the stream for this session so it doesn't hang
         const track = currentPlaylist[currentTrackIndex];
-        if (!streamReclaimed && currentStation && track && track.trackToken) {
+        if (catalogSession && track) await pauseCatalog();
+        else if (!streamReclaimed && currentStation && track && track.trackToken) {
             await api.playbackPaused(currentStation.stationId, track.trackToken);
         }
 
@@ -1088,6 +1226,7 @@ ipcMain.handle('AUTH:LOGOUT', async () => {
     }
 
     // Clear playback state
+    catalogSession = null;
     currentPlaylist = [];
     currentStation = null;
     streamReclaimed = false;
@@ -1112,8 +1251,11 @@ ipcMain.handle('PLAYER:CMD', async (event, { action, value }) => {
             // A delayed audio error/end event must not advance a different song.
             if (value && (value.trackToken !== currentPlaylist[currentTrackIndex]?.trackToken ||
                 value.playbackGeneration !== playbackGeneration)) return getCurrentState();
+            if (catalogSession) return changeCatalogTrack(value?.natural ? 'ended' : 'next', value);
             return await skipTrack();
         case 'prev':
+            if (catalogSession && value && !matchesCurrentTrack(value)) return getCurrentState();
+            if (catalogSession) return changeCatalogTrack('previous', value);
             return await replayTrack();
         case 'thumbUp':
             return await thumbUp(value);
@@ -1124,13 +1266,32 @@ ipcMain.handle('PLAYER:CMD', async (event, { action, value }) => {
         case 'play':
             return await resumePlayer();
         case 'pause':
-            return await pausePlayer();
+            return await pausePlayer(value);
         case 'volume':
             return { success: true, volume: value };
         case 'seek':
             return { success: true, seek: value };
         default:
             return { success: false, error: 'Unknown action' };
+    }
+});
+
+ipcMain.handle('PLAYER:CATALOG_EVENT', async (event, report) => {
+    if (!isAppRenderer(event) || !catalogSession || stationLoading || isPaused || !matchesCurrentTrack(report) ||
+        !['started', 'progress'].includes(report.kind) || !Number.isFinite(report.elapsed)) return;
+    const session = catalogSession;
+    const track = currentPlaylist[currentTrackIndex];
+    session.elapsed = Math.max(0, report.elapsed);
+    const isCurrent = () => catalogSession === session && matchesCurrentTrack(report);
+    try {
+        await api.catalog.event(session.selection, track, report.kind, session.elapsed, isCurrent);
+    } catch (error) {
+        if (isCurrent() && !isPaused) {
+            isPaused = true;
+            session.needsRestart = true;
+            sendPlayerState({ ...getCurrentState(), pausePlayback: true });
+            sendToUI('UI:ERROR', { message: error.message });
+        }
     }
 });
 
@@ -1153,7 +1314,9 @@ ipcMain.handle('PLAYER:UNDO_FEEDBACK', async (event, { trackToken }) => {
 
 // Play a station or item
 ipcMain.handle('NAV:PLAY_URI', async (event, payload) => {
-    let uri = typeof payload === 'string' ? payload : payload.uri;
+    const uri = typeof payload === 'string' ? payload : payload?.uri;
+    if (typeof uri !== 'string') return { error: 'Invalid URI format' };
+    const selection = ++selectionRevision;
     const metadata = typeof payload === 'object' ? payload : {};
 
     // Parse URI: "type:id" or "type:prefix:id"
@@ -1163,6 +1326,12 @@ ipcMain.handle('NAV:PLAY_URI', async (event, payload) => {
     const type = uri.substring(0, firstColon);
     const id = uri.substring(firstColon + 1);
 
+    if (type === 'catalog-track' || type === 'album' ||
+        (['song', 'track', 'TR'].includes(type) && api.hasPremiumAccess())) {
+        if (!isAppRenderer(event) || !api.hasPremiumAccess()) return { error: 'On-demand playback requires Pandora Premium.' };
+        sendToUI('UI:LOADING', { isLoading: false });
+        return changeCatalogTrack('select', { id });
+    }
     if (type === 'station') {
         sendToUI('UI:LOADING', { isLoading: true });
 
@@ -1182,19 +1351,24 @@ ipcMain.handle('NAV:PLAY_URI', async (event, payload) => {
             return result;
         }
 
-        // Try playing directly as a station ID first
-        try {
-            const result = await playStation(id);
-            sendToUI('UI:LOADING', { isLoading: false });
-            return result;
-        } catch (e) {
-            // Direct play failed, try creating a station from this seed
+        // A station factory needs to be added to the listener's collection first.
+        if (!id.startsWith('SF:')) {
+            try {
+                const result = await playStation(id.startsWith('ST:') ? id.split(':').at(-1) : id);
+                sendToUI('UI:LOADING', { isLoading: false });
+                return result;
+            } catch {
+                // Direct play failed. Try adding the station from its seed below.
+            }
         }
 
         // If direct play failed, try creating a station from this seed
+        if (selection !== selectionRevision) return getCurrentState();
         const station = await api.createStation(id);
+        if (selection !== selectionRevision) return getCurrentState();
         if (station && station.stationId) {
             await loadStations();
+            if (selection !== selectionRevision) return getCurrentState();
             const result = await playStation(station.stationId);
             sendToUI('UI:LOADING', { isLoading: false });
             return result;
@@ -1203,14 +1377,17 @@ ipcMain.handle('NAV:PLAY_URI', async (event, payload) => {
         sendToUI('UI:LOADING', { isLoading: false });
         return { error: 'Failed to play station' };
 
-    } else if (type === 'song' || type === 'TR' || type === 'track' || type === 'artist') {
+    } else if (type === 'song' || type === 'TR' || type === 'track' || type === 'artist' || type === 'song-radio') {
         sendToUI('UI:LOADING', { isLoading: true });
+        if (selection !== selectionRevision) return getCurrentState();
         const station = await api.createStation(id);
+        if (selection !== selectionRevision) return getCurrentState();
 
         if (station && station.stationId) {
             // Reload station list so it appears in sidebar
             await loadStations();
 
+            if (selection !== selectionRevision) return getCurrentState();
             // Ask to start this station with the selected song. This station API
             // can ignore the request; it is not verified Premium on-demand playback.
             const startTrackId = (type === 'song' || type === 'TR' || type === 'track') ? (metadata.pandoraId || id) : null;
@@ -1227,11 +1404,12 @@ ipcMain.handle('NAV:PLAY_URI', async (event, payload) => {
 });
 
 async function playShuffle() {
+    const selection = ++selectionRevision;
     const generation = playbackGeneration;
     sendToUI('UI:LOADING', { isLoading: true });
     try {
         const shuffleStation = await api.getShuffleStation();
-        if (generation !== playbackGeneration) return getCurrentState();
+        if (generation !== playbackGeneration || selection !== selectionRevision) return getCurrentState();
         if (shuffleStation && shuffleStation.stationId) {
             // This endpoint identifies Shuffle even when its response omits flags.
             shuffleStation.isShuffle = true;
@@ -1259,10 +1437,16 @@ ipcMain.handle('CONTENT:PLAY_SHUFFLE', () => playShuffle());
 
 // Search
 ipcMain.handle('CONTENT:SEARCH', async (event, query) => {
+    const revision = ++searchRevision;
     const results = await api.search(query);
-    // Send results to renderer
-    sendToUI('UI:SEARCH_RESULTS', results);
+    if (revision === searchRevision) sendToUI('UI:SEARCH_RESULTS', results);
     return results;
+});
+
+ipcMain.handle('CONTENT:CATALOG_ARTIST', async (event, id) => {
+    if (!isAppRenderer(event) || !api.hasPremiumAccess()) return { error: 'On-demand playback requires Pandora Premium.' };
+    try { return await api.catalog.artist(id); }
+    catch (err) { return { error: err.message || 'Could not load this artist.' }; }
 });
 
 ipcMain.handle('CONTENT:REMOVE_STATION', async (event, id) => {

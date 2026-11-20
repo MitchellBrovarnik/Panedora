@@ -78,10 +78,11 @@ contextBridge.exposeInMainWorld('api', {
     player: {
         toggle: () => ipcRenderer.invoke('PLAYER:CMD', { action: 'toggle' }),
         play: () => ipcRenderer.invoke('PLAYER:CMD', { action: 'play' }),
-        pause: () => ipcRenderer.invoke('PLAYER:CMD', { action: 'pause' }),
+        pause: (position) => ipcRenderer.invoke('PLAYER:CMD', { action: 'pause', value: position }),
         next: (expectedTrack) => ipcRenderer.invoke('PLAYER:CMD', { action: 'next', value: expectedTrack }),
         recoverAudio: (expectedTrack) => ipcRenderer.invoke('PLAYER:RECOVER_AUDIO', expectedTrack),
-        prev: () => ipcRenderer.invoke('PLAYER:CMD', { action: 'prev' }),
+        prev: (position) => ipcRenderer.invoke('PLAYER:CMD', { action: 'prev', value: position }),
+        catalogEvent: report => ipcRenderer.invoke('PLAYER:CATALOG_EVENT', report),
         seek: (seconds) => ipcRenderer.invoke('PLAYER:CMD', { action: 'seek', value: seconds }),
         setVolume: (value) => ipcRenderer.invoke('PLAYER:CMD', { action: 'volume', value }),
         shuffle: () => ipcRenderer.invoke('PLAYER:CMD', { action: 'shuffle' }),
@@ -103,6 +104,7 @@ contextBridge.exposeInMainWorld('api', {
         getStations: () => ipcRenderer.invoke('APP:INIT'),
         playItem: (item) => ipcRenderer.invoke('NAV:PLAY_URI', { uri: `${item.type}:${item.id}`, ...item }),
         playShuffle: () => ipcRenderer.invoke('CONTENT:PLAY_SHUFFLE'),
+        artist: id => ipcRenderer.invoke('CONTENT:CATALOG_ARTIST', id),
         search: (query) => ipcRenderer.invoke('CONTENT:SEARCH', query),
         removeStation: (id) => ipcRenderer.invoke('CONTENT:REMOVE_STATION', id),
         fetchLyrics: (artist, title) => ipcRenderer.invoke('CONTENT:FETCH_LYRICS', artist, title)

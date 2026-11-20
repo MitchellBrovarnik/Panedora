@@ -3,7 +3,7 @@
  * Helper functions for generating Spotify-style UI elements
  */
 
-function createCard(image, title, subtitle, dataId, { removable = false } = {}) {
+function createCard(image, title, subtitle, dataId, { removable = false, browse = false } = {}) {
   const placeholder = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Crect fill='%23282828' width='180' height='180'/%3E%3C/svg%3E`;
   const id = `card_${Math.random().toString(36).slice(2, 11)}`;
 
@@ -14,8 +14,8 @@ function createCard(image, title, subtitle, dataId, { removable = false } = {}) 
       </button>` : ''}
       <div class="card-image-container">
         <img class="card-image" src="${escapeAttribute(image || placeholder)}" alt="${escapeAttribute(title)}" loading="lazy">
-        <button class="card-play-button" aria-label="${escapeAttribute('Play ' + title)}">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        <button class="card-play-button" aria-label="${escapeAttribute((browse ? 'Browse ' : 'Play ') + title)}">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="${browse ? 'M9 5l7 7-7 7-1.5-1.5L13 12 7.5 6.5z' : 'M8 5v14l11-7z'}"/></svg>
         </button>
       </div>
       <div class="card-content">
@@ -25,21 +25,22 @@ function createCard(image, title, subtitle, dataId, { removable = false } = {}) 
     </div>`;
 }
 
-function createTrackRow(index, title, artist, duration, coverArt, dataId) {
+function createTrackRow(index, title, artist, duration, coverArt, dataId, showRadio = false) {
   const placeholder = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect fill='%23282828' width='40' height='40'/%3E%3C/svg%3E`;
   const id = `track_${Math.random().toString(36).slice(2, 11)}`;
 
   return `
-    <div class="track-row" id="${id}" data-id="${dataId || ''}" tabindex="0">
+    <div class="track-row" id="${id}" data-id="${escapeAttribute(dataId)}" tabindex="0">
       <div class="track-number"><span>${index}</span></div>
       <div class="track-info">
-        <img class="track-art" src="${coverArt || placeholder}" alt="">
+        <img class="track-art" src="${escapeAttribute(coverArt || placeholder)}" alt="">
         <div class="track-details">
           <span class="track-title">${escapeHtml(title)}</span>
           <span class="track-artist">${escapeHtml(artist)}</span>
         </div>
       </div>
-      <div class="track-duration">${duration || '--:--'}</div>
+      <div class="track-duration">${escapeHtml(duration || '--:--')}</div>
+      ${showRadio ? '<button type="button" class="catalog-radio">Start radio</button>' : ''}
     </div>`;
 }
 

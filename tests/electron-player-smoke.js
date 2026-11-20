@@ -97,6 +97,25 @@ app.whenReady().then(async () => {
         audioURL: 'https://fixture.invalid/audio-' + n + '.wav', trackLength: 60,
         rating: n === 1 ? 1 : n === 2 ? '1' : 0
     }));
+    const catalogIds = ['TR:101', 'TR:102'];
+    const catalogAnnotations = {
+        'AR:1': { name: 'Catalog Artist', icon: { artUrl: 'images/catalog-artist.svg' } },
+        'AL:10': { name: 'Catalog Album', artistName: 'Catalog Artist', tracks: catalogIds,
+            icon: { artUrl: 'images/catalog-album.svg' } },
+        'TR:101': { name: 'Song (studio)', artistName: 'Catalog Artist', albumId: 'AL:10',
+            icon: { artUrl: 'images/catalog-studio.svg' } },
+        'TR:102': { name: 'Song (live)', artistName: 'Catalog Artist', albumId: 'AL:10',
+            icon: { artUrl: 'images/catalog-live.svg' } },
+        'SF:1:10': { name: 'Catalog Station', icon: { artUrl: 'images/catalog-station.svg' } }
+    };
+    let catalogIndex = 0;
+    const catalogItem = () => {
+        const id = catalogIds[catalogIndex];
+        return { source: { pandoraId: 'AL:10' }, item: { index: catalogIndex, type: 'Track', pandoraId: id,
+            sourceId: 'AL:10', trackToken: 'catalog-' + id, audioUrl: 'https://fixture.invalid/catalog-' + catalogIndex + '.wav',
+            songName: catalogAnnotations[id].name, artistName: 'Catalog Artist', albumName: 'Catalog Album',
+            artUrl: art[0].url, duration: 60, interactions: ['PREVIOUS', 'SEEK', 'SKIP'] } };
+    };
     const json = (value, status = 200) => new Response(JSON.stringify(value), {
         status, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
@@ -165,6 +184,27 @@ app.whenReady().then(async () => {
                 return json({});
             case '/api/v1/station/shuffle':
                 return json({ stationId: 'fixture-shuffle', name: 'Fixture Mix', art });
+            case '/api/v3/sod/search':
+                return json({ results: Object.keys(catalogAnnotations), annotations: catalogAnnotations });
+            case '/api/v4/catalog/getDetailsWithCollaborations':
+                return json({ artistDetails: { topTracks: catalogIds, topAlbums: ['AL:10'] }, annotations: catalogAnnotations });
+            case '/api/v4/catalog/annotateObjects':
+                return json(catalogAnnotations);
+            case '/api/v1/playback/source':
+                assert.equal(auth, currentAuthToken);
+                assert.equal(body.sourceId, 'AL:10');
+                catalogIndex = catalogIds.indexOf(body.itemId);
+                assert.notEqual(catalogIndex, -1);
+                return json(catalogItem());
+            case '/api/v1/playback/current':
+                return json(catalogItem());
+            case '/api/v1/event/ended':
+                catalogIndex = Math.min(catalogIds.length - 1, catalogIndex + 1);
+                return json({});
+            case '/api/v1/action/pause':
+            case '/api/v1/event/started':
+            case '/api/v1/event/progress':
+                return json({});
             case '/api/v1/search/fullSearch':
                 return json({ items: [{ type: 'TR', pandoraId: 'TR:fixture', songTitle: 'Fixture Song', artistName: 'Fixture Artist', albumArt: art }] });
             case '/api/v1/playlist/getFragment': {
@@ -1805,6 +1845,40 @@ x11.XCloseDisplay(display)
         await waitFor(() => run("document.querySelector('audio').readyState >= 3 && !document.querySelector('audio').paused"), 'shortcut fixture audio');
         await exerciseKeyboardShortcuts();
     }
+    // Drive the normal Search rows through Chromium's actual audio element.
+    await run("renderPage('search'); window.api.content.search('catalog')");
+    await waitFor(() => run("!!document.querySelector('#search-albums .card')"), 'Premium album results');
+    const covers = '#search-songs img, #search-albums img, #search-artists img, #search-stations img';
+    assert.equal(await run(`document.querySelectorAll('${covers}').length`), 5);
+    await run(`document.querySelectorAll('${covers}').forEach(image => { image.loading = 'eager'; })`);
+    await waitFor(() => run(`Array.from(document.querySelectorAll('${covers}')).every(image =>
+        image.complete && image.naturalWidth > 0 && image.currentSrc.startsWith('https://content-images.p-cdn.com/images/catalog-'))`),
+        'song, album, artist and station covers load in Search before playback');
+    const catalogCallsAt = calls.length;
+    await run("document.querySelector('#search-artists .card').click()");
+    await waitFor(() => run("document.querySelectorAll('#search-songs .track-row').length === 2 && !!document.getElementById('artist-radio')"), 'artist catalog');
+    await waitFor(() => run("Array.from(document.querySelectorAll('#search-songs img, #search-albums img')).every(image => image.complete && image.naturalWidth > 0 && image.currentSrc.startsWith('https://content-images.p-cdn.com/'))"),
+        'artist song and album covers load before selecting a recording');
+    await run("document.querySelectorAll('#search-songs .track-row')[1].click()");
+    await waitFor(() => run("AppState.playerState.track === 'Song (live)' && document.querySelector('audio')?.currentTime > 0.1"), 'chosen recording plays real audio');
+    assert.equal(await run("document.getElementById('next-btn').disabled"), true, 'Single selection has no next track');
+    await run("document.querySelector('audio').currentTime = 12; document.querySelector('audio').pause()");
+    await waitFor(() => calls.some(c => c.path === '/api/v1/action/pause' && c.body.elapsedTime >= 12), 'catalog pause reports the actual position');
+    await run("document.getElementById('play-pause-btn').click()");
+    await waitFor(() => run("!document.querySelector('audio').paused && document.querySelector('audio').currentTime >= 12"), 'catalog resume keeps position');
+    await run("document.querySelector('audio').currentTime = document.querySelector('audio').duration - 0.12");
+    await waitFor(() => run("!AppState.playerState.isPlaying && !AppState.playerState.stationLoading && document.querySelector('audio').ended"), 'single recording stops at its end');
+    await run("document.querySelector('#search-albums .card').click()");
+    await waitFor(() => run("AppState.playerState.track === 'Song (studio)' && document.querySelector('audio').currentTime > 0.1"), 'first album track');
+    await run("document.querySelector('audio').currentTime = document.querySelector('audio').duration - 0.12");
+    await waitFor(() => run("AppState.playerState.track === 'Song (live)' && document.querySelector('audio').currentTime > 0.1"), 'album naturally advances to the second recording');
+    await run("document.querySelector('audio').currentTime = document.querySelector('audio').duration - 0.12");
+    await waitFor(() => run("!AppState.playerState.isPlaying && !AppState.playerState.stationLoading && document.querySelector('audio').ended"), 'album finishes');
+    const catalogCalls = calls.slice(catalogCallsAt);
+    assert.ok(catalogCalls.some(c => c.path === '/api/v1/event/started'));
+    assert.equal(new Set(catalogCalls.filter(c => c.body?.deviceUuid).map(c => c.body.deviceUuid)).size, 1);
+    assert.ok(!catalogCalls.some(c => /createStation|getFragment/.test(c.path)));
+    console.log('Premium fixtures passed in Electron: Search and artist artwork, exact song selection, pause/resume, album order and clean completion.');
 
     // Real audio -> renderer -> isolated preload -> main -> actual local IPC frames.
     assert.equal(discordServer.connections.length, 0, 'Discord is opt-in throughout normal playback');
