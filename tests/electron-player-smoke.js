@@ -8,7 +8,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
-const { app, BrowserWindow, session, screen, powerMonitor } = require('electron');
+const { app, BrowserWindow, session, screen, powerMonitor, globalShortcut } = require('electron');
 
 const testData = fs.mkdtempSync(path.join(os.tmpdir(), 'panedora-player-test-'));
 app.setPath('userData', testData);
@@ -1730,6 +1730,121 @@ app.whenReady().then(async () => {
     await run('window.api.settings.setLegacyMiniplayer(false)');
     console.log('Repeated renderer reloads in wide and classic mini mode passed: layout, visible controls, pending sign-in, mouse expansion, original bounds and window constraints.');
 
+    async function exerciseKeyboardShortcuts() {
+        const settings = () => run('window.api.shortcuts.get()');
+        // Use Xvfb's XTest input so the keys follow the OS path, including
+        // Electron's before-input-event and the global shortcut listener.
+        const osChord = key => require('node:child_process').execFileSync('python3', ['-c', `
+import ctypes as c
+import sys
+x11 = c.CDLL('libX11.so.6')
+xtst = c.CDLL('libXtst.so.6')
+x11.XOpenDisplay.argtypes = [c.c_char_p]
+x11.XOpenDisplay.restype = c.c_void_p
+x11.XStringToKeysym.argtypes = [c.c_char_p]
+x11.XStringToKeysym.restype = c.c_ulong
+x11.XKeysymToKeycode.argtypes = [c.c_void_p, c.c_ulong]
+x11.XKeysymToKeycode.restype = c.c_ubyte
+x11.XSync.argtypes = [c.c_void_p, c.c_int]
+x11.XCloseDisplay.argtypes = [c.c_void_p]
+xtst.XTestFakeKeyEvent.argtypes = [c.c_void_p, c.c_uint, c.c_int, c.c_ulong]
+display = x11.XOpenDisplay(None)
+assert display, 'open Xvfb display'
+keys = [x11.XKeysymToKeycode(display, x11.XStringToKeysym(key.encode())) for key in ('Control_L', 'Shift_L', sys.argv[1].lower())]
+assert all(keys), 'resolve the shortcut keycodes'
+for key in keys:
+    assert xtst.XTestFakeKeyEvent(display, key, 1, 0)
+for key in reversed(keys):
+    assert xtst.XTestFakeKeyEvent(display, key, 0, 0)
+x11.XSync(display, 0)
+x11.XCloseDisplay(display)
+`, key], { timeout: 3000 });
+        win.focus();
+        await waitFor(() => win.isFocused(), 'Panedora has keyboard focus');
+        await run("renderPage('settings')");
+        await waitFor(() => run("!document.getElementById('shortcut-background').disabled"), 'keyboard shortcut settings load');
+        assert.equal(await run("document.getElementById('shortcut-background').checked"), true);
+        assert.deepEqual((await settings()).bindings, {});
+        // Ctrl+Shift+R is also an Electron reload accelerator. The recorder must receive it.
+        const entries = { toggle: 'R', next: 'N', prev: 'P', thumbUp: 'H', thumbDown: 'D' };
+        for (const [action, key] of Object.entries(entries)) {
+            await run(`document.querySelector('[data-record-shortcut="${action}"]').click()`);
+            await waitFor(async () => (await settings()).recording === action, 'recording ' + action);
+            const received = [];
+            const observeInput = (_event, input) => received.push({ type: input.type, key: input.key, code: input.code, composing: input.isComposing });
+            win.webContents.on('before-input-event', observeInput);
+            try {
+                osChord(key);
+                await waitFor(async () => (await settings()).recording !== action, 'recorded shortcut ' + action);
+                const current = await settings();
+                assert.equal(current.bindings[action], 'Ctrl+Shift+' + key, current.message);
+            } catch (error) {
+                throw new Error('Could not record ' + action + ' from ' + JSON.stringify(received), { cause: error });
+            } finally {
+                win.webContents.removeListener('before-input-event', observeInput);
+            }
+            assert.equal(globalShortcut.isRegistered('Ctrl+Shift+' + key), true, action + ' works in the background by default');
+        }
+        assert.equal(await run("document.querySelector('audio').paused"), false, 'Recording shortcuts leaves playback alone');
+        assert.deepEqual(require('../config').getKeyboardShortcuts(), await settings().then(({ background, bindings }) => ({ background, bindings })));
+
+        const otherWindow = new BrowserWindow({ width: 320, height: 240, title: 'Shortcut focus fixture' });
+        try {
+            await otherWindow.loadURL('about:blank');
+            otherWindow.focus();
+            await waitFor(() => otherWindow.isFocused() && !win.isFocused(), 'another window has focus');
+            osChord('R');
+            await waitFor(() => run("document.querySelector('audio').paused"), 'background Play/Pause');
+            assert.equal(otherWindow.isFocused(), true, 'Background shortcuts do not steal focus');
+            osChord('R');
+            await waitFor(() => run("!document.querySelector('audio').paused"), 'background resume approval');
+            osChord('N');
+            await waitFor(() => run("AppState.playerState.track === 'Fixture Song 2'"), 'background Next');
+        } finally {
+            otherWindow.destroy();
+        }
+
+        win.focus();
+        await run("document.getElementById('shortcut-background').click()");
+        await waitFor(async () => !(await settings()).background, 'background shortcuts turn off');
+        for (const key of Object.values(entries)) assert.equal(globalShortcut.isRegistered('Ctrl+Shift+' + key), false);
+        await run("window.api.content.playItem({type:'station', id:'fixture-station'})");
+        await waitFor(() => run("AppState.playerState.track === 'Fixture Song 1' && !document.querySelector('audio').paused"), 'focused shortcut fixture playback');
+        osChord('R');
+        await waitFor(() => run("document.querySelector('audio').paused"), 'focused shortcut still works');
+        osChord('R');
+        await waitFor(() => run("!document.querySelector('audio').paused"), 'focused resume');
+
+        await run("document.querySelector('audio').currentTime = 12");
+        osChord('P');
+        await waitFor(() => run("document.querySelector('audio').currentTime < 3"), 'focused Previous restarts the track');
+
+        // In this fixture the first two songs already have positive feedback.
+        await run('window.api.player.next()');
+        await run('window.api.player.next()');
+        await waitFor(() => run("AppState.playerState.track === 'Fixture Song 3' && !document.querySelector('audio').paused"), 'unrated shortcut fixture song');
+        osChord('H');
+        await waitFor(() => run("AppState.playerState.feedback === 'thumbUp'"), 'focused Thumbs Up uses ordinary feedback');
+        await waitFor(() => run("Date.now() - _cooldowns.thumb >= 1500"), 'thumb cooldown');
+        osChord('D');
+        await waitFor(() => run("AppState.playerState.track === 'Fixture Song 4'"), 'focused Thumbs Down rates and skips');
+
+        await run(`document.querySelector('[data-clear-shortcut="toggle"]').click()`);
+        await waitFor(async () => !(await settings()).bindings.toggle, 'clear binding');
+        const saved = require('../config').getKeyboardShortcuts();
+        const loaded = new Promise(resolve => win.webContents.once('did-finish-load', resolve));
+        win.reload(); await loaded;
+        await waitFor(() => run('AppState.isLoggedIn && AppState.stations.length > 0'), 'full player reload after shortcuts');
+        assert.deepEqual(await settings().then(({ background, bindings }) => ({ background, bindings })), saved);
+        console.log('Custom shortcuts passed: default background scope, recorded keys, native background input, optional focused scope, feedback, clearing and persistence.');
+    }
+
+    if (process.platform === 'linux' && process.env.DISPLAY) {
+        stressTracks = null; freshTracks = null; activeMode = 0; canStream = true;
+        await run("window.api.content.playItem({type:'station', id:'fixture-station'})");
+        await waitFor(() => run("document.querySelector('audio').readyState >= 3 && !document.querySelector('audio').paused"), 'shortcut fixture audio');
+        await exerciseKeyboardShortcuts();
+    }
     // Drive the normal Search rows through Chromium's actual audio element.
     await run("renderPage('search'); window.api.content.search('catalog')");
     await waitFor(() => run("!!document.querySelector('#search-albums .card')"), 'Premium album results');

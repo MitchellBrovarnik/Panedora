@@ -6,6 +6,7 @@ const DIST = path.join(__dirname, 'dist');
 // All files to copy to dist
 const filesToCopy = [
     'main.js',
+    'keyboard-shortcuts.js',
     'pandora-api.js',
     'pandora-catalog.js',
     'pandora-verification.js',

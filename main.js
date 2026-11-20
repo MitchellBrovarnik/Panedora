@@ -3,7 +3,7 @@
  * Direct API-based architecture (no hidden browser)
  */
 
-const { app, BrowserWindow, ipcMain, screen, shell, net, powerMonitor } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, shell, net, powerMonitor, globalShortcut } = require('electron');
 const path = require('path');
 // A positive, effectively unbounded dimension also works with macOS window constraints.
 const MAX_WINDOW_DIMENSION = Math.floor(0x7fffffff / 10);
@@ -19,6 +19,7 @@ app.commandLine.appendSwitch('disable-gpu-disk-cache');
 
 const PandoraAPI = require('./pandora-api');
 const config = require('./config');
+const { KeyboardShortcuts } = require('./keyboard-shortcuts');
 const { PandoraVerification } = require('./pandora-verification');
 const verification = new PandoraVerification();
 const { UpdateChecker, DOWNLOAD_URL } = require('./update-checker');
@@ -30,6 +31,7 @@ let api = null;
 let updateChecker = null;
 let updateResponsePending = false;
 let discordPresence = null;
+let keyboardShortcuts = null;
 
 // Current state
 let currentStations = [];
@@ -91,6 +93,19 @@ function createUIWindow() {
         }
     });
 
+    keyboardShortcuts = new KeyboardShortcuts({
+        globalShortcut,
+        saved: config.getKeyboardShortcuts(),
+        save: config.setKeyboardShortcuts,
+        execute: action => sendToUI('UI:PLAYBACK_SHORTCUT', action),
+        update: settings => {
+            if (!uiWindow || uiWindow.isDestroyed()) return;
+            uiWindow.webContents.setIgnoreMenuShortcuts(settings.recording !== null);
+            sendToUI('UI:SHORTCUT_SETTINGS', settings);
+        }
+    });
+    uiWindow.webContents.on('before-input-event', (event, input) => keyboardShortcuts?.handleInput(event, input));
+    uiWindow.on('blur', () => keyboardShortcuts?.record(null));
     uiWindow.loadFile(path.join(__dirname, 'index.html'));
     uiWindow.on('focus', () => {
         if (app.isPackaged) void updateChecker?.check();
@@ -111,6 +126,8 @@ function createUIWindow() {
     }
 
     uiWindow.on('closed', () => {
+        keyboardShortcuts?.dispose();
+        keyboardShortcuts = null;
         isMiniPlayer = false;
         classicMiniActive = false;
         miniPlayerDragging = false;
@@ -125,6 +142,7 @@ function createUIWindow() {
     });
     for (const event of ['did-start-loading', 'render-process-gone']) {
         uiWindow.webContents.on(event, () => {
+            keyboardShortcuts?.record(null);
             cancelStreamPrompt();
             discordPresence?.invalidatePlayback();
         });
@@ -197,6 +215,7 @@ function sendMiniPlayerMode() {
 
 ipcMain.handle('WINDOW:TOGGLE_MINI', async () => {
     if (!uiWindow) return { isMini: false };
+    keyboardShortcuts?.record(null);
 
     saveMiniBoundsNow();
     miniPlayerDragging = false;
@@ -1091,6 +1110,14 @@ function isAppRenderer(event) {
         (!event.senderFrame || event.senderFrame === uiWindow.webContents.mainFrame);
 }
 
+ipcMain.handle('SHORTCUTS:GET', event => isAppRenderer(event) ? keyboardShortcuts?.status() : null);
+ipcMain.handle('SHORTCUTS:RECORD', (event, action) =>
+    isAppRenderer(event) && keyboardShortcuts?.record(action) === true);
+ipcMain.handle('SHORTCUTS:CLEAR', (event, action) =>
+    isAppRenderer(event) && keyboardShortcuts?.clear(action) === true);
+ipcMain.handle('SHORTCUTS:SET_BACKGROUND', (event, enabled) =>
+    isAppRenderer(event) && keyboardShortcuts?.setBackground(enabled) === true);
+
 ipcMain.handle('DISCORD:GET_STATUS', event => isAppRenderer(event) ? discordPresence?.getStatus() : null);
 ipcMain.handle('DISCORD:SET_ENABLED', (event, enabled) => {
     if (!isAppRenderer(event) || typeof enabled !== 'boolean' || !discordPresence) return null;
@@ -1612,6 +1639,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+    keyboardShortcuts?.dispose();
     discordPresence?.dispose();
     updateChecker?.stop();
     verification.cancel();

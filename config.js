@@ -47,8 +47,10 @@ function writeConfig(config) {
             fs.mkdirSync(dir, { recursive: true });
         }
         fs.writeFileSync(configPath, JSON.stringify(config, null, 2), { encoding: 'utf8', mode: 0o600 });
+        return true;
     } catch (e) {
         console.error('[Config] Error writing config:', e);
+        return false;
     }
 }
 
@@ -234,6 +236,14 @@ module.exports = {
     setVolume: volume => {
         const value = clampVolume(volume);
         if (value !== null) setConfig('volume', value);
+    },
+
+    getKeyboardShortcuts: () => getConfig().keyboardShortcuts,
+    setKeyboardShortcuts: settings => {
+        const next = { ...getConfig(), keyboardShortcuts: settings };
+        if (!writeConfig(next)) return false;
+        configCache = next;
+        return true;
     },
 
     // Optional classic (album-art-first) mini player; default is the wide mini player.
