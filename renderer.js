@@ -1208,9 +1208,9 @@ function renderDiscordSettings() {
 }
 
 const SHORTCUT_CONTROLS = {
-    toggle: { label: 'Play / Pause', run: () => DOM.playPauseBtn.click() },
-    next: { label: 'Next Track', run: () => DOM.nextBtn.click() },
-    prev: { label: 'Previous Track', run: () => DOM.prevBtn.click() },
+    toggle: { label: 'Play / Pause', mediaKey: 'Media Play/Pause', run: () => DOM.playPauseBtn.click() },
+    next: { label: 'Next Track', mediaKey: 'Media Next Track', run: () => DOM.nextBtn.click() },
+    prev: { label: 'Previous Track', mediaKey: 'Media Previous Track', run: () => DOM.prevBtn.click() },
     thumbUp: { label: 'Thumbs Up', run: () => handleThumb(true) },
     thumbDown: { label: 'Thumbs Down', run: () => handleThumb(false) }
 };
@@ -1232,15 +1232,17 @@ function keyboardShortcutsHtml() {
             <input class="setting-toggle" id="shortcut-background" type="checkbox" role="switch"
                 aria-describedby="shortcut-background-help" checked disabled>
           </div>
-          ${Object.entries(SHORTCUT_CONTROLS).map(([action, { label }]) => `
+          ${Object.entries(SHORTCUT_CONTROLS).map(([action, { label, mediaKey }]) => `
             <div class="setting-row">
               <div>
                 <span class="setting-label">${label}</span>
+                ${mediaKey ? `<p class="setting-help" data-default-shortcut="${action}">${mediaKey} · Default</p>` : ''}
+                <p class="setting-help" data-shortcut-recording="${action}" role="status" hidden></p>
                 <p class="setting-help" data-shortcut-unavailable="${action}" hidden>Could not register this shortcut in the background.</p>
               </div>
               <div class="shortcut-actions">
                 <button type="button" class="shortcut-button" data-record-shortcut="${action}"
-                    aria-label="Set shortcut for ${label}" aria-pressed="false" disabled>Set shortcut</button>
+                    aria-label="Add custom shortcut for ${label}" aria-pressed="false" disabled>Add custom shortcut</button>
                 <button type="button" class="shortcut-button" data-clear-shortcut="${action}"
                     aria-label="Clear ${label} shortcut" disabled>Clear</button>
               </div>
@@ -1266,12 +1268,16 @@ function updateKeyboardShortcutsSettings() {
         const button = section.querySelector(`[data-record-shortcut="${action}"]`);
         const active = recording === action;
         button.disabled = false;
-        button.textContent = active ? 'Press keys…' : keys || 'Set shortcut';
+        button.textContent = active ? 'Press keys…' : keys || 'Add custom shortcut';
         button.setAttribute('aria-label', active ? `Cancel setting shortcut for ${label}`
-            : keys ? `Change shortcut for ${label}, ${keys}` : `Set shortcut for ${label}`);
+            : keys ? `Change shortcut for ${label}, ${keys}` : `Add custom shortcut for ${label}`);
         button.setAttribute('aria-pressed', String(active));
         section.querySelector(`[data-clear-shortcut="${action}"]`).disabled = !accelerator;
         section.querySelector(`[data-shortcut-unavailable="${action}"]`).hidden = !unavailable.includes(action);
+        const recordingHelp = section.querySelector(`[data-shortcut-recording="${action}"]`);
+        recordingHelp.hidden = !active;
+        recordingHelp.textContent = active
+            ? message || 'Press Ctrl, Alt, or Command plus a key, or a function key. Esc cancels.' : '';
     }
     document.getElementById('shortcut-status').textContent = message ||
         (recording ? `Press the new shortcut for ${SHORTCUT_CONTROLS[recording].label}. Press Esc to cancel.` : '');
@@ -2975,11 +2981,18 @@ function initAPIListeners() {
             shortcutSettings = settings;
             updateKeyboardShortcutsSettings();
         };
-        document.addEventListener('keydown', event => {
-            if (!shortcutSettings?.recording) return;
-            if (event.key === 'Tab' && !event.ctrlKey && !event.altKey && !event.metaKey) return;
-            event.preventDefault();
-            event.stopImmediatePropagation();
+        for (const type of ['keydown', 'keyup']) document.addEventListener(type, event => {
+            const action = shortcutSettings?.recording;
+            if (!action) return;
+            if (!(event.key === 'Tab' && !event.ctrlKey && !event.altKey && !event.metaKey)) {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+            }
+            void shortcuts.capture(action, {
+                type: type === 'keydown' ? 'keyDown' : 'keyUp', key: event.key, code: event.code,
+                control: event.ctrlKey, alt: event.altKey, shift: event.shiftKey, meta: event.metaKey,
+                isAutoRepeat: event.repeat, isComposing: event.isComposing
+            }).catch(() => showErrorToast('Could not record this shortcut. Please try again.'));
         }, true);
         shortcuts.onSettings(applySettings);
         shortcuts.onAction(action => {

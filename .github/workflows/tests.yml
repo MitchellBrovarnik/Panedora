@@ -38,3 +38,16 @@ jobs:
           path: /tmp/panedora-player-test-*/*.png
           if-no-files-found: ignore
           retention-days: 7
+
+  windows-shortcuts:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Native Windows keyboard recording and shortcuts
+        run: npx electron tests/electron-shortcuts-smoke.js

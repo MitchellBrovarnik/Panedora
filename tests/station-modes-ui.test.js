@@ -14,7 +14,7 @@ function modes(currentModeId = 0, extra = {}) {
     ], ...extra };
 }
 
-function setup(t) {
+function setup(t, { keyboard = false } = {}) {
     const root = path.join(__dirname, '..');
     const dom = new JSDOM(fs.readFileSync(path.join(root, 'index.html'), 'utf8'), {
         url: 'https://panedora.test/', runScripts: 'outside-only', pretendToBeVisual: true
@@ -48,6 +48,25 @@ function setup(t) {
     };
     const events = {};
     window.api = { player, window: {}, content: {} };
+    let shortcuts;
+    if (keyboard) {
+        const { KeyboardShortcuts } = require('../keyboard-shortcuts');
+        shortcuts = new KeyboardShortcuts({
+            saved: null, save: () => true, execute() {},
+            update: value => events.ShortcutSettings?.(value),
+            globalShortcut: { register: () => true, unregister() {} }
+        });
+        window.api.platform = 'win32';
+        window.api.shortcuts = {
+            get: async () => shortcuts.status(),
+            record: async action => shortcuts.record(action),
+            capture: async (action, input) => shortcuts.capture(action, input),
+            clear: async action => shortcuts.clear(action),
+            setBackground: async value => shortcuts.setBackground(value),
+            onSettings: listener => { events.ShortcutSettings = listener; },
+            onAction() {}
+        };
+    }
     window.api.discord = {
         onStatus: listener => { events.DiscordStatus = listener; },
         getStatus: async () => ({ enabled: false, configured: true, status: 'disabled' }),
@@ -82,8 +101,39 @@ function setup(t) {
         node('np-mode-select').click();
         node('np-mode-option-' + value).click();
     };
-    return { window, ui, player, calls, node, open, select, events, images };
+    return { window, ui, player, calls, node, open, select, events, images, shortcuts };
 }
+
+test('shortcut settings show media defaults and record DOM keys with feedback beside the active control', async t => {
+    const s = setup(t, { keyboard: true });
+    await tick();
+    s.ui.render('settings');
+    const button = action => s.window.document.querySelector(`[data-record-shortcut="${action}"]`);
+    const help = action => s.window.document.querySelector(`[data-shortcut-recording="${action}"]`);
+    const key = (type, options) => s.window.document.dispatchEvent(new s.window.KeyboardEvent(type,
+        { key: 'k', code: 'KeyK', bubbles: true, cancelable: true, ...options }));
+    assert.match(s.window.document.querySelector('[data-default-shortcut="toggle"]').textContent, /Media Play\/Pause.*Default/);
+    assert.match(s.window.document.querySelector('[data-default-shortcut="next"]').textContent, /Media Next Track.*Default/);
+    assert.match(s.window.document.querySelector('[data-default-shortcut="prev"]').textContent, /Media Previous Track.*Default/);
+    assert.deepEqual(s.shortcuts.status().bindings, {});
+    assert.equal(button('thumbUp').textContent, 'Add custom shortcut');
+    button('thumbUp').click(); await tick();
+    key('keydown'); await tick();
+    assert.equal(help('thumbUp').hidden, false);
+    assert.match(help('thumbUp').textContent, /function key|Ctrl/);
+    key('keydown', { ctrlKey: true, altKey: true }); await tick();
+    assert.deepEqual(s.shortcuts.status().bindings, {}, 'Recording must wait for the key release');
+    assert.match(help('thumbUp').textContent, /Release/);
+    key('keyup', { ctrlKey: true, altKey: true }); await tick();
+    key('keyup', { key: 'Control', code: 'ControlLeft' }); await tick();
+    assert.equal(s.shortcuts.status().bindings.thumbUp, 'Ctrl+Alt+K');
+    assert.equal(button('thumbUp').textContent, 'Ctrl + Alt + K');
+    assert.equal(s.window.document.querySelector('.error-toast'), null);
+    button('next').click(); await tick();
+    key('keydown', { key: 'Escape', code: 'Escape' }); await tick();
+    assert.equal(s.shortcuts.status().recording, null);
+    assert.match(s.window.document.querySelector('[data-default-shortcut="next"]').textContent, /Default/);
+});
 
 test('Discord setting is opt-in, accessible, reflects live status, and handles unavailable builds', async t => {
     const s = setup(t);

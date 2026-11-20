@@ -47,6 +47,7 @@ contextBridge.exposeInMainWorld('api', {
     shortcuts: {
         get: () => ipcRenderer.invoke('SHORTCUTS:GET'),
         record: action => ipcRenderer.invoke('SHORTCUTS:RECORD', action),
+        capture: (action, input) => ipcRenderer.invoke('SHORTCUTS:CAPTURE', { action, input }),
         clear: action => ipcRenderer.invoke('SHORTCUTS:CLEAR', action),
         setBackground: enabled => ipcRenderer.invoke('SHORTCUTS:SET_BACKGROUND', enabled),
         onSettings: callback => {

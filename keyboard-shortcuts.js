@@ -129,6 +129,14 @@ class KeyboardShortcuts {
         return this.applyPreferences({ ...this.preferences, bindings });
     }
 
+    capture(action, input) {
+        if (!this.recording || action !== this.recording ||
+            !['keyDown', 'keyUp'].includes(input?.type) || typeof input.key !== 'string' ||
+            typeof input.code !== 'string') return false;
+        this.handleInput({ preventDefault() {} }, input);
+        return true;
+    }
+
     applyPreferences(preferences, recordedAction = null) {
         const previous = this.preferences;
         this.preferences = preferences;
@@ -174,9 +182,9 @@ class KeyboardShortcuts {
                     action !== this.recording && binding === accelerator)) {
                     this.message = 'That shortcut is already assigned to another action.';
                 } else {
-                    // Cancelling keyDown here also suppresses keyUp in Chromium.
-                    // The window ignores menu shortcuts and the page cancels keyDown.
                     this.pendingKey = { code: input.code || input.key, accelerator };
+                    this.message = 'Release the keys to save.';
+                    this.update(this.status());
                     return;
                 }
                 this.update(this.status());

@@ -104,7 +104,11 @@ function createUIWindow() {
             sendToUI('UI:SHORTCUT_SETTINGS', settings);
         }
     });
-    uiWindow.webContents.on('before-input-event', (event, input) => keyboardShortcuts?.handleInput(event, input));
+    uiWindow.webContents.on('before-input-event', (event, input) => {
+        // The focused page records DOM keydown/keyup events. Keep native
+        // interception for running shortcuts outside the recorder.
+        if (!keyboardShortcuts?.recording) keyboardShortcuts?.handleInput(event, input);
+    });
     uiWindow.on('blur', () => keyboardShortcuts?.record(null));
     uiWindow.loadFile(path.join(__dirname, 'index.html'));
     uiWindow.on('focus', () => {
@@ -1111,8 +1115,13 @@ function isAppRenderer(event) {
 }
 
 ipcMain.handle('SHORTCUTS:GET', event => isAppRenderer(event) ? keyboardShortcuts?.status() : null);
-ipcMain.handle('SHORTCUTS:RECORD', (event, action) =>
-    isAppRenderer(event) && keyboardShortcuts?.record(action) === true);
+ipcMain.handle('SHORTCUTS:RECORD', (event, action) => {
+    if (!isAppRenderer(event) || !keyboardShortcuts?.record(action)) return false;
+    if (action !== null) uiWindow.webContents.focus();
+    return true;
+});
+ipcMain.handle('SHORTCUTS:CAPTURE', (event, { action, input } = {}) =>
+    isAppRenderer(event) && keyboardShortcuts?.capture(action, input) === true);
 ipcMain.handle('SHORTCUTS:CLEAR', (event, action) =>
     isAppRenderer(event) && keyboardShortcuts?.clear(action) === true);
 ipcMain.handle('SHORTCUTS:SET_BACKGROUND', (event, enabled) =>
