@@ -5,7 +5,10 @@ const ARTIST = /^AR:\d+$/;
 
 function catalogArtwork(item) {
     const artId = item?.icon?.artId || item?.artId;
-    const sources = [item?.artUrl, item?.icon?.artUrl, artId ? `${artId}_500W_500H.jpg` : null];
+    const layers = item?.thorLayers;
+    const sources = [item?.artUrl, item?.icon?.artUrl, artId ? `${artId}_500W_500H.jpg` : null,
+        typeof layers === 'string' && layers.trim()
+            ? `https://dyn-images.p-cdn.com/?l=${encodeURIComponent(layers)}&w=500&h=500` : null];
     for (const source of sources) {
         if (typeof source !== 'string' || !source.trim()) continue;
         try {

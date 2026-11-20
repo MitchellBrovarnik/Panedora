@@ -600,6 +600,7 @@ test('catalog artwork resolves relative CDN paths before searching or browsing a
         'AL:42': { name: 'Album', icon: { artId: cover } },
         'AR:1': { name: 'Artist', icon: { artUrl: '//content-images.p-cdn.com/images/artist.jpg' } },
         'SF:1:1': { name: 'Station', icon: { artUrl: 'https://fixture.invalid/station.jpg?width=500&height=500' } },
+        'SF:1:2': { name: 'Station collage', thorLayers: '_;grid(images/first/@1/2,images/second/@1/2)' },
         'TR:23': { name: 'Missing cover' }
     };
     const { api, calls } = setup([premium(),
@@ -612,6 +613,9 @@ test('catalog artwork resolves relative CDN paths before searching or browsing a
     assert.equal(results.albums[0].image, expectedCover);
     assert.equal(results.artists[0].image, 'https://content-images.p-cdn.com/images/artist.jpg');
     assert.equal(results.stations[0].image, annotations['SF:1:1'].icon.artUrl);
+    const collage = new URL(results.stations[1].image);
+    assert.equal(collage.origin, 'https://dyn-images.p-cdn.com');
+    assert.equal(collage.searchParams.get('l'), annotations['SF:1:2'].thorLayers);
     assert.equal(results.songs[1].image, null);
     const artist = await api.catalog.artist('AR:1');
     assert.equal(artist.songs[0].image, expectedCover);

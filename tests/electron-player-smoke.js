@@ -1734,6 +1734,7 @@ app.whenReady().then(async () => {
     await run("renderPage('search'); window.api.content.search('catalog')");
     await waitFor(() => run("!!document.querySelector('#search-albums .card')"), 'Premium album results');
     const covers = '#search-songs img, #search-albums img, #search-artists img, #search-stations img';
+    assert.equal(await run(`document.querySelectorAll('${covers}').length`), 5);
     await run(`document.querySelectorAll('${covers}').forEach(image => { image.loading = 'eager'; })`);
     await waitFor(() => run(`Array.from(document.querySelectorAll('${covers}')).every(image =>
         image.complete && image.naturalWidth > 0 && image.currentSrc.startsWith('https://content-images.p-cdn.com/images/catalog-'))`),
@@ -1762,7 +1763,7 @@ app.whenReady().then(async () => {
     assert.ok(catalogCalls.some(c => c.path === '/api/v1/event/started'));
     assert.equal(new Set(catalogCalls.filter(c => c.body?.deviceUuid).map(c => c.body.deviceUuid)).size, 1);
     assert.ok(!catalogCalls.some(c => /createStation|getFragment/.test(c.path)));
-    console.log('Premium fixtures passed in Electron: artist browsing, exact song selection, pause/resume, album order and clean completion.');
+    console.log('Premium fixtures passed in Electron: Search and artist artwork, exact song selection, pause/resume, album order and clean completion.');
 
     // Real audio -> renderer -> isolated preload -> main -> actual local IPC frames.
     assert.equal(discordServer.connections.length, 0, 'Discord is opt-in throughout normal playback');
