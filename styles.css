@@ -622,7 +622,7 @@ body.classic-mini.classic-history-open .classic-now {
 }
 
 /* Feedback must be distinguishable by shape as well as color.
-   Only active feedback is filled; hover and neutral states stay outlined. */
+   Only active feedback is shaded; preserve the full-opacity icon outline. */
 .mini-thumb-btn.liked svg,
 .mini-thumb-btn.disliked svg,
 .classic-thumb.liked svg,
@@ -630,6 +630,7 @@ body.classic-mini.classic-history-open .classic-now {
 .np-feedback-btn.liked svg,
 .np-feedback-btn.disliked svg {
     fill: currentColor;
+    fill-opacity: 0.32;
 }
 
 button {
