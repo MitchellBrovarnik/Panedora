@@ -927,6 +927,27 @@ function applyTheme(themeId) {
     }
 }
 
+// Feedback accessibility is independent of the selected appearance theme.
+const COLORBLIND_MODES = Object.freeze({
+    none: 'None (Default)',
+    protanopia: 'Protanopia (red-green)',
+    deuteranopia: 'Deuteranopia (red-green)',
+    tritanopia: 'Tritanopia (blue-yellow)',
+    monochrome: 'Monochrome'
+});
+const COLORBLIND_STORAGE_KEY = 'panedora-colorblind-mode';
+
+function applyColorblindMode(mode) {
+    const selected = Object.hasOwn(COLORBLIND_MODES, mode) ? mode : 'none';
+    document.documentElement.dataset.colorblindMode = selected;
+    AppState.colorblindMode = selected;
+    localStorage.setItem(COLORBLIND_STORAGE_KEY, selected);
+}
+
+function loadSavedColorblindMode() {
+    applyColorblindMode(localStorage.getItem(COLORBLIND_STORAGE_KEY));
+}
+
 function loadSavedTheme() {
     const savedTheme = localStorage.getItem('panedora-theme');
     if (savedTheme && THEMES[savedTheme]) {
@@ -1376,6 +1397,23 @@ function renderSettingsPage() {
           <input class="setting-toggle" id="legacy-miniplayer-toggle" type="checkbox" role="switch" aria-describedby="legacy-miniplayer-description">
         </div>
       </section>
+      <section class="settings-section">
+        <h2 class="section-title">Accessibility</h2>
+        <div class="setting-row colorblind-setting">
+          <div>
+            <label class="setting-label" for="colorblind-mode">Colorblind mode</label>
+            <p class="setting-help" id="colorblind-description">Adjust thumbs-up and thumbs-down colors throughout Panedora. Your theme and album artwork stay unchanged.</p>
+          </div>
+          <select class="colorblind-select" id="colorblind-mode" aria-describedby="colorblind-description">
+            ${Object.entries(COLORBLIND_MODES).map(([id, name]) => `<option value="${id}"${id === (AppState.colorblindMode || 'none') ? ' selected' : ''}>${name}</option>`).join('')}
+          </select>
+          <div class="colorblind-preview" aria-label="Feedback color preview">
+            <span><span class="mini-thumb-btn" aria-hidden="true">${HISTORY_THUMB_UP_ICON}</span>Inactive</span>
+            <span><span class="mini-thumb-btn liked" aria-hidden="true">${HISTORY_THUMB_UP_ICON}</span>Liked</span>
+            <span><span class="mini-thumb-btn disliked" aria-hidden="true">${HISTORY_THUMB_DOWN_ICON}</span>Disliked</span>
+          </div>
+        </div>
+      </section>
       ${window.api?.shortcuts ? keyboardShortcutsHtml() : ''}
       <section class="settings-section">
         <h2 class="section-title">Discord</h2>
@@ -1422,6 +1460,10 @@ function renderSettingsPage() {
     </div>`;
 
     bindKeyboardShortcutsSettings();
+
+    document.getElementById('colorblind-mode').addEventListener('change', event => {
+        applyColorblindMode(event.target.value);
+    });
 
     const legacyToggle = document.getElementById('legacy-miniplayer-toggle');
     legacyToggle.checked = useLegacyMiniplayer;
@@ -3536,6 +3578,7 @@ async function init() {
 
     // Restore saved theme and effect before rendering
     loadSavedTheme();
+    loadSavedColorblindMode();
     loadSavedEffect();
 
     initEventListeners();
