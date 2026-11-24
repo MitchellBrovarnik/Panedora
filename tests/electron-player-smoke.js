@@ -1898,10 +1898,13 @@ x11.XCloseDisplay(display)
     for (const [mode, colors] of Object.entries(feedbackPalettes)) {
         await run(`(() => { const select = document.getElementById('colorblind-mode'); select.value = ${JSON.stringify(mode)}; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
         assert.equal(await run("localStorage.getItem('panedora-colorblind-mode')"), mode);
-        assert.deepEqual(await run(`['liked', 'disliked'].flatMap(state => {
+        const readFeedbackColors = () => run(`['liked', 'disliked'].flatMap(state => {
             const svg = document.querySelector('.colorblind-preview .' + state + ' svg');
             const style = getComputedStyle(svg); return [style.stroke, style.fill];
-        })`), colors);
+        })`);
+        // The outline inherits the button's 150 ms color transition; the fill changes immediately.
+        await waitFor(async () => JSON.stringify(await readFeedbackColors()) === JSON.stringify(colors), `${mode} feedback palette transition`);
+        assert.deepEqual(await readFeedbackColors(), colors);
         assert.equal(await run("getComputedStyle(document.querySelector('.colorblind-preview .mini-thumb-btn:not(.liked):not(.disliked) svg')).fill"), 'none');
         assert.equal(await run("getComputedStyle(document.documentElement).getPropertyValue('--accent')"), feedbackThemeBefore);
     }
