@@ -621,6 +621,17 @@ body.classic-mini.classic-history-open .classic-now {
     color: #e81123;
 }
 
+/* Feedback must be distinguishable by shape as well as color.
+   Only active feedback is filled; hover and neutral states stay outlined. */
+.mini-thumb-btn.liked svg,
+.mini-thumb-btn.disliked svg,
+.classic-thumb.liked svg,
+.classic-thumb.disliked svg,
+.np-feedback-btn.liked svg,
+.np-feedback-btn.disliked svg {
+    fill: currentColor;
+}
+
 button {
     font-family: inherit;
     cursor: pointer;
