@@ -621,27 +621,18 @@ body.classic-mini.classic-history-open .classic-now {
     color: #e81123;
 }
 
-/* Feedback must be distinguishable by shape as well as color.
-   Only active feedback is filled; keep the original cuff seam visible. */
+/* Feedback uses a contrasting two-tone fill, retaining the original outline
+   and internal wrist detail. Neutral and hover-only icons remain unfilled. */
 .mini-thumb-btn.liked svg,
-.mini-thumb-btn.disliked svg,
 .classic-thumb.liked svg,
+.np-feedback-btn.liked svg {
+    fill: #11783b;
+}
+
+.mini-thumb-btn.disliked svg,
 .classic-thumb.disliked svg,
-.np-feedback-btn.liked svg,
 .np-feedback-btn.disliked svg {
-    fill: currentColor;
-}
-
-.feedback-detail {
-    display: none;
-    fill: none;
-    stroke: #080810;
-    stroke-width: 1.6;
-    stroke-linecap: round;
-}
-
-:is(.mini-thumb-btn, .classic-thumb, .np-feedback-btn):is(.liked, .disliked) .feedback-detail {
-    display: inline;
+    fill: #970b17;
 }
 
 button {
