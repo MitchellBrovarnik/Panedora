@@ -56,7 +56,7 @@ test('Panedora Settings has no volume-memory toggle', t => {
     const s = setup(t);
     s.ui.render('settings');
     const titles = [...s.window.document.querySelectorAll('.section-title')].map(el => el.textContent);
-    assert.deepEqual(titles.slice(0, 2), ['Panedora Settings', 'Discord']);
+    assert.deepEqual(titles.slice(0, 3), ['Panedora Settings', 'Accessibility', 'Discord']);
     assert.equal(s.node('remember-volume-toggle'), null);
     assert.equal(s.node('remember-volume-description'), null);
     assert.equal(s.window.document.querySelector('.settings-section .setting-label').textContent, 'Use legacy miniplayer');
