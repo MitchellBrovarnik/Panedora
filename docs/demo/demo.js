@@ -285,7 +285,7 @@
     function reset() {
         preferences.clear(); ratings.clear(); history = []; stationIndex = 0; songIndex = 0; modeId = 0; shuffling = false; playing = true; volume = 65;
         motion = !reducedMotion.matches; AppState.stations = stations.map(s => ({ ...s })); AppState.libraryFilter = ''; AppState.searchResults = null; DOM.searchInput.value = '';
-        applyTheme('midnight'); applyBgEffect('waves'); applyLyricsStyle('glow'); applyEffectSpeed(1); applyVolume(volume);
+        applyTheme('midnight'); applyColorblindMode('none'); applyBgEffect('waves'); applyLyricsStyle('glow'); applyEffectSpeed(1); applyVolume(volume);
         renderStationsList(); renderPage('home'); publishSong(44);
     }
     AppState.isLoggedIn = true; AppState.isLoading = false;
