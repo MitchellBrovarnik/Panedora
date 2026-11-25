@@ -44,6 +44,12 @@ contextBridge.exposeInMainWorld('api', {
         }
     },
 
+    notifications: {
+        getEnabled: () => ipcRenderer.invoke('NOTIFICATIONS:GET_ENABLED'),
+        setEnabled: enabled => ipcRenderer.invoke('NOTIFICATIONS:SET_ENABLED', enabled),
+        reportPlayback: report => { void ipcRenderer.invoke('NOTIFICATIONS:PLAYBACK', report).catch(() => {}); }
+    },
+
     shortcuts: {
         get: () => ipcRenderer.invoke('SHORTCUTS:GET'),
         record: action => ipcRenderer.invoke('SHORTCUTS:RECORD', action),
