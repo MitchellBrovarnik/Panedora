@@ -803,6 +803,19 @@ app.whenReady().then(async () => {
         }
         await run('new Promise(resolve => setTimeout(resolve, 750))');
         await capture('player-settings');
+        // Native desktop preference is opt-in and persists via main-process IPC.
+        assert.equal(await run('window.api.notifications.getEnabled()'), false);
+        assert.equal(await run("document.getElementById('song-notifications-toggle').checked"), false);
+        await run("document.getElementById('song-notifications-toggle').click()");
+        await waitFor(() => require('../config').getSongNotificationsEnabled(), 'song notifications enabled');
+        await waitFor(() => run("!document.getElementById('song-notifications-toggle').disabled"), 'notification preference save');
+        await run("renderPage('home'); renderPage('settings')");
+        assert.equal(await run("document.getElementById('song-notifications-toggle').checked"), true);
+        await run("document.getElementById('song-notifications-toggle').scrollIntoView({block:'center'})");
+        await capture('song-notifications-settings');
+        await run("document.getElementById('song-notifications-toggle').click()");
+        await waitFor(() => !require('../config').getSongNotificationsEnabled(), 'song notifications disabled');
+        await waitFor(() => run("!document.getElementById('song-notifications-toggle').disabled"), 'notification preference disabled');
         await run("renderPage('home')");
         console.log('Automatic volume memory passed: no toggle, saved slider changes and mute through real IPC, both sliders synchronized.');
     }

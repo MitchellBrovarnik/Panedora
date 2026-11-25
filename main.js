@@ -3,7 +3,7 @@
  * Direct API-based architecture (no hidden browser)
  */
 
-const { app, BrowserWindow, ipcMain, screen, shell, net, powerMonitor, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, shell, net, powerMonitor, globalShortcut, Notification, nativeImage } = require('electron');
 const path = require('path');
 // A positive, effectively unbounded dimension also works with macOS window constraints.
 const MAX_WINDOW_DIMENSION = Math.floor(0x7fffffff / 10);
@@ -24,6 +24,7 @@ const { PandoraVerification } = require('./pandora-verification');
 const verification = new PandoraVerification();
 const { UpdateChecker, DOWNLOAD_URL } = require('./update-checker');
 const { DiscordPresence } = require('./discord-presence');
+const { SongNotifications, canShowSongNotification } = require('./song-notifications');
 const discordConfig = require('./discord-config.json');
 
 let uiWindow = null;
@@ -31,6 +32,7 @@ let api = null;
 let updateChecker = null;
 let updateResponsePending = false;
 let discordPresence = null;
+let songNotifications = null;
 let keyboardShortcuts = null;
 
 // Current state
@@ -140,6 +142,7 @@ function createUIWindow() {
         playbackGeneration++;
         selectionRevision++;
         discordPresence?.setPlayerState(null);
+        songNotifications?.dispose();
         cancelStreamPrompt();
         verification.cancel();
         uiWindow = null;
@@ -149,6 +152,7 @@ function createUIWindow() {
             keyboardShortcuts?.record(null);
             cancelStreamPrompt();
             discordPresence?.invalidatePlayback();
+            songNotifications?.invalidate();
         });
     }
 }
@@ -295,7 +299,10 @@ function sendToUI(channel, data) {
 }
 
 function sendLoginStatus(isLoggedIn) {
-    if (!isLoggedIn) discordPresence?.setPlayerState(null);
+    if (!isLoggedIn) {
+        discordPresence?.setPlayerState(null);
+        songNotifications?.dispose();
+    }
     sendToUI('UI:LOGIN_STATUS', { isLoggedIn });
 }
 
@@ -1134,6 +1141,17 @@ ipcMain.handle('DISCORD:SET_ENABLED', (event, enabled) => {
     config.setDiscordEnabled(enabled);
     return discordPresence.setEnabled(enabled);
 });
+ipcMain.handle('NOTIFICATIONS:GET_ENABLED', event =>
+    isAppRenderer(event) ? config.getSongNotificationsEnabled() : null);
+ipcMain.handle('NOTIFICATIONS:SET_ENABLED', (event, enabled) => {
+    if (!isAppRenderer(event) || typeof enabled !== 'boolean') return null;
+    if (!config.setSongNotificationsEnabled(enabled)) return null;
+    if (!enabled) songNotifications?.dispose();
+    return config.getSongNotificationsEnabled();
+});
+ipcMain.handle('NOTIFICATIONS:PLAYBACK', (event, report) =>
+    isAppRenderer(event) && songNotifications?.report(report) === true);
+
 // Volume memory (stored in the same config file as the other installation settings)
 ipcMain.handle('SETTINGS:GET_VOLUME', event => isAppRenderer(event) ? config.getVolumeSettings() : null);
 ipcMain.handle('SETTINGS:GET_LEGACY_MINIPLAYER', event => isAppRenderer(event) ? config.getLegacyMiniplayer() : null);
@@ -1218,6 +1236,7 @@ ipcMain.handle('AUTH:LOGOUT', async () => {
     selectionRevision++;
     searchRevision++;
     discordPresence?.setPlayerState(null);
+    songNotifications?.dispose();
     cancelStreamPrompt();
     stationLoading = false;
     resetStationModes();
@@ -1546,7 +1565,62 @@ ipcMain.handle('PLAYER:GET_MORE_TRACKS', async () => {
 // App Lifecycle
 // ============================================================================
 
+// Use the same Chromium network cache as the player. Artwork is optional and
+// bounded by both size and time; it must never delay or interfere with audio.
+async function loadNotificationArtwork(value, signal) {
+    if (typeof value !== 'string' || !value.startsWith('https://') || signal.aborted) return null;
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    signal.addEventListener('abort', abort, { once: true });
+    const timeout = setTimeout(abort, 1200);
+    try {
+        const response = await net.fetch(value, { signal: controller.signal, cache: 'force-cache', credentials: 'omit' });
+        if (!response.ok || !response.body || !/^image\//i.test(response.headers.get('content-type') || '')) return null;
+        const maxBytes = 2 * 1024 * 1024;
+        if (Number(response.headers.get('content-length')) > maxBytes) return null;
+        const reader = response.body.getReader();
+        const chunks = [];
+        let size = 0;
+        while (true) {
+            const { done, value: chunk } = await reader.read();
+            if (done) break;
+            size += chunk.byteLength;
+            if (size > maxBytes) { abort(); return null; }
+            chunks.push(Buffer.from(chunk));
+        }
+        const image = nativeImage.createFromBuffer(Buffer.concat(chunks));
+        return image.isEmpty() ? null : image.resize({ width: 128, height: 128 });
+    } catch {
+        return null;
+    } finally {
+        clearTimeout(timeout);
+        signal.removeEventListener('abort', abort);
+        controller.abort();
+    }
+}
+
 app.whenReady().then(() => {
+    if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? 'com.panedora.app' : process.execPath);
+    songNotifications = new SongNotifications({
+        enabled: config.getSongNotificationsEnabled,
+        getState: getCurrentState,
+        canShow: () => Notification.isSupported() && canShowSongNotification(uiWindow, isMiniPlayer),
+        loadArtwork: loadNotificationArtwork,
+        show: options => {
+            const notification = new Notification({ icon: path.join(__dirname, 'assets', 'icon.png'), ...options });
+            notification.on('click', () => {
+                if (!uiWindow || uiWindow.isDestroyed()) return;
+                if (uiWindow.isMinimized()) uiWindow.restore();
+                uiWindow.show();
+                uiWindow.focus();
+            });
+            notification.on('failed', (_event, error) => console.warn('[Notifications] Native notification failed:', error));
+            notification.show();
+            return notification;
+        },
+        onError: error => console.warn('[Notifications] Could not show song notification:', error)
+    });
+    powerMonitor.on('suspend', () => songNotifications?.invalidate());
     discordPresence = new DiscordPresence({
         clientId: process.env.PANEDORA_DISCORD_CLIENT_ID || discordConfig.applicationId,
         enabled: config.getDiscordEnabled(),
@@ -1650,6 +1724,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
     keyboardShortcuts?.dispose();
     discordPresence?.dispose();
+    songNotifications?.dispose();
     updateChecker?.stop();
     verification.cancel();
 });
