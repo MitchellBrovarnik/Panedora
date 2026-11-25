@@ -1885,6 +1885,34 @@ x11.XCloseDisplay(display)
     stressTracks = null; freshTracks = null; activeMode = 0; canStream = true;
     await run("window.api.content.playItem({type:'station', id:'fixture-station'})");
     await waitFor(() => run("document.querySelector('audio').readyState >= 3 && !document.querySelector('audio').paused"), 'Discord fixture audio');
+    // Feedback accessibility: all presets preview live, persist, and leave the theme intact.
+    await run("renderPage('settings')");
+    const feedbackThemeBefore = await run("getComputedStyle(document.documentElement).getPropertyValue('--accent')");
+    const feedbackPalettes = {
+        none: ['rgb(29, 185, 84)', 'rgb(17, 120, 59)', 'rgb(232, 17, 35)', 'rgb(151, 11, 23)'],
+        protanopia: ['rgb(86, 180, 233)', 'rgb(40, 103, 142)', 'rgb(230, 159, 0)', 'rgb(135, 93, 0)'],
+        deuteranopia: ['rgb(86, 180, 233)', 'rgb(40, 103, 142)', 'rgb(230, 159, 0)', 'rgb(135, 93, 0)'],
+        tritanopia: ['rgb(69, 201, 194)', 'rgb(36, 119, 115)', 'rgb(240, 128, 128)', 'rgb(148, 68, 68)'],
+        monochrome: ['rgb(242, 242, 242)', 'rgb(133, 133, 133)', 'rgb(208, 208, 208)', 'rgb(98, 98, 98)']
+    };
+    for (const [mode, colors] of Object.entries(feedbackPalettes)) {
+        await run(`(() => { const select = document.getElementById('colorblind-mode'); select.value = ${JSON.stringify(mode)}; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+        assert.equal(await run("localStorage.getItem('panedora-colorblind-mode')"), mode);
+        const readFeedbackColors = () => run(`['liked', 'disliked'].flatMap(state => {
+            const svg = document.querySelector('.colorblind-preview .' + state + ' svg');
+            const style = getComputedStyle(svg); return [style.stroke, style.fill];
+        })`);
+        // The outline inherits the button's 150 ms color transition; the fill changes immediately.
+        await waitFor(async () => JSON.stringify(await readFeedbackColors()) === JSON.stringify(colors), `${mode} feedback palette transition`);
+        assert.deepEqual(await readFeedbackColors(), colors);
+        assert.equal(await run("getComputedStyle(document.querySelector('.colorblind-preview .mini-thumb-btn:not(.liked):not(.disliked) svg')).fill"), 'none');
+        assert.equal(await run("getComputedStyle(document.documentElement).getPropertyValue('--accent')"), feedbackThemeBefore);
+    }
+    await run("delete document.documentElement.dataset.colorblindMode; loadSavedColorblindMode(); renderSettingsPage()");
+    assert.equal(await run("document.getElementById('colorblind-mode').value"), 'monochrome');
+    await run("localStorage.setItem('panedora-colorblind-mode', 'invalid'); loadSavedColorblindMode(); renderSettingsPage()");
+    assert.equal(await run("document.getElementById('colorblind-mode').value"), 'none');
+
     await run("renderPage('settings'); document.getElementById('discord-sharing-toggle').click()");
     await waitFor(() => discordServer.active?.details === 'Fixture Song 1', 'listening activity');
     assert.equal(discordServer.active.type, 2);
