@@ -241,6 +241,15 @@ module.exports = {
         return true;
     },
 
+    getNormalizeVolume: () => getConfig().normalizeVolume === true,
+    setNormalizeVolume: enabled => {
+        if (typeof enabled !== 'boolean') return false;
+        const next = { ...getConfig(), normalizeVolume: enabled };
+        if (!writeConfig(next)) return false;
+        configCache = next;
+        return true;
+    },
+
     // Always remember the last volume, including mute, across restarts and sign-out.
     getVolumeSettings: () => ({ volume: restoredVolume(getConfig().volume) }),
     setVolume: volume => {
