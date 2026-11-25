@@ -20,6 +20,7 @@ const filesToCopy = [
     'preload-verification.js',
     'renderer.js',
     'visualizer.js',
+    'loudness-worklet.js',
     'components.js',
     'package.json',
     'index.html',
