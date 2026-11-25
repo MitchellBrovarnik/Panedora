@@ -1667,6 +1667,24 @@ function applyBgEffect(effectId) {
 
 let discordStatus = null;
 let discordSettingsPending = false;
+let songNotificationsEnabled = false;
+let songNotificationsPending = false;
+
+async function loadSongNotificationSettings() {
+    if (!window.api.notifications) return;
+    try {
+        songNotificationsEnabled = (await window.api.notifications.getEnabled()) === true;
+    } catch (error) {
+        console.warn('[UI] Could not load song notification setting:', error);
+    }
+}
+
+function renderSongNotificationToggle() {
+    const toggle = document.getElementById('song-notifications-toggle');
+    if (!toggle) return;
+    toggle.checked = songNotificationsEnabled;
+    toggle.disabled = songNotificationsPending;
+}
 
 function renderDiscordSettings() {
     const toggle = document.getElementById('discord-sharing-toggle');
@@ -1885,6 +1903,17 @@ function renderSettingsPage() {
           <input class="discord-sharing-toggle" id="discord-sharing-toggle" type="checkbox" role="switch" aria-describedby="discord-sharing-description discord-sharing-status">
         </div>
       </section>
+      ${window.api?.notifications ? `
+      <section class="settings-section">
+        <h2 class="section-title">Notifications</h2>
+        <div class="setting-row">
+          <div>
+            <label class="setting-label" for="song-notifications-toggle">Song change notifications</label>
+            <p class="setting-help" id="song-notifications-description">Show a silent desktop notification when a new song starts while Panedora is in the background and no visible mini player is always on top.</p>
+          </div>
+          <input class="setting-toggle" id="song-notifications-toggle" type="checkbox" role="switch" aria-describedby="song-notifications-description">
+        </div>
+      </section>` : ''}
       <section class="settings-section">
         <h2 class="section-title">Color Theme</h2>
         <p class="settings-description">Choose a color palette to personalize your experience.</p>
@@ -1958,6 +1987,24 @@ function renderSettingsPage() {
         } finally {
             discordSettingsPending = false;
             renderDiscordSettings();
+        }
+    });
+
+    renderSongNotificationToggle();
+    document.getElementById('song-notifications-toggle')?.addEventListener('change', async event => {
+        if (songNotificationsPending) { renderSongNotificationToggle(); return; }
+        const enabled = event.target.checked;
+        songNotificationsPending = true;
+        event.target.disabled = true;
+        try {
+            const saved = await window.api.notifications.setEnabled(enabled);
+            if (typeof saved !== 'boolean') throw new Error('Notification setting was not saved');
+            songNotificationsEnabled = saved;
+        } catch {
+            showErrorToast('Could not save the notification setting. Please try again.');
+        } finally {
+            songNotificationsPending = false;
+            renderSongNotificationToggle();
         }
     });
 
@@ -3541,10 +3588,10 @@ function initAPIListeners() {
         lastCatalogReport = Date.now();
     };
     const reportDiscordPlayback = () => {
-        if (!currentAudio || !window.api.discord || currentAudioToken !== AppState.playerState.trackToken ||
+        if (!currentAudio || currentAudioToken !== AppState.playerState.trackToken ||
             currentAudioGeneration !== AppState.playerState.playbackGeneration) return;
         lastDiscordReport = Date.now();
-        window.api.discord.reportPlayback({
+        const report = {
             trackToken: currentAudioToken,
             playbackGeneration: currentAudioGeneration,
             playing: discordAudioPlaying && !currentAudio.paused && !currentAudio.ended && !currentAudio.error &&
@@ -3553,7 +3600,10 @@ function initAPIListeners() {
                 !!currentAudio.getAttribute('src') && !AppState.playerState.streamBlocked,
             position: Number.isFinite(currentAudio.currentTime) ? currentAudio.currentTime : 0,
             duration: Number.isFinite(currentAudio.duration) ? currentAudio.duration : 0
-        });
+        };
+        window.api.discord?.reportPlayback(report);
+        window.api.notifications?.reportPlayback({ trackToken: report.trackToken,
+            playbackGeneration: report.playbackGeneration, playing: report.playing });
     };
     let consecutiveErrors = 0; // Prevent chain-skipping on stale/expired URLs
     let audioRevision = 0;
@@ -4044,6 +4094,7 @@ async function init() {
     initAPIListeners();
     await loadVolumeSettings();
     await loadMiniplayerSettings();
+    await loadSongNotificationSettings();
 
     // Request initial data
     await window.api.init();
