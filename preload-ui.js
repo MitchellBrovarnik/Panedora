@@ -66,6 +66,8 @@ contextBridge.exposeInMainWorld('api', {
 
     settings: {
         getVolume: () => ipcRenderer.invoke('SETTINGS:GET_VOLUME'),
+        getNormalizeVolume: () => ipcRenderer.invoke('SETTINGS:GET_NORMALIZE_VOLUME'),
+        setNormalizeVolume: enabled => ipcRenderer.invoke('SETTINGS:SET_NORMALIZE_VOLUME', enabled),
         saveVolume: volume => ipcRenderer.invoke('SETTINGS:SAVE_VOLUME', volume),
         getLegacyMiniplayer: () => ipcRenderer.invoke('SETTINGS:GET_LEGACY_MINIPLAYER'),
         setLegacyMiniplayer: enabled => ipcRenderer.invoke('SETTINGS:SET_LEGACY_MINIPLAYER', enabled)
