@@ -1154,6 +1154,11 @@ ipcMain.handle('NOTIFICATIONS:PLAYBACK', (event, report) =>
 
 // Volume memory (stored in the same config file as the other installation settings)
 ipcMain.handle('SETTINGS:GET_VOLUME', event => isAppRenderer(event) ? config.getVolumeSettings() : null);
+ipcMain.handle('SETTINGS:GET_NORMALIZE_VOLUME', event => isAppRenderer(event) ? config.getNormalizeVolume() : null);
+ipcMain.handle('SETTINGS:SET_NORMALIZE_VOLUME', (event, enabled) => {
+    if (!isAppRenderer(event) || typeof enabled !== 'boolean' || !config.setNormalizeVolume(enabled)) return null;
+    return config.getNormalizeVolume();
+});
 ipcMain.handle('SETTINGS:GET_LEGACY_MINIPLAYER', event => isAppRenderer(event) ? config.getLegacyMiniplayer() : null);
 ipcMain.handle('SETTINGS:SET_LEGACY_MINIPLAYER', (event, enabled) => {
     if (!isAppRenderer(event) || typeof enabled !== 'boolean') return null;
