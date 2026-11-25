@@ -231,6 +231,16 @@ module.exports = {
     getDiscordEnabled: () => getConfig().discordEnabled === true,
     setDiscordEnabled: enabled => setConfig('discordEnabled', enabled === true),
 
+    // Optional native song notifications; only a successful write updates the cache.
+    getSongNotificationsEnabled: () => getConfig().songNotificationsEnabled === true,
+    setSongNotificationsEnabled: enabled => {
+        if (typeof enabled !== 'boolean') return false;
+        const next = { ...getConfig(), songNotificationsEnabled: enabled };
+        if (!writeConfig(next)) return false;
+        configCache = next;
+        return true;
+    },
+
     // Always remember the last volume, including mute, across restarts and sign-out.
     getVolumeSettings: () => ({ volume: restoredVolume(getConfig().volume) }),
     setVolume: volume => {
