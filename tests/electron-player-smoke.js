@@ -816,6 +816,56 @@ app.whenReady().then(async () => {
         await run("document.getElementById('song-notifications-toggle').click()");
         await waitFor(() => !require('../config').getSongNotificationsEnabled(), 'song notifications disabled');
         await waitFor(() => run("!document.getElementById('song-notifications-toggle').disabled"), 'notification preference disabled');
+        // Exercise the actual settings IPC and local worklet module (not a fake analyzer).
+        assert.equal(await run('window.api.settings.getNormalizeVolume()'), false);
+        assert.equal(await run("document.getElementById('normalize-volume-toggle').checked"), false);
+        await run("document.getElementById('normalize-volume-toggle').click()");
+        await waitFor(() => require('../config').getNormalizeVolume(), 'normalization preference enabled');
+        await waitFor(() => run("!document.getElementById('normalize-volume-toggle').disabled"), 'normalization preference saved');
+        await run("renderPage('home'); renderPage('settings')");
+        assert.equal(await run("document.getElementById('normalize-volume-toggle').checked"), true);
+        if (await run('!!window.visualizer.source')) {
+            await waitFor(() => run('!!window.visualizer.normalizationMeter || !!window.visualizer.normalizationError'), 'normalization worklet load');
+            assert.equal(await run('window.visualizer.normalizationError'), null);
+            assert.equal(await run('!!window.visualizer.normalizationMeter'), true);
+        }
+        // Real Web Audio offline render: calibrated stereo tone through a silent
+        // sidechain. The worklet must produce a gain report without adding audio.
+        const measured = await run(`(async () => {
+            const rate = 48000;
+            const ctx = new OfflineAudioContext(2, rate * 4, rate);
+            await ctx.audioWorklet.addModule(new URL('loudness-worklet.js', document.baseURI));
+            const meter = new AudioWorkletNode(ctx, 'panedora-loudness-meter', {
+                numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1],
+                channelCount: 2, channelCountMode: 'explicit'
+            });
+            const reports = [];
+            meter.port.onmessage = event => reports.push(event.data);
+            meter.port.postMessage({ type: 'reset', epoch: 42 });
+            const tone = ctx.createBufferSource();
+            tone.buffer = ctx.createBuffer(2, rate * 4, rate);
+            for (let channel = 0; channel < 2; channel++) {
+                const data = tone.buffer.getChannelData(channel);
+                for (let i = 0; i < data.length; i++) data[i] = 0.5 * Math.sin(2 * Math.PI * 997 * i / rate);
+            }
+            tone.connect(meter); meter.connect(ctx.destination); tone.start();
+            const output = await ctx.startRendering();
+            for (let i = 0; i < 20 && reports.length === 0; i++) await new Promise(resolve => setTimeout(resolve, 25));
+            const peak = Math.max(...[0, 1].map(channel => output.getChannelData(channel).reduce((max, x) => Math.max(max, Math.abs(x)), 0)));
+            meter.port.close();
+            return { peak, report: reports.at(-1) };
+        })()`);
+        assert.equal(measured.peak, 0, 'worklet sidechain emits no audible samples');
+        assert.equal(measured.report?.epoch, 42);
+        assert.ok(Math.abs(measured.report.measured - (-6.0206)) < 0.05);
+        assert.ok(Math.abs(measured.report.measured + 20 * Math.log10(measured.report.gain) - (-18)) < 0.05);
+        await run("document.getElementById('normalize-volume-toggle').scrollIntoView({block:'center'})");
+        await capture('volume-normalization-settings');
+        await run("document.getElementById('normalize-volume-toggle').click()");
+        await waitFor(() => !require('../config').getNormalizeVolume(), 'normalization preference disabled');
+        await waitFor(() => run("!document.getElementById('normalize-volume-toggle').disabled"), 'normalization preference save finished');
+        assert.equal(await run('window.visualizer.normalizationMeter === null'), true);
+        assert.equal(await run("Number(document.getElementById('volume-slider').value)"), initial);
         await run("renderPage('home')");
         console.log('Automatic volume memory passed: no toggle, saved slider changes and mute through real IPC, both sliders synchronized.');
     }
