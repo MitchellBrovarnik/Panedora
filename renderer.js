@@ -1455,6 +1455,18 @@ function renderSettingsPage() {
           <input class="setting-toggle" id="song-notifications-toggle" type="checkbox" role="switch" aria-describedby="song-notifications-description">
         </div>
       </section>` : ''}
+      ${window.api.settings?.getNormalizeVolume ? `
+      <section class="settings-section">
+        <h2 class="section-title">Playback</h2>
+        <div class="setting-row">
+          <div>
+            <label class="setting-label" for="normalize-volume-toggle">Normalize volume</label>
+            <p class="setting-help" id="normalize-volume-description">Gradually reduce louder tracks for more consistent listening. Learns from the beginning of each song without boosting quiet recordings or changing your volume slider.</p>
+            <p class="setting-help" id="normalize-volume-status" role="status"></p>
+          </div>
+          <input class="setting-toggle" id="normalize-volume-toggle" type="checkbox" role="switch" aria-describedby="normalize-volume-description normalize-volume-status">
+        </div>
+      </section>` : ''}
       <section class="settings-section">
         <h2 class="section-title">Color Theme</h2>
         <p class="settings-description">Choose a color palette to personalize your experience.</p>
@@ -1546,6 +1558,25 @@ function renderSettingsPage() {
         } finally {
             songNotificationsPending = false;
             renderSongNotificationToggle();
+        }
+    });
+
+    renderNormalizeVolumeToggle();
+    document.getElementById('normalize-volume-toggle')?.addEventListener('change', async event => {
+        if (normalizeVolumePending) { renderNormalizeVolumeToggle(); return; }
+        const enabled = event.target.checked;
+        normalizeVolumePending = true;
+        renderNormalizeVolumeToggle();
+        try {
+            const saved = await window.api.settings.setNormalizeVolume(enabled);
+            if (typeof saved !== 'boolean') throw new Error('Normalization setting was not saved');
+            normalizeVolumeEnabled = saved;
+            window.visualizer?.setNormalizationEnabled?.(saved);
+        } catch {
+            showErrorToast('Could not save the volume normalization setting. Please try again.');
+        } finally {
+            normalizeVolumePending = false;
+            renderNormalizeVolumeToggle();
         }
     });
 
@@ -2678,6 +2709,27 @@ const CLASSIC_VOLUME_THUMB_PX = 14; // matches .classic-volume-slider::-webkit-s
 const VOLUME_POPOVER_LINGER_MS = 700;
 const VOLUME_POPOVER_RELEASE_MS = 250;
 let currentVolume = 100;
+let normalizeVolumeEnabled = false;
+let normalizeVolumePending = false;
+
+function renderNormalizeVolumeToggle() {
+    const toggle = document.getElementById('normalize-volume-toggle');
+    if (!toggle) return;
+    toggle.checked = normalizeVolumeEnabled;
+    toggle.disabled = normalizeVolumePending;
+    const status = document.getElementById('normalize-volume-status');
+    if (status) status.textContent = normalizeVolumeEnabled ? window.visualizer?.normalizationError || '' : '';
+}
+
+async function loadNormalizeVolumeSettings() {
+    try {
+        normalizeVolumeEnabled = (await window.api.settings?.getNormalizeVolume?.()) === true;
+        window.visualizer?.setNormalizationEnabled?.(normalizeVolumeEnabled);
+    } catch (error) {
+        console.warn('[UI] Could not load volume normalization preference:', error);
+    }
+}
+window.addEventListener('panedora-normalization-status', renderNormalizeVolumeToggle);
 
 function clampVolumePercent(value) {
     const percent = Math.round(Number(value));
@@ -3370,6 +3422,7 @@ function initAPIListeners() {
                 syncClassicProgress();
                 catalogStarted = false;
                 currentAudio.src = state.audioURL;
+                window.visualizer?.setNormalizationTrack?.(state.trackToken);
                 if (state.resumeAt > 0 && state.catalogCanSeek) currentAudio.currentTime = state.resumeAt;
                 if (state.isPlaying !== false) currentAudio.play().then(() => {
                     if (revision !== audioRevision || currentAudio.paused) return;
@@ -3421,6 +3474,7 @@ function initAPIListeners() {
             cancelRecovery();
             currentAudio.pause();
             currentAudio.src = '';
+            window.visualizer?.setNormalizationTrack?.(null);
         }
 
         // NOTE: Audio play/pause state is now managed entirely by the audio element's
@@ -3550,6 +3604,7 @@ function initAPIListeners() {
                 audioEl.pause();
                 audioEl.src = '';
             }
+            window.visualizer?.setNormalizationTrack?.(null);
 
             const stationsList = document.getElementById('stations-list');
             if (stationsList) stationsList.innerHTML = '';
@@ -3634,6 +3689,7 @@ async function init() {
     initEventListeners();
     initAPIListeners();
     await loadVolumeSettings();
+    await loadNormalizeVolumeSettings();
     await loadMiniplayerSettings();
     await loadSongNotificationSettings();
 
