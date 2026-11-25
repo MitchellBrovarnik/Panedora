@@ -46,11 +46,11 @@ function gatedEnergy(blocks) {
 }
 
 class PanedoraLoudnessMeter extends AudioWorkletProcessor {
-    constructor() {
+    constructor(options) {
         super();
         this.hop = Math.round(sampleRate / 10);
         this.coefficients = coefficients(sampleRate);
-        this.reset(null);
+        this.reset(options?.processorOptions?.epoch ?? null);
         this.port.onmessage = ({ data }) => {
             if (data?.type === 'reset') this.reset(data.epoch);
         };
