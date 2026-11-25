@@ -837,11 +837,10 @@ app.whenReady().then(async () => {
             await ctx.audioWorklet.addModule(new URL('loudness-worklet.js', document.baseURI));
             const meter = new AudioWorkletNode(ctx, 'panedora-loudness-meter', {
                 numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1],
-                channelCount: 2, channelCountMode: 'explicit'
+                channelCount: 2, channelCountMode: 'explicit', processorOptions: { epoch: 42 }
             });
             const reports = [];
             meter.port.onmessage = event => reports.push(event.data);
-            meter.port.postMessage({ type: 'reset', epoch: 42 });
             const tone = ctx.createBufferSource();
             tone.buffer = ctx.createBuffer(2, rate * 4, rate);
             for (let channel = 0; channel < 2; channel++) {
