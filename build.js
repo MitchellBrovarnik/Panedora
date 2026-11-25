@@ -13,6 +13,7 @@ const filesToCopy = [
     'update-checker.js',
     'discord-rpc.js',
     'discord-presence.js',
+    'song-notifications.js',
     'discord-config.json',
     'config.js',
     'preload-ui.js',
