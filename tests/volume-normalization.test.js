@@ -112,6 +112,8 @@ test('gain stages are independent, off is unity, and stale track messages are ig
     v.setNormalizationTrack('a');
     v.setNormalizationEnabled(true);
     await v.normalizationModule;
+    // The VM continuation runs after the host-realm module promise settles.
+    await new Promise(setImmediate);
     const meter = v.normalizationMeter;
     assert.ok(meter);
     assert.ok(v.source.connections.has(meter));
@@ -143,6 +145,7 @@ test('worklet load failure fails open without disturbing original volume', async
     v.setNormalizationTrack('a');
     v.setNormalizationEnabled(true);
     await v.normalizationModule.catch(() => {});
+    await new Promise(setImmediate);
     assert.match(v.normalizationError, /unavailable/);
     assert.equal(v.normalizationGain.gain.value, 1);
     assert.equal(v.gainNode.gain.value, 0.3);
