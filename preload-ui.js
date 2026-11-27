@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('api', {
     init: () => ipcRenderer.invoke('APP:INIT'),
     diagnostics: {
         report: () => ipcRenderer.invoke('DIAGNOSTICS:REPORT'),
+        takeStartupNotice: () => ipcRenderer.invoke('DIAGNOSTICS:STARTUP_NOTICE'),
         openIssues: () => ipcRenderer.invoke('DIAGNOSTICS:OPEN_ISSUES'),
         reportAppearance: report => { void ipcRenderer.invoke('DIAGNOSTICS:APPEARANCE', report).catch(() => {}); }
     },
