@@ -43,6 +43,42 @@ test('disabled and foreground tracks are consumed without announcing after focus
     s.next('c'); s.report(); await s.flush(); assert.equal(s.shown.length, 1);
 });
 
+test('buffering before the toast allows one notification when the same track resumes', async t => {
+    const s = setup(t);
+    assert.equal(s.report(), true);
+    s.report(false, { interrupted: true });
+    await s.flush();
+    assert.equal(s.shown.length, 0);
+    assert.equal(s.report(true, { playbackGeneration: 0 }), false);
+    assert.equal(s.report(), true);
+    assert.equal(s.report(), false);
+    await s.flush();
+    s.report(false, { interrupted: true });
+    assert.equal(s.report(), false);
+    assert.deepEqual(s.shown.map(n => n.title), ['Song A']);
+});
+
+test('buffering cancels artwork in flight and a pause or invalidation cancels the retry', async t => {
+    let release, signal;
+    const s = setup(t, { loadArtwork: (_cover, abortSignal) => new Promise(resolve => {
+        signal = abortSignal; release = resolve;
+    }) });
+    s.report();
+    const delivering = s.flush();
+    s.report(false, { interrupted: true });
+    assert.equal(signal.aborted, true);
+    release('old');
+    await delivering;
+    assert.equal(s.shown.length, 0);
+    s.report(false); // The listener explicitly paused during buffering.
+    assert.equal(s.report(), false);
+    s.next('b');
+    s.report();
+    s.report(false, { interrupted: true });
+    s.service.invalidate();
+    assert.equal(s.report(), false);
+});
+
 test('rapid skips, stale reports, pause and focus changes cannot show outdated notifications', async t => {
     const s = setup(t);
     s.report(); s.next('b'); s.report(); s.next('c');

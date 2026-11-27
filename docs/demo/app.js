@@ -100,6 +100,15 @@ class AudioVisualizer {
     this.canvas = null;
     this.ctx = null;
     this.gainNode = null;
+    this.normalizationGain = null;
+    this.normalizationEnabled = false;
+    this.normalizationTrack = null;
+    this.normalizationEpoch = 0;
+    this.normalizationMeter = null;
+    this.normalizationModule = null;
+    this.normalizationError = null;
+    this.normalizationEstimateReady = false;
+    this.normalizationSeekPending = false;
     this.isVisualizing = false;
     this.animationId = null;
     this.previousWaveHeights = null; // Used for ultra-smooth lerping on the wave visualizer
@@ -137,22 +146,132 @@ class AudioVisualizer {
 
       this.source = this.audioContext.createMediaElementSource(audioElement);
       this.gainNode = this.audioContext.createGain();
+      this.normalizationGain = this.audioContext.createGain();
 
       // Set the gain to whatever volume the element is currently at
       this.gainNode.gain.value = audioElement.volume;
 
-      // Route audio: Source -> Analyser -> Gain -> Destination
+      // The meter sees original PCM, never the volume slider or normalized signal.
+      // The optional gain stage remains at unity when normalization is disabled.
       this.source.connect(this.analyser);
-      this.analyser.connect(this.gainNode);
+      this.analyser.connect(this.normalizationGain);
+      this.normalizationGain.connect(this.gainNode);
       this.gainNode.connect(this.audioContext.destination);
 
       // Force internal element to max volume so the analyser gets the full signal range
       audioElement.volume = 1.0;
+      if (this.normalizationEnabled) void this.startNormalizationMeter();
 
       console.log("[Visualizer] AudioContext initialized and connected.");
     } catch (error) {
       console.error("[Visualizer] Failed to initialize AudioContext:", error);
     }
+  }
+
+  // Optional meter is a silent sidechain, never in the audible signal path.
+  // A failed module load cannot interrupt playback.
+  async startNormalizationMeter() {
+    const context = this.audioContext;
+    if (!this.normalizationEnabled || !this.source || !this.normalizationGain || this.normalizationMeter) return;
+    try {
+      if (!context.audioWorklet || typeof AudioWorkletNode !== 'function') throw new Error('AudioWorklet unavailable');
+      this.normalizationModule ||= context.audioWorklet.addModule(new URL('loudness-worklet.js', document.baseURI));
+      await this.normalizationModule;
+      if (!this.normalizationEnabled || this.normalizationMeter) return;
+      const node = new AudioWorkletNode(context, 'panedora-loudness-meter', {
+        numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1],
+        channelCount: 2, channelCountMode: 'explicit', channelInterpretation: 'speakers'
+      });
+      this.normalizationMeter = node;
+      node.port.onmessage = ({ data }) => {
+        if (node !== this.normalizationMeter || !this.normalizationEnabled ||
+            data?.epoch !== this.normalizationEpoch || this.normalizationTrack === null ||
+            !Number.isFinite(data.gain) || data.gain < 0.125 || data.gain > 1) return;
+        const provisional = data.provisional === true;
+        if (!provisional) this.normalizationEstimateReady = true;
+        this.normalizationGain.gain.setTargetAtTime(data.gain, context.currentTime, provisional ? 0.15 : 0.6);
+      };
+      node.onprocessorerror = () => {
+        if (this.normalizationMeter === node) this.failNormalization(new Error('Loudness meter failed'));
+      };
+      node.port.postMessage({ type: 'reset', epoch: this.normalizationTrack === null ? null : this.normalizationEpoch });
+      this.source.connect(node);
+      node.connect(context.destination); // Worklet output is always zero.
+      this.normalizationError = null;
+      window.dispatchEvent(new Event('panedora-normalization-status'));
+    } catch (error) {
+      this.normalizationModule = null;
+      if (this.normalizationEnabled) this.failNormalization(error);
+    }
+  }
+
+  stopNormalizationMeter() {
+    const node = this.normalizationMeter;
+    this.normalizationMeter = null;
+    this.normalizationEstimateReady = false;
+    this.normalizationSeekPending = false;
+    if (!node) return;
+    node.port.onmessage = null;
+    node.onprocessorerror = null;
+    try { this.source.disconnect(node); } catch { /* Already disconnected */ }
+    try { node.disconnect(); } catch { /* Already disconnected */ }
+    node.port.close();
+  }
+
+  resetNormalizationGain(immediate) {
+    if (!this.normalizationGain) return;
+    const param = this.normalizationGain.gain;
+    const now = this.audioContext.currentTime;
+    param.cancelScheduledValues(now);
+    if (immediate) param.setValueAtTime(1, now);
+    else param.setTargetAtTime(1, now, 0.25);
+  }
+
+  failNormalization(error) {
+    this.stopNormalizationMeter();
+    this.resetNormalizationGain(false);
+    this.normalizationError = 'Volume normalization is unavailable; original audio is playing.';
+    console.warn('[Audio] Normalization unavailable:', error);
+    window.dispatchEvent(new Event('panedora-normalization-status'));
+  }
+
+  setNormalizationEnabled(enabled) {
+    if (this.normalizationEnabled === enabled) return;
+    this.normalizationEnabled = enabled;
+    this.normalizationEpoch++;
+    this.normalizationError = null;
+    if (enabled) void this.startNormalizationMeter();
+    else {
+      this.stopNormalizationMeter();
+      this.resetNormalizationGain(false);
+    }
+  }
+
+  setNormalizationTrack(token) {
+    if (token === this.normalizationTrack) return; // Recovery of the same track preserves gain.
+    this.normalizationTrack = token ?? null;
+    this.normalizationEpoch++;
+    this.normalizationEstimateReady = false;
+    this.normalizationSeekPending = false;
+    this.resetNormalizationGain(true);
+    this.normalizationMeter?.port.postMessage({
+      type: 'reset', epoch: this.normalizationTrack === null ? null : this.normalizationEpoch
+    });
+  }
+
+  beginNormalizationSeek() {
+    if (!this.normalizationMeter || this.normalizationTrack === null ||
+        this.normalizationEstimateReady || this.normalizationSeekPending) return;
+    this.normalizationSeekPending = true;
+    this.normalizationEpoch++;
+    this.normalizationMeter.port.postMessage({ type: 'reset', epoch: null });
+    this.normalizationGain.gain.setTargetAtTime(10 ** (-6 / 20), this.audioContext.currentTime, 0.02);
+  }
+
+  finishNormalizationSeek() {
+    if (!this.normalizationSeekPending) return;
+    this.normalizationSeekPending = false;
+    this.normalizationMeter.port.postMessage({ type: 'reset', epoch: this.normalizationEpoch, afterSeek: true });
   }
 
   start(canvasElement, style = 'bars') {
@@ -161,8 +280,7 @@ class AudioVisualizer {
       return;
     }
 
-    // Each new song calls start again. Release the previous frame and
-    // resize listener before starting another rendering loop.
+    // Release the previous frame and resize listener before restarting.
     this.stop();
 
     this.canvas = canvasElement;
@@ -1962,6 +2080,18 @@ function renderSettingsPage() {
           <input class="setting-toggle" id="song-notifications-toggle" type="checkbox" role="switch" aria-describedby="song-notifications-description">
         </div>
       </section>` : ''}
+      ${window.api.settings?.getNormalizeVolume ? `
+      <section class="settings-section">
+        <h2 class="section-title">Playback</h2>
+        <div class="setting-row">
+          <div>
+            <label class="setting-label" for="normalize-volume-toggle">Normalize volume (Experimental)</label>
+            <p class="setting-help" id="normalize-volume-description">Turns down louder tracks as it measures them. The level can take a few seconds to settle after a track change.</p>
+            <p class="setting-help" id="normalize-volume-status" role="status"></p>
+          </div>
+          <input class="setting-toggle" id="normalize-volume-toggle" type="checkbox" role="switch" aria-describedby="normalize-volume-description normalize-volume-status">
+        </div>
+      </section>` : ''}
       <section class="settings-section">
         <h2 class="section-title">Color Theme</h2>
         <p class="settings-description">Choose a color palette to personalize your experience.</p>
@@ -2062,6 +2192,25 @@ function renderSettingsPage() {
         } finally {
             songNotificationsPending = false;
             renderSongNotificationToggle();
+        }
+    });
+
+    renderNormalizeVolumeToggle();
+    document.getElementById('normalize-volume-toggle')?.addEventListener('change', async event => {
+        if (normalizeVolumePending) { renderNormalizeVolumeToggle(); return; }
+        const enabled = event.target.checked;
+        normalizeVolumePending = true;
+        renderNormalizeVolumeToggle();
+        try {
+            const saved = await window.api.settings.setNormalizeVolume(enabled);
+            if (typeof saved !== 'boolean') throw new Error('Normalization setting was not saved');
+            normalizeVolumeEnabled = saved;
+            window.visualizer?.setNormalizationEnabled?.(saved);
+        } catch {
+            showErrorToast('Could not save the volume normalization setting. Please try again.');
+        } finally {
+            normalizeVolumePending = false;
+            renderNormalizeVolumeToggle();
         }
     });
 
@@ -3196,6 +3345,27 @@ const CLASSIC_VOLUME_THUMB_PX = 14; // matches .classic-volume-slider::-webkit-s
 const VOLUME_POPOVER_LINGER_MS = 700;
 const VOLUME_POPOVER_RELEASE_MS = 250;
 let currentVolume = 100;
+let normalizeVolumeEnabled = false;
+let normalizeVolumePending = false;
+
+function renderNormalizeVolumeToggle() {
+    const toggle = document.getElementById('normalize-volume-toggle');
+    if (!toggle) return;
+    toggle.checked = normalizeVolumeEnabled;
+    toggle.disabled = normalizeVolumePending;
+    const status = document.getElementById('normalize-volume-status');
+    if (status) status.textContent = normalizeVolumeEnabled ? window.visualizer?.normalizationError || '' : '';
+}
+
+async function loadNormalizeVolumeSettings() {
+    try {
+        normalizeVolumeEnabled = (await window.api.settings?.getNormalizeVolume?.()) === true;
+        window.visualizer?.setNormalizationEnabled?.(normalizeVolumeEnabled);
+    } catch (error) {
+        console.warn('[UI] Could not load volume normalization preference:', error);
+    }
+}
+window.addEventListener('panedora-normalization-status', renderNormalizeVolumeToggle);
 
 function clampVolumePercent(value) {
     const percent = Math.round(Number(value));
@@ -3650,19 +3820,21 @@ function initAPIListeners() {
         if (!currentAudio || currentAudioToken !== AppState.playerState.trackToken ||
             currentAudioGeneration !== AppState.playerState.playbackGeneration) return;
         lastDiscordReport = Date.now();
+        const hasSource = !!currentAudio.getAttribute('src') && !currentAudio.ended && !currentAudio.error &&
+            !AppState.playerState.streamBlocked;
         const report = {
             trackToken: currentAudioToken,
             playbackGeneration: currentAudioGeneration,
-            playing: discordAudioPlaying && !currentAudio.paused && !currentAudio.ended && !currentAudio.error &&
-                !!currentAudio.getAttribute('src') && !AppState.playerState.streamBlocked,
-            paused: discordHasPlayed && currentAudio.paused && !currentAudio.ended && !currentAudio.error &&
-                !!currentAudio.getAttribute('src') && !AppState.playerState.streamBlocked,
+            playing: discordAudioPlaying && !currentAudio.paused && hasSource,
+            paused: discordHasPlayed && currentAudio.paused && hasSource,
             position: Number.isFinite(currentAudio.currentTime) ? currentAudio.currentTime : 0,
             duration: Number.isFinite(currentAudio.duration) ? currentAudio.duration : 0
         };
         window.api.discord?.reportPlayback(report);
         window.api.notifications?.reportPlayback({ trackToken: report.trackToken,
-            playbackGeneration: report.playbackGeneration, playing: report.playing });
+            playbackGeneration: report.playbackGeneration, playing: report.playing,
+            interrupted: !report.playing && hasSource && !currentAudio.paused && currentAudio.readyState > 0 &&
+                AppState.playerState.isPlaying });
     };
     let consecutiveErrors = 0; // Prevent chain-skipping on stale/expired URLs
     let audioRevision = 0;
@@ -3680,6 +3852,24 @@ function initAPIListeners() {
         consecutiveErrors = 0;
         freshPlaylistTried = false;
         failedAudioRevision = null;
+    };
+    const playAudio = async () => {
+        const revision = audioRevision;
+        try {
+            await currentAudio.play();
+            if (revision !== audioRevision || currentAudio.paused) return;
+            playbackSucceeded();
+
+            const visualizer = window.visualizer;
+            if (!visualizer) return;
+            visualizer.init(currentAudio);
+            if (!visualizer.isVisualizing && AppState.currentEffect?.startsWith('reactive-')) {
+                const canvas = document.getElementById('reactive-canvas');
+                if (canvas) visualizer.start(canvas, AppState.currentEffect.replace('reactive-', ''));
+            }
+        } catch (error) {
+            if (revision === audioRevision && error.name !== 'AbortError') console.error('[UI] Play error:', error);
+        }
     };
     const stopRecovery = () => {
         cancelRecovery();
@@ -3724,6 +3914,16 @@ function initAPIListeners() {
                 currentAudio = document.createElement('audio');
                 document.body.appendChild(currentAudio);
                 applyVolume(currentVolume, currentAudio);
+
+                currentAudio.addEventListener('seeking', () => {
+                    if (currentAudio.seeking) window.visualizer?.beginNormalizationSeek?.();
+                });
+                const finishNormalizationSeek = () => {
+                    if (!currentAudio.seeking) window.visualizer?.finishNormalizationSeek?.();
+                };
+                currentAudio.addEventListener('seeked', finishNormalizationSeek);
+                // A source refresh can cancel a seek and resume without a seeked event.
+                currentAudio.addEventListener('playing', finishNormalizationSeek);
 
                 // Presence observes audio events; it never controls playback or waits on Discord.
                 for (const event of ['pause', 'ended', 'error', 'emptied', 'waiting', 'seeking']) {
@@ -3876,7 +4076,7 @@ function initAPIListeners() {
             // at the beginning, while ordinary state updates preserve position.
             if (currentAudio.src !== state.audioURL || currentAudioToken !== state.trackToken || state.reloadAudio) {
                 console.log('[UI] Loading new audio source');
-                const revision = ++audioRevision;
+                audioRevision++;
                 cancelRecovery();
                 currentAudioToken = state.trackToken;
                 currentAudioGeneration = state.playbackGeneration;
@@ -3888,24 +4088,9 @@ function initAPIListeners() {
                 syncClassicProgress();
                 catalogStarted = false;
                 currentAudio.src = state.audioURL;
+                window.visualizer?.setNormalizationTrack?.(state.trackToken);
                 if (state.resumeAt > 0 && state.catalogCanSeek) currentAudio.currentTime = state.resumeAt;
-                if (state.isPlaying !== false) currentAudio.play().then(() => {
-                    if (revision !== audioRevision || currentAudio.paused) return;
-                    playbackSucceeded();
-
-                    // Web Audio API requires a user gesture. This is a safe place to init.
-                    if (window.visualizer) {
-                        window.visualizer.init(currentAudio);
-                        // If they have the reactive theme already selected, start it up!
-                        if (AppState.currentEffect && AppState.currentEffect.startsWith('reactive-')) {
-                            const cvs = document.getElementById('reactive-canvas');
-                            const styleName = AppState.currentEffect.replace('reactive-', '');
-                            if (cvs) window.visualizer.start(cvs, styleName);
-                        }
-                    }
-                }).catch(e => {
-                    if (revision === audioRevision && e.name !== 'AbortError') console.error('[UI] Play error:', e);
-                });
+                if (state.isPlaying !== false) void playAudio();
 
                 // Update OS media session metadata (shows in Windows taskbar, lock screen, etc.)
                 if ('mediaSession' in navigator) {
@@ -3925,7 +4110,7 @@ function initAPIListeners() {
                     // A terminal media error need not fire again when play() is
                     // retried. An approved user resume explicitly retries fresh URLs.
                     if (currentAudio.error) requestFreshPlaylist();
-                    else currentAudio.play().catch(e => console.error('[UI] Resume error:', e));
+                    else void playAudio();
                 }
                 if (discordHasPlayed) reportDiscordPlayback();
             }
@@ -3939,6 +4124,7 @@ function initAPIListeners() {
             cancelRecovery();
             currentAudio.pause();
             currentAudio.src = '';
+            window.visualizer?.setNormalizationTrack?.(null);
         }
 
         // NOTE: Audio play/pause state is now managed entirely by the audio element's
@@ -4068,6 +4254,7 @@ function initAPIListeners() {
                 audioEl.pause();
                 audioEl.src = '';
             }
+            window.visualizer?.setNormalizationTrack?.(null);
 
             const stationsList = document.getElementById('stations-list');
             if (stationsList) stationsList.innerHTML = '';
@@ -4159,6 +4346,7 @@ async function init() {
     initEventListeners();
     initAPIListeners();
     await loadVolumeSettings();
+    await loadNormalizeVolumeSettings();
     await loadMiniplayerSettings();
     await loadSongNotificationSettings();
 

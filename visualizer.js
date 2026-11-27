@@ -11,6 +11,15 @@ class AudioVisualizer {
     this.canvas = null;
     this.ctx = null;
     this.gainNode = null;
+    this.normalizationGain = null;
+    this.normalizationEnabled = false;
+    this.normalizationTrack = null;
+    this.normalizationEpoch = 0;
+    this.normalizationMeter = null;
+    this.normalizationModule = null;
+    this.normalizationError = null;
+    this.normalizationEstimateReady = false;
+    this.normalizationSeekPending = false;
     this.isVisualizing = false;
     this.animationId = null;
     this.previousWaveHeights = null; // Used for ultra-smooth lerping on the wave visualizer
@@ -48,22 +57,132 @@ class AudioVisualizer {
 
       this.source = this.audioContext.createMediaElementSource(audioElement);
       this.gainNode = this.audioContext.createGain();
+      this.normalizationGain = this.audioContext.createGain();
 
       // Set the gain to whatever volume the element is currently at
       this.gainNode.gain.value = audioElement.volume;
 
-      // Route audio: Source -> Analyser -> Gain -> Destination
+      // The meter sees original PCM, never the volume slider or normalized signal.
+      // The optional gain stage remains at unity when normalization is disabled.
       this.source.connect(this.analyser);
-      this.analyser.connect(this.gainNode);
+      this.analyser.connect(this.normalizationGain);
+      this.normalizationGain.connect(this.gainNode);
       this.gainNode.connect(this.audioContext.destination);
 
       // Force internal element to max volume so the analyser gets the full signal range
       audioElement.volume = 1.0;
+      if (this.normalizationEnabled) void this.startNormalizationMeter();
 
       console.log("[Visualizer] AudioContext initialized and connected.");
     } catch (error) {
       console.error("[Visualizer] Failed to initialize AudioContext:", error);
     }
+  }
+
+  // Optional meter is a silent sidechain, never in the audible signal path.
+  // A failed module load cannot interrupt playback.
+  async startNormalizationMeter() {
+    const context = this.audioContext;
+    if (!this.normalizationEnabled || !this.source || !this.normalizationGain || this.normalizationMeter) return;
+    try {
+      if (!context.audioWorklet || typeof AudioWorkletNode !== 'function') throw new Error('AudioWorklet unavailable');
+      this.normalizationModule ||= context.audioWorklet.addModule(new URL('loudness-worklet.js', document.baseURI));
+      await this.normalizationModule;
+      if (!this.normalizationEnabled || this.normalizationMeter) return;
+      const node = new AudioWorkletNode(context, 'panedora-loudness-meter', {
+        numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1],
+        channelCount: 2, channelCountMode: 'explicit', channelInterpretation: 'speakers'
+      });
+      this.normalizationMeter = node;
+      node.port.onmessage = ({ data }) => {
+        if (node !== this.normalizationMeter || !this.normalizationEnabled ||
+            data?.epoch !== this.normalizationEpoch || this.normalizationTrack === null ||
+            !Number.isFinite(data.gain) || data.gain < 0.125 || data.gain > 1) return;
+        const provisional = data.provisional === true;
+        if (!provisional) this.normalizationEstimateReady = true;
+        this.normalizationGain.gain.setTargetAtTime(data.gain, context.currentTime, provisional ? 0.15 : 0.6);
+      };
+      node.onprocessorerror = () => {
+        if (this.normalizationMeter === node) this.failNormalization(new Error('Loudness meter failed'));
+      };
+      node.port.postMessage({ type: 'reset', epoch: this.normalizationTrack === null ? null : this.normalizationEpoch });
+      this.source.connect(node);
+      node.connect(context.destination); // Worklet output is always zero.
+      this.normalizationError = null;
+      window.dispatchEvent(new Event('panedora-normalization-status'));
+    } catch (error) {
+      this.normalizationModule = null;
+      if (this.normalizationEnabled) this.failNormalization(error);
+    }
+  }
+
+  stopNormalizationMeter() {
+    const node = this.normalizationMeter;
+    this.normalizationMeter = null;
+    this.normalizationEstimateReady = false;
+    this.normalizationSeekPending = false;
+    if (!node) return;
+    node.port.onmessage = null;
+    node.onprocessorerror = null;
+    try { this.source.disconnect(node); } catch { /* Already disconnected */ }
+    try { node.disconnect(); } catch { /* Already disconnected */ }
+    node.port.close();
+  }
+
+  resetNormalizationGain(immediate) {
+    if (!this.normalizationGain) return;
+    const param = this.normalizationGain.gain;
+    const now = this.audioContext.currentTime;
+    param.cancelScheduledValues(now);
+    if (immediate) param.setValueAtTime(1, now);
+    else param.setTargetAtTime(1, now, 0.25);
+  }
+
+  failNormalization(error) {
+    this.stopNormalizationMeter();
+    this.resetNormalizationGain(false);
+    this.normalizationError = 'Volume normalization is unavailable; original audio is playing.';
+    console.warn('[Audio] Normalization unavailable:', error);
+    window.dispatchEvent(new Event('panedora-normalization-status'));
+  }
+
+  setNormalizationEnabled(enabled) {
+    if (this.normalizationEnabled === enabled) return;
+    this.normalizationEnabled = enabled;
+    this.normalizationEpoch++;
+    this.normalizationError = null;
+    if (enabled) void this.startNormalizationMeter();
+    else {
+      this.stopNormalizationMeter();
+      this.resetNormalizationGain(false);
+    }
+  }
+
+  setNormalizationTrack(token) {
+    if (token === this.normalizationTrack) return; // Recovery of the same track preserves gain.
+    this.normalizationTrack = token ?? null;
+    this.normalizationEpoch++;
+    this.normalizationEstimateReady = false;
+    this.normalizationSeekPending = false;
+    this.resetNormalizationGain(true);
+    this.normalizationMeter?.port.postMessage({
+      type: 'reset', epoch: this.normalizationTrack === null ? null : this.normalizationEpoch
+    });
+  }
+
+  beginNormalizationSeek() {
+    if (!this.normalizationMeter || this.normalizationTrack === null ||
+        this.normalizationEstimateReady || this.normalizationSeekPending) return;
+    this.normalizationSeekPending = true;
+    this.normalizationEpoch++;
+    this.normalizationMeter.port.postMessage({ type: 'reset', epoch: null });
+    this.normalizationGain.gain.setTargetAtTime(10 ** (-6 / 20), this.audioContext.currentTime, 0.02);
+  }
+
+  finishNormalizationSeek() {
+    if (!this.normalizationSeekPending) return;
+    this.normalizationSeekPending = false;
+    this.normalizationMeter.port.postMessage({ type: 'reset', epoch: this.normalizationEpoch, afterSeek: true });
   }
 
   start(canvasElement, style = 'bars') {
@@ -72,8 +191,7 @@ class AudioVisualizer {
       return;
     }
 
-    // Each new song calls start again. Release the previous frame and
-    // resize listener before starting another rendering loop.
+    // Release the previous frame and resize listener before restarting.
     this.stop();
 
     this.canvas = canvasElement;

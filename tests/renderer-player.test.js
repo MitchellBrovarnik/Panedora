@@ -35,11 +35,17 @@ function setup({ deferPlay = false, withDiscord = false, volume } = {}) {
     const playRequests = [];
     const toasts = [];
     const discordReports = [];
+    const notificationReports = [];
     const catalogReports = [];
     const timers = new Set();
     const testWindow = { addEventListener() {} };
     let visualizerInits = 0;
-    testWindow.visualizer = { init() { visualizerInits++; } };
+    const normalizationSeeks = [];
+    testWindow.visualizer = {
+        init() { visualizerInits++; },
+        beginNormalizationSeek() { normalizationSeeks.push('begin'); },
+        finishNormalizationSeek() { normalizationSeeks.push('finish'); }
+    };
     const mediaActions = new Map();
     const document = {
         getElementById: id => {
@@ -75,6 +81,7 @@ function setup({ deferPlay = false, withDiscord = false, volume } = {}) {
             next: async expected => { nextRequests.push(expected); } },
         onState: listener => { onState = listener; },
         onMiniMode: listener => { onMiniMode = listener; },
+        notifications: { reportPlayback: value => notificationReports.push(value) },
         onCollection() {}, onSearchResults() {}, onLoginStatus() {}, onError() {}
     };
     if (withDiscord) api.discord = {
@@ -101,10 +108,28 @@ function setup({ deferPlay = false, withDiscord = false, volume } = {}) {
         get audio() { return audio; },
         get resumeRequests() { return resumeRequests; },
         get pauseRequests() { return pauseRequests; }, get visualizerInits() { return visualizerInits; },
-        nextRequests, recoveryRequests, playRequests, timers, toasts, discordReports, catalogReports,
+        nextRequests, recoveryRequests, playRequests, timers, toasts, discordReports, notificationReports, catalogReports, normalizationSeeks,
         fireTimers: () => { for (const timer of [...timers]) { timers.delete(timer); timer.callback(); } }
     };
 }
+
+test('normalization follows the current audio seek and ignores stale seek events', () => {
+    const s = setup();
+    s.state({ isPlaying: true });
+    s.audio.seeking = false;
+    s.audio.dispatch('seeking');
+    s.audio.seeking = true;
+    s.audio.dispatch('seeking');
+    s.audio.dispatch('seeked');
+    s.audio.seeking = false;
+    s.audio.dispatch('seeked');
+    assert.deepEqual(s.normalizationSeeks, ['begin', 'finish']);
+    s.audio.seeking = true;
+    s.audio.dispatch('seeking');
+    s.audio.seeking = false;
+    s.audio.dispatch('playing');
+    assert.deepEqual(s.normalizationSeeks, ['begin', 'finish', 'begin', 'finish']);
+});
 
 test('Discord observes playing, seeking and pause without starting audio or publishing loading tracks', () => {
     const s = setup({ withDiscord: true });
@@ -129,6 +154,25 @@ test('Discord observes playing, seeking and pause without starting audio or publ
     assert.equal(s.discordReports.at(-1).paused, true);
     assert.equal(s.resumeRequests, callsBefore);
     assert.equal(s.audio.plays, 1);
+});
+
+test('notification reports distinguish buffering from a pause', () => {
+    const s = setup();
+    s.state({ isPlaying: true });
+    s.audio.dispatch('playing');
+    assert.equal(s.notificationReports.at(-1).playing, true);
+    s.audio.readyState = 2;
+    s.audio.dispatch('waiting');
+    assert.equal(s.notificationReports.at(-1).playing, false);
+    assert.equal(s.notificationReports.at(-1).interrupted, true);
+    s.state({ isPlaying: true });
+    assert.equal(s.notificationReports.at(-1).interrupted, true, 'state updates preserve the buffering status');
+    s.audio.readyState = 4;
+    s.audio.dispatch('playing');
+    assert.equal(s.notificationReports.at(-1).playing, true);
+    s.audio.pause();
+    assert.equal(s.notificationReports.at(-1).playing, false);
+    assert.equal(s.notificationReports.at(-1).interrupted, false);
 });
 
 test('Discord follows a renewed playback generation even when the current source is reused', () => {
@@ -187,6 +231,17 @@ test('normal and mini Play and Previous wait for the approved resume state', () 
     }
 });
 
+test('resuming the first buffered track initializes the audio graph', async () => {
+    const s = setup({ deferPlay: true });
+    s.state();
+    assert.equal(s.visualizerInits, 0);
+    s.state({ isPlaying: true, resumePlayback: true });
+    s.playRequests[0].resolve();
+    await new Promise(setImmediate);
+    assert.equal(s.audio.paused, false);
+    assert.equal(s.visualizerInits, 1);
+});
+
 test('a failed old song cannot auto-skip a new song or apply its late play completion', async () => {
     const s = setup({ deferPlay: true });
     s.state({ isPlaying: true });
@@ -197,10 +252,10 @@ test('a failed old song cannot auto-skip a new song or apply its late play compl
     s.state({ trackToken: 'new-track', audioURL: 'https://fixture.invalid/new.wav', isPlaying: true });
     assert.equal(s.timers.size, 0);
     s.playRequests[0].resolve();
-    await Promise.resolve();
+    await new Promise(setImmediate);
     assert.equal(s.visualizerInits, 0, 'Old play completion is ignored');
     s.playRequests[1].resolve();
-    await Promise.resolve();
+    await new Promise(setImmediate);
     assert.equal(s.visualizerInits, 1);
     s.fireTimers();
     assert.equal(s.nextRequests.length, 0);
