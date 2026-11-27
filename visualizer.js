@@ -18,6 +18,8 @@ class AudioVisualizer {
     this.normalizationMeter = null;
     this.normalizationModule = null;
     this.normalizationError = null;
+    this.normalizationEstimateReady = false;
+    this.normalizationSeekPending = false;
     this.isVisualizing = false;
     this.animationId = null;
     this.previousWaveHeights = null; // Used for ultra-smooth lerping on the wave visualizer
@@ -96,7 +98,9 @@ class AudioVisualizer {
         if (node !== this.normalizationMeter || !this.normalizationEnabled ||
             data?.epoch !== this.normalizationEpoch || this.normalizationTrack === null ||
             !Number.isFinite(data.gain) || data.gain < 0.125 || data.gain > 1) return;
-        this.normalizationGain.gain.setTargetAtTime(data.gain, context.currentTime, data.provisional === true ? 0.15 : 0.6);
+        const provisional = data.provisional === true;
+        if (!provisional) this.normalizationEstimateReady = true;
+        this.normalizationGain.gain.setTargetAtTime(data.gain, context.currentTime, provisional ? 0.15 : 0.6);
       };
       node.onprocessorerror = () => {
         if (this.normalizationMeter === node) this.failNormalization(new Error('Loudness meter failed'));
@@ -115,6 +119,8 @@ class AudioVisualizer {
   stopNormalizationMeter() {
     const node = this.normalizationMeter;
     this.normalizationMeter = null;
+    this.normalizationEstimateReady = false;
+    this.normalizationSeekPending = false;
     if (!node) return;
     node.port.onmessage = null;
     node.onprocessorerror = null;
@@ -156,10 +162,27 @@ class AudioVisualizer {
     if (token === this.normalizationTrack) return; // Recovery of the same track preserves gain.
     this.normalizationTrack = token ?? null;
     this.normalizationEpoch++;
+    this.normalizationEstimateReady = false;
+    this.normalizationSeekPending = false;
     this.resetNormalizationGain(true);
     this.normalizationMeter?.port.postMessage({
       type: 'reset', epoch: this.normalizationTrack === null ? null : this.normalizationEpoch
     });
+  }
+
+  beginNormalizationSeek() {
+    if (!this.normalizationMeter || this.normalizationTrack === null ||
+        this.normalizationEstimateReady || this.normalizationSeekPending) return;
+    this.normalizationSeekPending = true;
+    this.normalizationEpoch++;
+    this.normalizationMeter.port.postMessage({ type: 'reset', epoch: null });
+    this.normalizationGain.gain.setTargetAtTime(10 ** (-6 / 20), this.audioContext.currentTime, 0.02);
+  }
+
+  finishNormalizationSeek() {
+    if (!this.normalizationSeekPending) return;
+    this.normalizationSeekPending = false;
+    this.normalizationMeter.port.postMessage({ type: 'reset', epoch: this.normalizationEpoch, afterSeek: true });
   }
 
   start(canvasElement, style = 'bars') {

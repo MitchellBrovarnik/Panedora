@@ -3346,6 +3346,13 @@ function initAPIListeners() {
                 document.body.appendChild(currentAudio);
                 applyVolume(currentVolume, currentAudio);
 
+                currentAudio.addEventListener('seeking', () => {
+                    if (currentAudio.seeking) window.visualizer?.beginNormalizationSeek?.();
+                });
+                currentAudio.addEventListener('seeked', () => {
+                    if (!currentAudio.seeking) window.visualizer?.finishNormalizationSeek?.();
+                });
+
                 // Presence observes audio events; it never controls playback or waits on Discord.
                 for (const event of ['pause', 'ended', 'error', 'emptied', 'waiting', 'seeking']) {
                     currentAudio.addEventListener(event, () => {

@@ -58,10 +58,10 @@ class PanedoraLoudnessMeter extends AudioWorkletProcessor {
         this.coefficients = coefficients(sampleRate);
         this.reset(options?.processorOptions?.epoch ?? null);
         this.port.onmessage = ({ data }) => {
-            if (data?.type === 'reset') this.reset(data.epoch);
+            if (data?.type === 'reset') this.reset(data.epoch, data.afterSeek === true);
         };
     }
-    reset(epoch) {
+    reset(epoch, afterSeek = false) {
         this.epoch = epoch;
         this.filters = Array.from({ length: 2 }, () => this.coefficients.map(c => new Biquad(c)));
         this.hops = new Float64Array(4);
@@ -74,6 +74,7 @@ class PanedoraLoudnessMeter extends AudioWorkletProcessor {
         this.gainDb = 0;
         this.openingHops = new Float64Array(OPENING_HOPS);
         this.openingGainSent = false;
+        this.afterSeek = afterSeek;
     }
     measureOpening(hopEnergy) {
         this.openingHops[(this.hopCount - 1) % OPENING_HOPS] = hopEnergy;
@@ -82,8 +83,11 @@ class PanedoraLoudnessMeter extends AudioWorkletProcessor {
         // peak can raise the average without meeting this condition.
         const sustainedEnergy = this.openingHops.slice().sort()[OPENING_HOPS - LOUD_OPENING_HOPS];
         const measured = loudness(sustainedEnergy);
-        if (!Number.isFinite(measured) || measured < TARGET_LUFS + OPENING_THRESHOLD_LU) return;
-        const gainDb = Math.max(MIN_OPENING_GAIN_DB, TARGET_LUFS - measured);
+        if (!Number.isFinite(measured) || sustainedEnergy < ABS_GATE) return;
+        // A seek begins with temporary attenuation. Report even a quiet
+        // estimate so the renderer can lift that attenuation once audio resumes.
+        if (!this.afterSeek && measured < TARGET_LUFS + OPENING_THRESHOLD_LU) return;
+        const gainDb = Math.max(MIN_OPENING_GAIN_DB, Math.min(0, TARGET_LUFS - measured));
         this.openingGainSent = true;
         this.port.postMessage({ epoch: this.epoch, measured, gain: 10 ** (gainDb / 20), provisional: true });
     }

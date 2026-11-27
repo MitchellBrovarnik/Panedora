@@ -40,7 +40,12 @@ function setup({ deferPlay = false, withDiscord = false, volume } = {}) {
     const timers = new Set();
     const testWindow = { addEventListener() {} };
     let visualizerInits = 0;
-    testWindow.visualizer = { init() { visualizerInits++; } };
+    const normalizationSeeks = [];
+    testWindow.visualizer = {
+        init() { visualizerInits++; },
+        beginNormalizationSeek() { normalizationSeeks.push('begin'); },
+        finishNormalizationSeek() { normalizationSeeks.push('finish'); }
+    };
     const mediaActions = new Map();
     const document = {
         getElementById: id => {
@@ -103,10 +108,23 @@ function setup({ deferPlay = false, withDiscord = false, volume } = {}) {
         get audio() { return audio; },
         get resumeRequests() { return resumeRequests; },
         get pauseRequests() { return pauseRequests; }, get visualizerInits() { return visualizerInits; },
-        nextRequests, recoveryRequests, playRequests, timers, toasts, discordReports, notificationReports, catalogReports,
+        nextRequests, recoveryRequests, playRequests, timers, toasts, discordReports, notificationReports, catalogReports, normalizationSeeks,
         fireTimers: () => { for (const timer of [...timers]) { timers.delete(timer); timer.callback(); } }
     };
 }
+
+test('normalization follows the current audio seek and ignores stale seek events', () => {
+    const s = setup();
+    s.state({ isPlaying: true });
+    s.audio.seeking = false;
+    s.audio.dispatch('seeking');
+    s.audio.seeking = true;
+    s.audio.dispatch('seeking');
+    s.audio.dispatch('seeked');
+    s.audio.seeking = false;
+    s.audio.dispatch('seeked');
+    assert.deepEqual(s.normalizationSeeks, ['begin', 'finish']);
+});
 
 test('Discord observes playing, seeking and pause without starting audio or publishing loading tracks', () => {
     const s = setup({ withDiscord: true });

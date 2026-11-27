@@ -82,6 +82,18 @@ test('a quiet opening and a short loud burst leave the early gain untouched', ()
     }
 });
 
+test('after an early seek, buffering silence holds the cut and quiet audio releases it', () => {
+    const rate = 48000, meter = meterAt(rate);
+    meter.port.onmessage({ data: { type: 'reset', epoch: 2, afterSeek: true } });
+    feed(meter, rate, 1.2, 0);
+    assert.equal(meter.messages.length, 0);
+    feed(meter, rate, 0.85, 0.1, 31);
+    assert.equal(meter.messages.length, 1);
+    assert.equal(meter.messages[0].epoch, 2);
+    assert.equal(meter.messages[0].provisional, true);
+    assert.equal(meter.messages[0].gain, 1);
+});
+
 test('the full estimate can release a provisional cut when the opening settles down', () => {
     const rate = 48000, meter = meterAt(rate);
     feed(meter, rate, 3.1, t => t < 0.8 ? 0.24 : 0.14);
@@ -196,5 +208,34 @@ test('worklet load failure fails open without disturbing original volume', async
     await new Promise(setImmediate);
     assert.match(v.normalizationError, /unavailable/);
     assert.equal(v.normalizationGain.gain.value, 1);
+    assert.equal(v.gainNode.gain.value, 0.3);
+});
+
+test('a seek before the full estimate applies temporary attenuation and restarts measurement', async () => {
+    const v = audioHarness();
+    v.setNormalizationTrack('track');
+    v.setNormalizationEnabled(true);
+    v.init({ volume: 0.3 });
+    await v.normalizationModule;
+    await new Promise(setImmediate);
+    const meter = v.normalizationMeter;
+    const previousEpoch = v.normalizationEpoch;
+
+    v.beginNormalizationSeek();
+    assert.ok(Math.abs(20 * Math.log10(v.normalizationGain.gain.value) + 6) < 0.01);
+    assert.equal(meter.last.epoch, null, 'pre-seek audio is no longer measured');
+    meter.port.onmessage({ data: { epoch: previousEpoch, gain: 1 } });
+    assert.ok(v.normalizationGain.gain.value < 0.51, 'an in-flight estimate cannot cancel the cut');
+    v.finishNormalizationSeek();
+    const seekEpoch = v.normalizationEpoch;
+    assert.equal(meter.last.epoch, seekEpoch);
+    assert.equal(meter.last.afterSeek, true);
+    meter.port.onmessage({ data: { epoch: seekEpoch, gain: 1, provisional: true } });
+    assert.equal(v.normalizationGain.gain.value, 1, 'quiet audio lifts the temporary attenuation');
+    meter.port.onmessage({ data: { epoch: seekEpoch, gain: 0.8 } });
+    v.beginNormalizationSeek();
+    v.finishNormalizationSeek();
+    assert.equal(v.normalizationEpoch, seekEpoch);
+    assert.equal(v.normalizationGain.gain.value, 0.8, 'an established gain is retained across a seek');
     assert.equal(v.gainNode.gain.value, 0.3);
 });
