@@ -1504,23 +1504,21 @@ function loadSavedColorblindMode() {
 
 function loadSavedTheme() {
     const savedTheme = localStorage.getItem('panedora-theme');
-    if (savedTheme && THEMES[savedTheme]) {
+    if (savedTheme && Object.hasOwn(THEMES, savedTheme)) {
         applyTheme(savedTheme);
-    } else {
-        applyTheme('midnight'); // Default fallback
+        return 'saved';
     }
+    applyTheme('midnight');
+    return savedTheme === null ? 'missing' : 'invalid';
 }
 function loadSavedEffect() {
     const savedEffect = localStorage.getItem('panedora-effect');
-    // Ensure the effect still exists in the registry
-    if (savedEffect && BG_EFFECTS[savedEffect]) {
-        applyBgEffect(savedEffect);
-    } else {
-        applyBgEffect('waves'); // Default fallback
-    }
+    const valid = savedEffect && Object.hasOwn(BG_EFFECTS, savedEffect);
+    applyBgEffect(valid ? savedEffect : 'waves');
     // Apply saved speed
     const savedSpeed = parseFloat(localStorage.getItem('panedora-effect-speed')) || 1;
     applyEffectSpeed(savedSpeed);
+    return valid ? 'saved' : savedEffect === null ? 'missing' : 'invalid';
 }
 
 function applyEffectSpeed(speed) {
@@ -1908,6 +1906,50 @@ function bindKeyboardShortcutsSettings() {
     updateKeyboardShortcutsSettings();
 }
 
+function bindDiagnosticsSettings() {
+    const submit = document.getElementById('submit-diagnostic-log');
+    if (!submit) return;
+    const dialog = document.getElementById('diagnostics-dialog');
+    const preview = document.getElementById('diagnostics-preview');
+    const status = document.getElementById('diagnostics-status');
+    const copy = document.getElementById('diagnostics-copy');
+    const issues = document.getElementById('diagnostics-issues');
+    submit.addEventListener('click', async () => {
+        submit.disabled = true;
+        try {
+            const report = await window.api.diagnostics.report();
+            if (!submit.isConnected) return;
+            preview.value = report?.text || '';
+            document.getElementById('diagnostics-previous-exit').hidden = !report?.previousInterrupted;
+            status.textContent = report ? '' : 'The diagnostic log is unavailable.';
+            copy.disabled = !report;
+            submit.disabled = false;
+            dialog.showModal();
+        } catch {
+            showErrorToast('Could not open the diagnostic log.');
+        } finally {
+            submit.disabled = false;
+        }
+    });
+    document.getElementById('diagnostics-close').addEventListener('click', () => dialog.close());
+    copy.addEventListener('click', async () => {
+        try {
+            await navigator.clipboard.writeText(preview.value);
+            status.textContent = 'Log copied.';
+        } catch {
+            preview.focus();
+            preview.select();
+            status.textContent = 'Copy the selected text with your keyboard.';
+        }
+    });
+    issues.addEventListener('click', async () => {
+        try {
+            if (await window.api.diagnostics.openIssues()) return;
+        } catch { /* Show an actionable message below. */ }
+        status.textContent = 'Could not open GitHub Issues.';
+    });
+}
+
 function renderSettingsPage() {
     const currentTheme = AppState.currentTheme || localStorage.getItem('panedora-theme') || 'midnight';
     const currentEffect = AppState.currentEffect || localStorage.getItem('panedora-effect') || 'aurora';
@@ -2052,9 +2094,32 @@ function renderSettingsPage() {
         <p class="settings-description">Choose how the currently playing line is highlighted.</p>
         <div class="theme-grid" style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));">${lyricsStyleButtons}</div>
       </section>
+      ${window.api?.diagnostics ? `
+      <section class="settings-section">
+        <h2 class="section-title">Support</h2>
+        <div class="setting-row">
+          <p class="setting-help">Review recent app activity and share it in a GitHub issue.</p>
+          <button class="shortcut-button" id="submit-diagnostic-log" type="button">Submit diagnostic log</button>
+        </div>
+        <dialog class="stream-dialog diagnostics-dialog" id="diagnostics-dialog" aria-labelledby="diagnostics-title" aria-describedby="diagnostics-description">
+          <div class="stream-dialog-copy">
+            <h2 id="diagnostics-title">Diagnostic log</h2>
+            <p id="diagnostics-description">Review the log before copying it into a GitHub issue.</p>
+            <p id="diagnostics-previous-exit" hidden>The previous session ended unexpectedly.</p>
+            <textarea id="diagnostics-preview" aria-label="Diagnostic log contents" rows="9" readonly spellcheck="false"></textarea>
+            <p class="stream-dialog-status" id="diagnostics-status" role="status"></p>
+          </div>
+          <div class="stream-dialog-actions">
+            <button class="stream-dialog-secondary" id="diagnostics-close" type="button" autofocus>Close</button>
+            <button class="stream-dialog-secondary" id="diagnostics-issues" type="button">Open GitHub Issues</button>
+            <button class="stream-dialog-primary" id="diagnostics-copy" type="button">Copy log</button>
+          </div>
+        </dialog>
+      </section>` : ''}
     </div>`;
 
     bindKeyboardShortcutsSettings();
+    bindDiagnosticsSettings();
 
     document.getElementById('colorblind-mode').addEventListener('change', event => {
         applyColorblindMode(event.target.value);
@@ -2139,6 +2204,7 @@ function renderSettingsPage() {
         btn.addEventListener('click', () => {
             const themeId = btn.dataset.theme;
             applyTheme(themeId);
+            window.api.diagnostics?.reportAppearance({ changed: 'theme' });
             renderSettingsPage();
         });
     });
@@ -2148,6 +2214,7 @@ function renderSettingsPage() {
         btn.addEventListener('click', () => {
             const effectId = btn.dataset.effect;
             applyBgEffect(effectId);
+            window.api.diagnostics?.reportAppearance({ changed: 'effect' });
             renderSettingsPage();
         });
     });
@@ -4240,9 +4307,15 @@ async function init() {
     }, true);
 
     // Restore saved theme and effect before rendering
-    loadSavedTheme();
-    loadSavedColorblindMode();
-    loadSavedEffect();
+    let theme = 'unavailable';
+    let effect = 'unavailable';
+    try {
+        theme = loadSavedTheme();
+        loadSavedColorblindMode();
+        effect = loadSavedEffect();
+    } finally {
+        window.api.diagnostics?.reportAppearance({ theme, effect });
+    }
 
     initEventListeners();
     initAPIListeners();
