@@ -2,11 +2,12 @@
 
 // Stereo K-weighted, gated loudness estimate based on ITU-R BS.1770.
 // https://www.itu.int/rec/R-REC-BS.1770
-// The first 20 seconds of non-silent measurement are used, not the full song.
+// Estimate loudness from the latest 10 seconds of gated measurement throughout the track.
 // Never amplify: without a full-track true-peak scan, future peaks are unknown.
 const TARGET_LUFS = -18;
 const MIN_GAIN_DB = -18;
 const ABS_GATE = 10 ** ((-70 + 0.691) / 10);
+const WINDOW_BLOCKS = 100;
 const loudness = energy => -0.691 + 10 * Math.log10(energy);
 
 function coefficients(rate) {
@@ -64,13 +65,13 @@ class PanedoraLoudnessMeter extends AudioWorkletProcessor {
         this.frames = 0;
         this.energy = 0;
         this.blocks = [];
+        this.blockCount = 0;
         this.gainDb = 0;
-        this.done = epoch === null;
     }
     process(inputs) {
         // Sidechain only: the untouched, zero-filled output is never audible.
         const channels = inputs[0];
-        if (this.done || !channels?.length || !channels[0]?.length) return true;
+        if (this.epoch === null || !channels?.length || !channels[0]?.length) return true;
         const left = channels[0], right = channels[1] || left;
         const l = this.filters[0], r = this.filters[1];
         for (let i = 0; i < left.length; i++) {
@@ -85,16 +86,14 @@ class PanedoraLoudnessMeter extends AudioWorkletProcessor {
             if (++this.hopCount < 4) continue;
             const block = (this.hops[0] + this.hops[1] + this.hops[2] + this.hops[3]) / 4;
             if (!Number.isFinite(block) || block < ABS_GATE) continue;
-            this.blocks.push(block);
-            const n = this.blocks.length;
+            this.blocks[this.blockCount % WINDOW_BLOCKS] = block;
+            const n = ++this.blockCount;
             // Require ~3 seconds of gated audio; update once per second.
             // Only decrease gain while learning, so quiet passages cannot pump it back up.
             if (n >= 27 && (n === 27 || n % 10 === 0)) {
                 const measured = loudness(gatedEnergy(this.blocks));
                 this.gainDb = Math.min(this.gainDb, Math.max(MIN_GAIN_DB, Math.min(0, TARGET_LUFS - measured)));
-                this.done = n >= 200;
-                this.port.postMessage({ epoch: this.epoch, measured, gain: 10 ** (this.gainDb / 20), done: this.done });
-                if (this.done) break;
+                this.port.postMessage({ epoch: this.epoch, measured, gain: 10 ** (this.gainDb / 20) });
             }
         }
         return true;

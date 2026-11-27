@@ -1,5 +1,9 @@
 'use strict';
 
+function samePlayback(a, b) {
+    return !!a && !!b && a.trackToken === b.trackToken && a.playbackGeneration === b.playbackGeneration;
+}
+
 // The main process owns notification eligibility and deduplication. Renderer
 // reports prove that audio has started; they never supply notification content.
 class SongNotifications {
@@ -7,29 +11,37 @@ class SongNotifications {
         Object.assign(this, { enabled, getState, canShow, loadArtwork, show, delay, onError });
         this.lastToken = null;
         this.pending = null;
+        this.interruptedPlayback = null;
         this.active = null;
     }
 
     matches(report, state = this.getState()) {
         return !!state?.trackToken && !!state.audioURL && state.isPlaying &&
             !state.streamBlocked && !state.stationLoading &&
-            report?.trackToken === state.trackToken &&
-            report.playbackGeneration === state.playbackGeneration;
+            samePlayback(report, state);
     }
 
     report(report) {
         const state = this.getState();
         if (!report || typeof report.playing !== 'boolean') return false;
         if (!report.playing) {
-            if (this.pending && report.trackToken === this.pending.report.trackToken &&
-                report.playbackGeneration === this.pending.report.playbackGeneration) this.cancelPending();
+            if (samePlayback(report, this.pending?.report)) {
+                // Buffering can interrupt the delay or artwork load. Retry only
+                // when this same playback becomes audible again.
+                this.interruptedPlayback = report.interrupted === true && this.eligible(this.pending)
+                    ? this.pending.report : null;
+                this.cancelPending();
+            } else if (report.interrupted !== true && samePlayback(report, this.interruptedPlayback)) {
+                this.interruptedPlayback = null;
+            }
             return false;
         }
-        if (!this.matches(report, state) || state.trackToken === this.lastToken) return false;
+        if (!this.matches(report, state)) return false;
+        if (state.trackToken === this.lastToken && !samePlayback(report, this.interruptedPlayback)) return false;
         // Consume even in foreground or while disabled: resuming, enabling the
         // preference or moving the window later must never announce an old song.
         this.lastToken = state.trackToken;
-        this.cancelPending();
+        this.invalidate();
         this.closeActive();
         if (!this.enabled() || !this.canShow()) return false;
         const pending = { report: { trackToken: state.trackToken, playbackGeneration: state.playbackGeneration }, controller: new AbortController() };
@@ -77,7 +89,10 @@ class SongNotifications {
         try { active?.close(); } catch { /* native service may have already dismissed it */ }
     }
 
-    invalidate() { this.cancelPending(); }
+    invalidate() {
+        this.interruptedPlayback = null;
+        this.cancelPending();
+    }
     dispose() { this.invalidate(); this.closeActive(); }
 }
 

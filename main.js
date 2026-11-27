@@ -114,6 +114,7 @@ function createUIWindow() {
     uiWindow.on('blur', () => keyboardShortcuts?.record(null));
     uiWindow.loadFile(path.join(__dirname, 'index.html'));
     uiWindow.on('focus', () => {
+        songNotifications?.invalidate();
         if (app.isPackaged) void updateChecker?.check();
     });
 

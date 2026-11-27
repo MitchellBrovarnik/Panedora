@@ -257,8 +257,7 @@ class AudioVisualizer {
       return;
     }
 
-    // Each new song calls start again. Release the previous frame and
-    // resize listener before starting another rendering loop.
+    // Release the previous frame and resize listener before restarting.
     this.stop();
 
     this.canvas = canvasElement;
@@ -2016,7 +2015,7 @@ function renderSettingsPage() {
         <div class="setting-row">
           <div>
             <label class="setting-label" for="normalize-volume-toggle">Normalize volume</label>
-            <p class="setting-help" id="normalize-volume-description">Gradually reduce louder tracks for more consistent listening. Learns from the beginning of each song without boosting quiet recordings or changing your volume slider.</p>
+            <p class="setting-help" id="normalize-volume-description">Gradually reduce loud tracks for more consistent listening. Measures loudness during playback without boosting quiet recordings or changing your volume slider.</p>
             <p class="setting-help" id="normalize-volume-status" role="status"></p>
           </div>
           <input class="setting-toggle" id="normalize-volume-toggle" type="checkbox" role="switch" aria-describedby="normalize-volume-description normalize-volume-status">
@@ -3739,19 +3738,21 @@ function initAPIListeners() {
         if (!currentAudio || currentAudioToken !== AppState.playerState.trackToken ||
             currentAudioGeneration !== AppState.playerState.playbackGeneration) return;
         lastDiscordReport = Date.now();
+        const hasSource = !!currentAudio.getAttribute('src') && !currentAudio.ended && !currentAudio.error &&
+            !AppState.playerState.streamBlocked;
         const report = {
             trackToken: currentAudioToken,
             playbackGeneration: currentAudioGeneration,
-            playing: discordAudioPlaying && !currentAudio.paused && !currentAudio.ended && !currentAudio.error &&
-                !!currentAudio.getAttribute('src') && !AppState.playerState.streamBlocked,
-            paused: discordHasPlayed && currentAudio.paused && !currentAudio.ended && !currentAudio.error &&
-                !!currentAudio.getAttribute('src') && !AppState.playerState.streamBlocked,
+            playing: discordAudioPlaying && !currentAudio.paused && hasSource,
+            paused: discordHasPlayed && currentAudio.paused && hasSource,
             position: Number.isFinite(currentAudio.currentTime) ? currentAudio.currentTime : 0,
             duration: Number.isFinite(currentAudio.duration) ? currentAudio.duration : 0
         };
         window.api.discord?.reportPlayback(report);
         window.api.notifications?.reportPlayback({ trackToken: report.trackToken,
-            playbackGeneration: report.playbackGeneration, playing: report.playing });
+            playbackGeneration: report.playbackGeneration, playing: report.playing,
+            interrupted: !report.playing && hasSource && !currentAudio.paused && currentAudio.readyState > 0 &&
+                AppState.playerState.isPlaying });
     };
     let consecutiveErrors = 0; // Prevent chain-skipping on stale/expired URLs
     let audioRevision = 0;
@@ -3769,6 +3770,24 @@ function initAPIListeners() {
         consecutiveErrors = 0;
         freshPlaylistTried = false;
         failedAudioRevision = null;
+    };
+    const playAudio = async () => {
+        const revision = audioRevision;
+        try {
+            await currentAudio.play();
+            if (revision !== audioRevision || currentAudio.paused) return;
+            playbackSucceeded();
+
+            const visualizer = window.visualizer;
+            if (!visualizer) return;
+            visualizer.init(currentAudio);
+            if (!visualizer.isVisualizing && AppState.currentEffect?.startsWith('reactive-')) {
+                const canvas = document.getElementById('reactive-canvas');
+                if (canvas) visualizer.start(canvas, AppState.currentEffect.replace('reactive-', ''));
+            }
+        } catch (error) {
+            if (revision === audioRevision && error.name !== 'AbortError') console.error('[UI] Play error:', error);
+        }
     };
     const stopRecovery = () => {
         cancelRecovery();
@@ -3965,7 +3984,7 @@ function initAPIListeners() {
             // at the beginning, while ordinary state updates preserve position.
             if (currentAudio.src !== state.audioURL || currentAudioToken !== state.trackToken || state.reloadAudio) {
                 console.log('[UI] Loading new audio source');
-                const revision = ++audioRevision;
+                audioRevision++;
                 cancelRecovery();
                 currentAudioToken = state.trackToken;
                 currentAudioGeneration = state.playbackGeneration;
@@ -3979,23 +3998,7 @@ function initAPIListeners() {
                 currentAudio.src = state.audioURL;
                 window.visualizer?.setNormalizationTrack?.(state.trackToken);
                 if (state.resumeAt > 0 && state.catalogCanSeek) currentAudio.currentTime = state.resumeAt;
-                if (state.isPlaying !== false) currentAudio.play().then(() => {
-                    if (revision !== audioRevision || currentAudio.paused) return;
-                    playbackSucceeded();
-
-                    // Web Audio API requires a user gesture. This is a safe place to init.
-                    if (window.visualizer) {
-                        window.visualizer.init(currentAudio);
-                        // If they have the reactive theme already selected, start it up!
-                        if (AppState.currentEffect && AppState.currentEffect.startsWith('reactive-')) {
-                            const cvs = document.getElementById('reactive-canvas');
-                            const styleName = AppState.currentEffect.replace('reactive-', '');
-                            if (cvs) window.visualizer.start(cvs, styleName);
-                        }
-                    }
-                }).catch(e => {
-                    if (revision === audioRevision && e.name !== 'AbortError') console.error('[UI] Play error:', e);
-                });
+                if (state.isPlaying !== false) void playAudio();
 
                 // Update OS media session metadata (shows in Windows taskbar, lock screen, etc.)
                 if ('mediaSession' in navigator) {
@@ -4015,7 +4018,7 @@ function initAPIListeners() {
                     // A terminal media error need not fire again when play() is
                     // retried. An approved user resume explicitly retries fresh URLs.
                     if (currentAudio.error) requestFreshPlaylist();
-                    else currentAudio.play().catch(e => console.error('[UI] Resume error:', e));
+                    else void playAudio();
                 }
                 if (discordHasPlayed) reportDiscordPlayback();
             }

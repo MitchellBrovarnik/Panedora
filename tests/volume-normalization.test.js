@@ -43,11 +43,9 @@ for (const rate of [44100, 48000]) {
         // 997 Hz dual-mono tone: BS.1770 calibration; FFmpeg ebur128 reports -6.0 LUFS.
         assert.ok(Math.abs(last.measured - (-6.0206)) < 0.05);
         assert.ok(Math.abs(last.measured + 20 * Math.log10(last.gain) - (-18)) < 0.05);
-        assert.equal(last.done, true);
         assert.ok(loud.messages.every(message => message.gain <= 1 && message.gain >= 10 ** (-18 / 20)));
-        const count = loud.messages.length;
         feed(loud, rate, 5, 1);
-        assert.equal(loud.messages.length, count, 'steady gain after learning');
+        assert.ok(loud.messages.at(-1).gain < last.gain, 'meter still responds to louder audio later in the song');
 
         const quiet = meterAt(rate);
         feed(quiet, rate, 21, 0.1);
@@ -55,6 +53,18 @@ for (const rate of [44100, 48000]) {
         assert.ok(quiet.messages.every(message => message.gain === 1), 'never boosts a quiet master');
     });
 }
+
+test('a long quiet intro cannot freeze normalization before the loud section', () => {
+    const rate = 48000, meter = meterAt(rate);
+    feed(meter, rate, 22, 0.1);
+    assert.ok(meter.messages.length > 0);
+    assert.ok(meter.messages.every(message => message.gain === 1));
+    feed(meter, rate, 6, 0.5, 22);
+    const loud = meter.messages.at(-1);
+    assert.ok(Math.abs(loud.measured + 20 * Math.log10(loud.gain) - (-18)) < 0.05);
+    assert.ok(loud.gain < 0.3);
+    assert.ok(meter.blocks.length <= 100, 'meter keeps a bounded measurement window');
+});
 
 test('silence does not produce a gain estimate, and quieter passages cannot pump gain up', () => {
     const rate = 48000, meter = meterAt(rate);
