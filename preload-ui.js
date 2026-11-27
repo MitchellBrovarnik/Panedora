@@ -26,6 +26,11 @@ contextBridge.exposeInMainWorld('api', {
     // App Lifecycle
     // ========================================
     init: () => ipcRenderer.invoke('APP:INIT'),
+    diagnostics: {
+        report: () => ipcRenderer.invoke('DIAGNOSTICS:REPORT'),
+        openIssues: () => ipcRenderer.invoke('DIAGNOSTICS:OPEN_ISSUES'),
+        reportAppearance: report => { void ipcRenderer.invoke('DIAGNOSTICS:APPEARANCE', report).catch(() => {}); }
+    },
     updates: {
         check: () => ipcRenderer.invoke('APP:CHECK_UPDATES'),
         respond: (version, action) => ipcRenderer.invoke('APP:UPDATE_RESPONSE', { version, action })

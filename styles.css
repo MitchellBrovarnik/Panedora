@@ -2674,6 +2674,21 @@ body.mini-mode:not(.classic-mini) .volume-popover {
 .stream-dialog button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .stream-dialog button:disabled { opacity: 0.55; cursor: default; }
 
+.diagnostics-dialog { width: min(600px, calc(100vw - 40px)); }
+.diagnostics-dialog textarea {
+    display: block;
+    width: 100%;
+    margin-top: 12px;
+    padding: 10px;
+    border: 1px solid var(--glass-border-hover);
+    border-radius: 10px;
+    background: var(--glass);
+    color: var(--text-1);
+    font: 12px/1.5 monospace;
+    resize: vertical;
+}
+.diagnostics-dialog .stream-dialog-actions { flex-wrap: wrap; }
+
 .station-remove-dialog { width: min(360px, calc(100vw - 32px)); padding: 18px; border-radius: 16px; }
 .station-remove-dialog h2 { padding-right: 22px; font-size: 18px; }
 .station-remove-dialog .stream-dialog-copy p { margin-top: 8px; line-height: 1.5; }
