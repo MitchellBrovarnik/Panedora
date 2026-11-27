@@ -265,6 +265,12 @@ app.whenReady().then(async () => {
             super({ ...options, clientId, rpc: new DiscordRpc({ clientId, paths: [discordServer.socketPath] }) });
         }
     };
+    const diagnosticsDir = path.join(testData, 'diagnostics');
+    const earlier = new Date(Date.now() - 60000);
+    fs.mkdirSync(diagnosticsDir);
+    fs.writeFileSync(path.join(diagnosticsDir, `${earlier.getTime()}-00000000-0000-0000-0000-000000000000.json`),
+        JSON.stringify({ pid: 0, startedAt: earlier.toISOString(), closedAt: null,
+            events: [{ at: earlier.toISOString(), event: 'Window became unresponsive' }] }));
     require('../main');
     updates.UpdateChecker = RealUpdateChecker;
     discord.DiscordPresence = RealPresence;
@@ -1125,6 +1131,15 @@ app.whenReady().then(async () => {
     }
 
     await waitFor(() => run("!!document.getElementById('login-form')"), 'login UI');
+    await waitFor(() => run("!document.getElementById('diagnostics-notice').hidden"), 'startup diagnostics notice');
+    await run("document.getElementById('diagnostics-review').click()");
+    await waitFor(() => run("document.getElementById('diagnostics-dialog').open"), 'diagnostic preview from startup notice');
+    assert.equal(await run("document.getElementById('diagnostics-previous-exit').hidden"), false);
+    const previousReport = JSON.parse(await run("document.getElementById('diagnostics-preview').value"));
+    assert.ok(previousReport.sessions[0].events.some(event => event.event === 'Window became unresponsive'));
+    await run("document.getElementById('diagnostics-close').click()");
+    assert.ok(await run("document.getElementById('diagnostics-notice').hidden"));
+    assert.equal(await run('window.api.diagnostics.takeStartupNotice()'), false);
     await waitFor(() => run("!document.getElementById('update-banner').hidden"), 'new release banner');
     await run('document.fonts.ready');
     assert.equal(await run("document.fonts.check('16px Inter')"), true, 'App uses the bundled font');

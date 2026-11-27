@@ -28,6 +28,7 @@ class Diagnostics {
             closedAt: null, events: []
         };
         this.previousInterrupted = false;
+        this.startupNoticeShown = false;
         try {
             fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
             const previous = this.files().map(file => this.read(file))
@@ -81,6 +82,12 @@ class Diagnostics {
     close() {
         this.session.closedAt = new Date().toISOString();
         this.save();
+    }
+
+    takeStartupNotice() {
+        if (!this.previousInterrupted || this.startupNoticeShown) return false;
+        this.startupNoticeShown = true;
+        return true;
     }
 
     report() {
