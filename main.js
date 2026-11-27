@@ -130,6 +130,7 @@ function createUIWindow() {
     uiWindow.on('resize', scheduleMiniBoundsSave);
     uiWindow.on('close', saveMiniBoundsNow);
     if (process.platform === 'win32') {
+        uiWindow.on('session-end', () => diagnostics?.close());
         // Windows supplies an end-of-drag event. Wait for release so dragging
         // across monitors never gets interrupted by the screen-edge correction.
         uiWindow.on('will-move', beginMiniPlayerMove);
@@ -1135,6 +1136,8 @@ function isAppRenderer(event) {
 }
 
 ipcMain.handle('DIAGNOSTICS:REPORT', event => isAppRenderer(event) ? diagnostics?.report() : null);
+ipcMain.handle('DIAGNOSTICS:STARTUP_NOTICE', event =>
+    isAppRenderer(event) && diagnostics?.takeStartupNotice() === true);
 ipcMain.handle('DIAGNOSTICS:OPEN_ISSUES', async event => {
     if (!isAppRenderer(event)) return false;
     await shell.openExternal('https://github.com/MitchellBrovarnik/Panedora/issues');
@@ -1635,6 +1638,7 @@ app.whenReady().then(() => {
     });
     powerMonitor.on('suspend', () => diagnostics.record('Computer suspended'));
     powerMonitor.on('resume', () => diagnostics.record('Computer resumed'));
+    powerMonitor.on('shutdown', () => diagnostics.close());
     if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? 'com.panedora.app' : process.execPath);
     songNotifications = new SongNotifications({
         enabled: config.getSongNotificationsEnabled,

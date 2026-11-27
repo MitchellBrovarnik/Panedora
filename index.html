@@ -139,6 +139,11 @@
             </header>
 
             <div class="main-scroll" id="main-scroll">
+                <aside class="diagnostics-notice" id="diagnostics-notice" aria-label="Previous Panedora session" hidden>
+                    <p role="status">Panedora may have closed unexpectedly. You can review the log and share it in a GitHub issue.</p>
+                    <button class="shortcut-button" id="diagnostics-review" type="button">Review log</button>
+                    <button class="shortcut-button" id="diagnostics-dismiss" type="button">Dismiss</button>
+                </aside>
                 <!-- Dynamic content rendered here -->
                 <div id="page-content">
                     <div class="welcome-container">
@@ -358,6 +363,21 @@
         <div class="stream-dialog-actions">
             <button class="stream-dialog-secondary" id="station-remove-cancel" type="button" autofocus>Cancel</button>
             <button class="station-remove-confirm" id="station-remove-confirm" type="button">Remove station</button>
+        </div>
+    </dialog>
+
+    <dialog class="stream-dialog diagnostics-dialog" id="diagnostics-dialog" aria-labelledby="diagnostics-title" aria-describedby="diagnostics-description">
+        <div class="stream-dialog-copy">
+            <h2 id="diagnostics-title">Diagnostic log</h2>
+            <p id="diagnostics-description">Review the log before copying it into a GitHub issue.</p>
+            <p id="diagnostics-previous-exit" hidden>The previous session may have ended unexpectedly.</p>
+            <textarea id="diagnostics-preview" aria-label="Diagnostic log contents" rows="9" readonly spellcheck="false"></textarea>
+            <p class="stream-dialog-status" id="diagnostics-status" role="status"></p>
+        </div>
+        <div class="stream-dialog-actions">
+            <button class="stream-dialog-secondary" id="diagnostics-close" type="button" autofocus>Close</button>
+            <button class="stream-dialog-secondary" id="diagnostics-issues" type="button">Open GitHub Issues</button>
+            <button class="stream-dialog-primary" id="diagnostics-copy" type="button">Copy log</button>
         </div>
     </dialog>
 

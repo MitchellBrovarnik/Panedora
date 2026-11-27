@@ -1352,31 +1352,37 @@ function bindKeyboardShortcutsSettings() {
     updateKeyboardShortcutsSettings();
 }
 
-function bindDiagnosticsSettings() {
-    const submit = document.getElementById('submit-diagnostic-log');
-    if (!submit) return;
+async function openDiagnosticLog() {
     const dialog = document.getElementById('diagnostics-dialog');
+    if (dialog.open || dialog.getAttribute('aria-busy') === 'true') return;
+    dialog.setAttribute('aria-busy', 'true');
+    try {
+        const report = await window.api.diagnostics.report();
+        document.getElementById('diagnostics-preview').value = report?.text || '';
+        document.getElementById('diagnostics-previous-exit').hidden = !report?.previousInterrupted;
+        document.getElementById('diagnostics-status').textContent = report ? '' : 'The diagnostic log is unavailable.';
+        document.getElementById('diagnostics-copy').disabled = !report;
+        dialog.showModal();
+        document.getElementById('diagnostics-notice').hidden = true;
+    } catch {
+        showErrorToast('Could not open the diagnostic log.');
+    } finally {
+        dialog.removeAttribute('aria-busy');
+    }
+}
+
+function initDiagnostics() {
+    const api = window.api?.diagnostics;
+    if (!api) return;
+    const dialog = document.getElementById('diagnostics-dialog');
+    const notice = document.getElementById('diagnostics-notice');
     const preview = document.getElementById('diagnostics-preview');
     const status = document.getElementById('diagnostics-status');
     const copy = document.getElementById('diagnostics-copy');
     const issues = document.getElementById('diagnostics-issues');
-    submit.addEventListener('click', async () => {
-        submit.disabled = true;
-        try {
-            const report = await window.api.diagnostics.report();
-            if (!submit.isConnected) return;
-            preview.value = report?.text || '';
-            document.getElementById('diagnostics-previous-exit').hidden = !report?.previousInterrupted;
-            status.textContent = report ? '' : 'The diagnostic log is unavailable.';
-            copy.disabled = !report;
-            submit.disabled = false;
-            dialog.showModal();
-        } catch {
-            showErrorToast('Could not open the diagnostic log.');
-        } finally {
-            submit.disabled = false;
-        }
-    });
+    document.getElementById('diagnostics-review').addEventListener('click', openDiagnosticLog);
+    document.getElementById('diagnostics-dismiss').addEventListener('click', () => { notice.hidden = true; });
+    void api.takeStartupNotice().then(show => { notice.hidden = !show; }).catch(() => {});
     document.getElementById('diagnostics-close').addEventListener('click', () => dialog.close());
     copy.addEventListener('click', async () => {
         try {
@@ -1390,7 +1396,7 @@ function bindDiagnosticsSettings() {
     });
     issues.addEventListener('click', async () => {
         try {
-            if (await window.api.diagnostics.openIssues()) return;
+            if (await api.openIssues()) return;
         } catch { /* Show an actionable message below. */ }
         status.textContent = 'Could not open GitHub Issues.';
     });
@@ -1535,25 +1541,11 @@ function renderSettingsPage() {
           <p class="setting-help">Review recent app activity and share it in a GitHub issue.</p>
           <button class="shortcut-button" id="submit-diagnostic-log" type="button">Submit diagnostic log</button>
         </div>
-        <dialog class="stream-dialog diagnostics-dialog" id="diagnostics-dialog" aria-labelledby="diagnostics-title" aria-describedby="diagnostics-description">
-          <div class="stream-dialog-copy">
-            <h2 id="diagnostics-title">Diagnostic log</h2>
-            <p id="diagnostics-description">Review the log before copying it into a GitHub issue.</p>
-            <p id="diagnostics-previous-exit" hidden>The previous session ended unexpectedly.</p>
-            <textarea id="diagnostics-preview" aria-label="Diagnostic log contents" rows="9" readonly spellcheck="false"></textarea>
-            <p class="stream-dialog-status" id="diagnostics-status" role="status"></p>
-          </div>
-          <div class="stream-dialog-actions">
-            <button class="stream-dialog-secondary" id="diagnostics-close" type="button" autofocus>Close</button>
-            <button class="stream-dialog-secondary" id="diagnostics-issues" type="button">Open GitHub Issues</button>
-            <button class="stream-dialog-primary" id="diagnostics-copy" type="button">Copy log</button>
-          </div>
-        </dialog>
       </section>` : ''}
     </div>`;
 
     bindKeyboardShortcutsSettings();
-    bindDiagnosticsSettings();
+    document.getElementById('submit-diagnostic-log')?.addEventListener('click', openDiagnosticLog);
 
     document.getElementById('colorblind-mode').addEventListener('change', event => {
         applyColorblindMode(event.target.value);
@@ -3684,6 +3676,7 @@ async function init() {
     console.log('[UI] Initializing Panedora...');
 
     applyPlatformTitlebar();
+    initDiagnostics();
 
     // Replace broken images with a dark placeholder
     document.addEventListener('error', (e) => {
