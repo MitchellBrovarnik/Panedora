@@ -124,6 +124,11 @@ test('normalization follows the current audio seek and ignores stale seek events
     s.audio.seeking = false;
     s.audio.dispatch('seeked');
     assert.deepEqual(s.normalizationSeeks, ['begin', 'finish']);
+    s.audio.seeking = true;
+    s.audio.dispatch('seeking');
+    s.audio.seeking = false;
+    s.audio.dispatch('playing');
+    assert.deepEqual(s.normalizationSeeks, ['begin', 'finish', 'begin', 'finish']);
 });
 
 test('Discord observes playing, seeking and pause without starting audio or publishing loading tracks', () => {

@@ -3349,9 +3349,12 @@ function initAPIListeners() {
                 currentAudio.addEventListener('seeking', () => {
                     if (currentAudio.seeking) window.visualizer?.beginNormalizationSeek?.();
                 });
-                currentAudio.addEventListener('seeked', () => {
+                const finishNormalizationSeek = () => {
                     if (!currentAudio.seeking) window.visualizer?.finishNormalizationSeek?.();
-                });
+                };
+                currentAudio.addEventListener('seeked', finishNormalizationSeek);
+                // A source refresh can cancel a seek and resume without a seeked event.
+                currentAudio.addEventListener('playing', finishNormalizationSeek);
 
                 // Presence observes audio events; it never controls playback or waits on Discord.
                 for (const event of ['pause', 'ended', 'error', 'emptied', 'waiting', 'seeking']) {
