@@ -28,6 +28,8 @@ test('on reopening after a force-kill, the prior session remains available for e
     current.record('Appearance restored', { theme: 'missing', effect: 'missing' });
     const report = current.report();
     assert.equal(report.previousInterrupted, true);
+    assert.equal(current.takeStartupNotice(), true);
+    assert.equal(current.takeStartupNotice(), false, 'renderer reload does not repeat the notice');
     const { sessions } = JSON.parse(report.text);
     const previous = sessions.find(session => session.events.some(event => event.event === 'Window became unresponsive'));
     assert.equal(previous.closedAt, null);
@@ -35,7 +37,9 @@ test('on reopening after a force-kill, the prior session remains available for e
     assert.ok(sessions.some(session => session.events[0]?.theme === 'missing'));
     assert.ok(sessions.every(session => !('pid' in session)));
     current.close();
-    assert.equal(new Diagnostics(directory, { version: 'fixture' }).report().previousInterrupted, false);
+    const reopenedNormally = new Diagnostics(directory, { version: 'fixture' });
+    assert.equal(reopenedNormally.report().previousInterrupted, false);
+    assert.equal(reopenedNormally.takeStartupNotice(), false);
 });
 
 test('the log retains recent sessions and events and reports clean exits', t => {
