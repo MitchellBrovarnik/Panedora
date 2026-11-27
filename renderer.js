@@ -1502,8 +1502,8 @@ function renderSettingsPage() {
         <h2 class="section-title">Playback</h2>
         <div class="setting-row">
           <div>
-            <label class="setting-label" for="normalize-volume-toggle">Normalize volume</label>
-            <p class="setting-help" id="normalize-volume-description">Gradually reduce loud tracks for more consistent listening. Measures loudness during playback without boosting quiet recordings or changing your volume slider.</p>
+            <label class="setting-label" for="normalize-volume-toggle">Normalize volume (Experimental)</label>
+            <p class="setting-help" id="normalize-volume-description">Turns down louder tracks as it measures them. The level can take a few seconds to settle after a track change.</p>
             <p class="setting-help" id="normalize-volume-status" role="status"></p>
           </div>
           <input class="setting-toggle" id="normalize-volume-toggle" type="checkbox" role="switch" aria-describedby="normalize-volume-description normalize-volume-status">
