@@ -4,10 +4,15 @@
 // https://www.itu.int/rec/R-REC-BS.1770
 // Estimate loudness from the latest 10 seconds of gated measurement throughout the track.
 // Never amplify: without a full-track true-peak scan, future peaks are unknown.
-const TARGET_LUFS = -18;
+const TARGET_LUFS = -16;
 const MIN_GAIN_DB = -18;
 const ABS_GATE = 10 ** ((-70 + 0.691) / 10);
 const WINDOW_BLOCKS = 100;
+const INITIAL_BLOCKS = 27;
+const OPENING_HOPS = 8;
+const LOUD_OPENING_HOPS = 6;
+const OPENING_THRESHOLD_LU = 3;
+const MIN_OPENING_GAIN_DB = -6;
 const loudness = energy => -0.691 + 10 * Math.log10(energy);
 
 function coefficients(rate) {
@@ -67,6 +72,20 @@ class PanedoraLoudnessMeter extends AudioWorkletProcessor {
         this.blocks = [];
         this.blockCount = 0;
         this.gainDb = 0;
+        this.openingHops = new Float64Array(OPENING_HOPS);
+        this.openingGainSent = false;
+    }
+    measureOpening(hopEnergy) {
+        this.openingHops[(this.hopCount - 1) % OPENING_HOPS] = hopEnergy;
+        if (this.hopCount < OPENING_HOPS) return;
+        // Require six loud 100 ms intervals in the last 800 ms. An isolated
+        // peak can raise the average without meeting this condition.
+        const sustainedEnergy = this.openingHops.slice().sort()[OPENING_HOPS - LOUD_OPENING_HOPS];
+        const measured = loudness(sustainedEnergy);
+        if (!Number.isFinite(measured) || measured < TARGET_LUFS + OPENING_THRESHOLD_LU) return;
+        const gainDb = Math.max(MIN_OPENING_GAIN_DB, TARGET_LUFS - measured);
+        this.openingGainSent = true;
+        this.port.postMessage({ epoch: this.epoch, measured, gain: 10 ** (gainDb / 20), provisional: true });
     }
     process(inputs) {
         // Sidechain only: the untouched, zero-filled output is never audible.
@@ -79,18 +98,22 @@ class PanedoraLoudnessMeter extends AudioWorkletProcessor {
             const b = r[1].sample(r[0].sample(right[i]));
             this.energy += a * a + b * b;
             if (++this.frames !== this.hop) continue;
-            this.hops[this.hopIndex] = this.energy / this.hop;
+            const hopEnergy = this.energy / this.hop;
+            this.hops[this.hopIndex] = hopEnergy;
             this.hopIndex = (this.hopIndex + 1) % 4;
             this.frames = 0;
             this.energy = 0;
-            if (++this.hopCount < 4) continue;
+            this.hopCount++;
+            if (!this.openingGainSent && this.blockCount < INITIAL_BLOCKS) this.measureOpening(hopEnergy);
+            if (this.hopCount < 4) continue;
             const block = (this.hops[0] + this.hops[1] + this.hops[2] + this.hops[3]) / 4;
             if (!Number.isFinite(block) || block < ABS_GATE) continue;
             this.blocks[this.blockCount % WINDOW_BLOCKS] = block;
             const n = ++this.blockCount;
             // Require ~3 seconds of gated audio; update once per second.
-            // Only decrease gain while learning, so quiet passages cannot pump it back up.
-            if (n >= 27 && (n === 27 || n % 10 === 0)) {
+            // The full estimate is independent of the provisional gain.
+            // Once established, quieter passages cannot pump this gain back up.
+            if (n >= INITIAL_BLOCKS && (n === INITIAL_BLOCKS || n % 10 === 0)) {
                 const measured = loudness(gatedEnergy(this.blocks));
                 this.gainDb = Math.min(this.gainDb, Math.max(MIN_GAIN_DB, Math.min(0, TARGET_LUFS - measured)));
                 this.port.postMessage({ epoch: this.epoch, measured, gain: 10 ** (this.gainDb / 20) });

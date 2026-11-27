@@ -849,15 +849,18 @@ app.whenReady().then(async () => {
             }
             tone.connect(meter); meter.connect(ctx.destination); tone.start();
             const output = await ctx.startRendering();
-            for (let i = 0; i < 20 && reports.length === 0; i++) await new Promise(resolve => setTimeout(resolve, 25));
+            for (let i = 0; i < 20 && reports.length < 2; i++) await new Promise(resolve => setTimeout(resolve, 25));
             const peak = Math.max(...[0, 1].map(channel => output.getChannelData(channel).reduce((max, x) => Math.max(max, Math.abs(x)), 0)));
             meter.port.close();
-            return { peak, report: reports.at(-1) };
+            return { peak, opening: reports[0], report: reports.at(-1) };
         })()`);
         assert.equal(measured.peak, 0, 'worklet sidechain emits no audible samples');
+        assert.equal(measured.opening?.epoch, 42);
+        assert.equal(measured.opening?.provisional, true);
+        assert.ok(Math.abs(20 * Math.log10(measured.opening.gain) + 6) < 0.05);
         assert.equal(measured.report?.epoch, 42);
         assert.ok(Math.abs(measured.report.measured - (-6.0206)) < 0.05);
-        assert.ok(Math.abs(measured.report.measured + 20 * Math.log10(measured.report.gain) - (-18)) < 0.05);
+        assert.ok(Math.abs(measured.report.measured + 20 * Math.log10(measured.report.gain) - (-16)) < 0.05);
         await run("document.getElementById('normalize-volume-toggle').scrollIntoView({block:'center'})");
         await capture('volume-normalization-settings');
         await run("document.getElementById('normalize-volume-toggle').click()");

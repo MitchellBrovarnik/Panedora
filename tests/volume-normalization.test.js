@@ -42,7 +42,7 @@ for (const rate of [44100, 48000]) {
         const last = loud.messages.at(-1);
         // 997 Hz dual-mono tone: BS.1770 calibration; FFmpeg ebur128 reports -6.0 LUFS.
         assert.ok(Math.abs(last.measured - (-6.0206)) < 0.05);
-        assert.ok(Math.abs(last.measured + 20 * Math.log10(last.gain) - (-18)) < 0.05);
+        assert.ok(Math.abs(last.measured + 20 * Math.log10(last.gain) - (-16)) < 0.05);
         assert.ok(loud.messages.every(message => message.gain <= 1 && message.gain >= 10 ** (-18 / 20)));
         feed(loud, rate, 5, 1);
         assert.ok(loud.messages.at(-1).gain < last.gain, 'meter still responds to louder audio later in the song');
@@ -54,6 +54,41 @@ for (const rate of [44100, 48000]) {
     });
 }
 
+test('a sustained loud opening gets a bounded correction in about 800 ms on each track', () => {
+    const rate = 48000, meter = meterAt(rate);
+    for (const epoch of [1, 2]) {
+        meter.port.onmessage({ data: { type: 'reset', epoch } });
+        meter.messages.length = 0;
+        feed(meter, rate, 0.75, 0.5);
+        assert.equal(meter.messages.length, 0);
+        feed(meter, rate, 0.1, 0.5, 0.75);
+        assert.equal(meter.messages.length, 1);
+        assert.equal(meter.messages[0].epoch, epoch);
+        assert.equal(meter.messages[0].provisional, true);
+        assert.ok(Math.abs(20 * Math.log10(meter.messages[0].gain) + 6) < 0.01);
+        feed(meter, rate, 2.25, 0.5, 0.85);
+        const full = meter.messages.at(-1);
+        assert.equal(meter.messages.filter(message => message.provisional).length, 1);
+        assert.ok(Math.abs(full.measured + 20 * Math.log10(full.gain) - (-16)) < 0.05);
+    }
+});
+
+test('a quiet opening and a short loud burst leave the early gain untouched', () => {
+    const rate = 48000;
+    for (const amplitude of [0.1, t => t >= 0.34 && t < 0.46 ? 0.9 : 0.1]) {
+        const meter = meterAt(rate);
+        feed(meter, rate, 2, amplitude);
+        assert.equal(meter.messages.length, 0);
+    }
+});
+
+test('the full estimate can release a provisional cut when the opening settles down', () => {
+    const rate = 48000, meter = meterAt(rate);
+    feed(meter, rate, 3.1, t => t < 0.8 ? 0.24 : 0.14);
+    assert.equal(meter.messages[0]?.provisional, true);
+    assert.ok(meter.messages.at(-1).gain > meter.messages[0].gain);
+});
+
 test('a long quiet intro cannot freeze normalization before the loud section', () => {
     const rate = 48000, meter = meterAt(rate);
     feed(meter, rate, 22, 0.1);
@@ -61,8 +96,8 @@ test('a long quiet intro cannot freeze normalization before the loud section', (
     assert.ok(meter.messages.every(message => message.gain === 1));
     feed(meter, rate, 6, 0.5, 22);
     const loud = meter.messages.at(-1);
-    assert.ok(Math.abs(loud.measured + 20 * Math.log10(loud.gain) - (-18)) < 0.05);
-    assert.ok(loud.gain < 0.3);
+    assert.ok(Math.abs(loud.measured + 20 * Math.log10(loud.gain) - (-16)) < 0.05);
+    assert.ok(loud.gain < 0.35);
     assert.ok(meter.blocks.length <= 100, 'meter keeps a bounded measurement window');
 });
 
@@ -93,7 +128,7 @@ function audioHarness({ fail = false } = {}) {
         const node = new Node();
         node.gain = { value: 1, cancelScheduledValues() {},
             setValueAtTime(value) { this.value = value; },
-            setTargetAtTime(value) { this.value = value; } };
+            setTargetAtTime(value, _time, timeConstant) { this.value = value; this.timeConstant = timeConstant; } };
         return node;
     }
     class AudioContext {
@@ -129,6 +164,7 @@ test('gain stages are independent, off is unity, and stale track messages are ig
     assert.ok(v.source.connections.has(meter));
     meter.port.onmessage({ data: { epoch: v.normalizationEpoch, gain: 0.25 } });
     assert.equal(v.normalizationGain.gain.value, 0.25);
+    assert.equal(v.normalizationGain.gain.timeConstant, 0.6);
     v.setVolume(0);
     assert.equal(v.gainNode.gain.value, 0, 'mute remains mute');
     assert.equal(v.normalizationGain.gain.value, 0.25);
@@ -137,11 +173,13 @@ test('gain stages are independent, off is unity, and stale track messages are ig
     assert.equal(v.normalizationGain.gain.value, 0.25, 'same-track recovery retains gain');
     v.setNormalizationTrack('b');
     assert.equal(v.normalizationGain.gain.value, 1);
-    meter.port.onmessage({ data: { epoch, gain: 0.25 } });
+    meter.port.onmessage({ data: { epoch, gain: 0.5, provisional: true } });
     assert.equal(v.normalizationGain.gain.value, 1);
     meter.port.onmessage({ data: { epoch: v.normalizationEpoch, gain: 2 } });
     assert.equal(v.normalizationGain.gain.value, 1, 'reject amplification');
-    meter.port.onmessage({ data: { epoch: v.normalizationEpoch, gain: 0.4 } });
+    meter.port.onmessage({ data: { epoch: v.normalizationEpoch, gain: 0.5, provisional: true } });
+    assert.equal(v.normalizationGain.gain.value, 0.5);
+    assert.equal(v.normalizationGain.gain.timeConstant, 0.15);
     v.setNormalizationEnabled(false);
     assert.equal(v.normalizationGain.gain.value, 1);
     assert.equal(v.gainNode.gain.value, 0);

@@ -185,7 +185,7 @@ class AudioVisualizer {
         if (node !== this.normalizationMeter || !this.normalizationEnabled ||
             data?.epoch !== this.normalizationEpoch || this.normalizationTrack === null ||
             !Number.isFinite(data.gain) || data.gain < 0.125 || data.gain > 1) return;
-        this.normalizationGain.gain.setTargetAtTime(data.gain, context.currentTime, 0.6);
+        this.normalizationGain.gain.setTargetAtTime(data.gain, context.currentTime, data.provisional === true ? 0.15 : 0.6);
       };
       node.onprocessorerror = () => {
         if (this.normalizationMeter === node) this.failNormalization(new Error('Loudness meter failed'));
