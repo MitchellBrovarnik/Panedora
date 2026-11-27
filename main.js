@@ -5,6 +5,7 @@
 
 const { app, BrowserWindow, ipcMain, screen, shell, net, powerMonitor, globalShortcut, Notification, nativeImage } = require('electron');
 const path = require('path');
+const os = require('node:os');
 // A positive, effectively unbounded dimension also works with macOS window constraints.
 const MAX_WINDOW_DIMENSION = Math.floor(0x7fffffff / 10);
 // The classic mini player: 12px margins around a 256px cover need 280px of width.
@@ -25,6 +26,7 @@ const verification = new PandoraVerification();
 const { UpdateChecker, DOWNLOAD_URL } = require('./update-checker');
 const { DiscordPresence } = require('./discord-presence');
 const { SongNotifications, canShowSongNotification } = require('./song-notifications');
+const { Diagnostics } = require('./diagnostics');
 const discordConfig = require('./discord-config.json');
 
 let uiWindow = null;
@@ -34,6 +36,10 @@ let updateResponsePending = false;
 let discordPresence = null;
 let songNotifications = null;
 let keyboardShortcuts = null;
+let diagnostics = null;
+
+const APPEARANCE_STATUSES = new Set(['saved', 'missing', 'invalid', 'unavailable']);
+const RENDERER_EXIT_REASONS = new Set(['clean-exit', 'abnormal-exit', 'killed', 'crashed', 'oom', 'launch-failed', 'integrity-failure']);
 
 // Current state
 let currentStations = [];
@@ -112,7 +118,6 @@ function createUIWindow() {
         if (!keyboardShortcuts?.recording) keyboardShortcuts?.handleInput(event, input);
     });
     uiWindow.on('blur', () => keyboardShortcuts?.record(null));
-    uiWindow.loadFile(path.join(__dirname, 'index.html'));
     uiWindow.on('focus', () => {
         if (app.isPackaged) void updateChecker?.check();
     });
@@ -155,6 +160,14 @@ function createUIWindow() {
             songNotifications?.invalidate();
         });
     }
+    uiWindow.webContents.on('did-start-loading', () => diagnostics?.record('Window started loading'));
+    uiWindow.webContents.on('render-process-gone', (_event, details) => diagnostics?.record('Renderer exited', {
+        reason: RENDERER_EXIT_REASONS.has(details.reason) ? details.reason : 'unknown',
+        exitCode: details.exitCode
+    }));
+    uiWindow.webContents.on('unresponsive', () => diagnostics?.record('Window became unresponsive'));
+    uiWindow.webContents.on('responsive', () => diagnostics?.record('Window recovered'));
+    uiWindow.loadFile(path.join(__dirname, 'index.html'));
 }
 
 // ============================================================================
@@ -1121,6 +1134,21 @@ function isAppRenderer(event) {
         (!event.senderFrame || event.senderFrame === uiWindow.webContents.mainFrame);
 }
 
+ipcMain.handle('DIAGNOSTICS:REPORT', event => isAppRenderer(event) ? diagnostics?.report() : null);
+ipcMain.handle('DIAGNOSTICS:OPEN_ISSUES', async event => {
+    if (!isAppRenderer(event)) return false;
+    await shell.openExternal('https://github.com/MitchellBrovarnik/Panedora/issues');
+    return true;
+});
+ipcMain.handle('DIAGNOSTICS:APPEARANCE', (event, report) => {
+    if (!isAppRenderer(event)) return;
+    if (APPEARANCE_STATUSES.has(report?.theme) && APPEARANCE_STATUSES.has(report?.effect)) {
+        diagnostics?.record('Appearance restored', { theme: report.theme, effect: report.effect });
+    } else if (report?.changed === 'theme' || report?.changed === 'effect') {
+        diagnostics?.record('Appearance changed', { setting: report.changed });
+    }
+});
+
 ipcMain.handle('SHORTCUTS:GET', event => isAppRenderer(event) ? keyboardShortcuts?.status() : null);
 ipcMain.handle('SHORTCUTS:RECORD', (event, action) => {
     if (!isAppRenderer(event) || !keyboardShortcuts?.record(action)) return false;
@@ -1194,6 +1222,7 @@ ipcMain.handle('APP:UPDATE_RESPONSE', async (event, { version, action } = {}) =>
 });
 
 ipcMain.handle('APP:INIT', async () => {
+    diagnostics?.record('Window initialized', { stationSelected: !!currentStation });
     // Ctrl+R replaces the renderer, but the native mini window stays open.
     // Restore its actual layout and expand control before sign-in can delay it.
     sendMiniPlayerMode();
@@ -1600,6 +1629,12 @@ async function loadNotificationArtwork(value, signal) {
 }
 
 app.whenReady().then(() => {
+    diagnostics = new Diagnostics(path.join(app.getPath('userData'), 'diagnostics'), {
+        version: app.getVersion(), electron: process.versions.electron,
+        platform: process.platform, osRelease: os.release(), architecture: process.arch
+    });
+    powerMonitor.on('suspend', () => diagnostics.record('Computer suspended'));
+    powerMonitor.on('resume', () => diagnostics.record('Computer resumed'));
     if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? 'com.panedora.app' : process.execPath);
     songNotifications = new SongNotifications({
         enabled: config.getSongNotificationsEnabled,
@@ -1728,6 +1763,8 @@ app.on('before-quit', () => {
     updateChecker?.stop();
     verification.cancel();
 });
+
+app.on('will-quit', () => diagnostics?.close());
 
 // Handle certificate errors for development only
 app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {

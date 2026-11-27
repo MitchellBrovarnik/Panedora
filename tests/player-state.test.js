@@ -75,6 +75,7 @@ function setup(config = { getRememberedShuffle: () => null, rememberShuffle() {}
             if (name === './keyboard-shortcuts') return require('../keyboard-shortcuts');
             if (name === './discord-presence') return require('../discord-presence');
             if (name === './song-notifications') return require('../song-notifications');
+            if (name === './diagnostics') return require('../diagnostics');
             if (name === './discord-config.json') return require('../discord-config.json');
             if (name === './config') return config;
             if (name === './pandora-verification') return { PandoraVerification: class { cancel() {} } };

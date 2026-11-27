@@ -1671,6 +1671,19 @@ app.whenReady().then(async () => {
     assert.equal(calls.some(c => ['fonts.googleapis.com', 'fonts.gstatic.com', 'unpkg.com'].includes(c.host)), false, 'App and website make no external font or icon requests');
     site.close();
     await exerciseBackgroundCentering('full-player');
+    // Review a locally persisted report through the real Settings and preload.
+    win.webContents.emit('unresponsive');
+    win.webContents.emit('responsive');
+    await run("renderPage('settings'); document.getElementById('submit-diagnostic-log').click()");
+    await waitFor(() => run("document.getElementById('diagnostics-dialog').open"), 'diagnostic log preview');
+    const diagnosticReport = JSON.parse(await run("document.getElementById('diagnostics-preview').value"));
+    assert.equal(diagnosticReport.format, 'Panedora diagnostics');
+    assert.ok(diagnosticReport.sessions.at(-1).events.some(event => event.event === 'Appearance restored'));
+    assert.ok(diagnosticReport.sessions.at(-1).events.some(event => event.event === 'Window initialized'));
+    assert.ok(diagnosticReport.sessions.at(-1).events.some(event => event.event === 'Window became unresponsive'));
+    assert.ok(diagnosticReport.sessions.at(-1).events.some(event => event.event === 'Window recovered'));
+    assert.doesNotMatch(JSON.stringify(diagnosticReport), /password|trackToken|https?:\/\//);
+    await run("document.getElementById('diagnostics-close').click(); renderPage('home')");
     await exerciseVolumeMemory();
     await exerciseMiniMarqueeClipping();
     await exerciseClassicMiniplayer();
