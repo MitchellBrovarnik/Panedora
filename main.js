@@ -94,6 +94,7 @@ function createUIWindow() {
         frame: false,
         transparent: true,
         backgroundColor: '#00000000', // MUST be transparent to allow CSS transparency
+        icon: process.platform === 'win32' ? path.join(__dirname, 'assets', 'icon.ico') : undefined,
         webPreferences: {
             preload: path.join(__dirname, 'preload-ui.js'),
             contextIsolation: true,
