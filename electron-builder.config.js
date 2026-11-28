@@ -13,7 +13,8 @@ module.exports = {
     nsis: {
         oneClick: false,
         allowToChangeInstallationDirectory: true,
-        installerHeaderIcon: 'dist/assets/icon.ico'
+        installerHeaderIcon: 'dist/assets/icon.ico',
+        include: 'scripts/windows-uninstall.nsh'
     },
     mac: {
         target: 'dmg',
