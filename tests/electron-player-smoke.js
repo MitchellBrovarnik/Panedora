@@ -1609,6 +1609,13 @@ app.whenReady().then(async () => {
         if (theme === 'adaptive') await waitFor(() => demoRun('window._lastExtractedArt === AppState.playerState.coverArt'), 'demo Adaptive color');
         else assert.equal(await demoRun("document.documentElement.style.getPropertyValue('--accent')"), await demoRun(`THEMES['${theme}'].vars['--accent']`));
     }
+    const sidebarTitleStyle = "getComputedStyle(document.querySelector('.sidebar-logo h1'))";
+    const titleColor = await demoRun(`${sidebarTitleStyle}.color`);
+    assert.equal(await demoRun(`${sidebarTitleStyle}.webkitTextFillColor`), titleColor, 'The sidebar title uses its solid text color');
+    assert.equal(await demoRun(`${sidebarTitleStyle}.backgroundImage`), 'none', 'The sidebar title has no text gradient');
+    await demoRun("window.api.content.playItem({ type: 'station', id: 'evening-mix' })");
+    await waitFor(() => demoRun(`document.documentElement.style.getPropertyValue('--accent').startsWith('rgb(') && ${sidebarTitleStyle}.color !== ${JSON.stringify(titleColor)}`),
+        'the sidebar title follows the next station artwork');
     await captureDemo('website-demo-settings');
     for (const effect of await demoRun('Object.keys(BG_EFFECTS)')) {
         await demoRun(`renderPage('settings'); document.querySelector('[data-effect="${effect}"]').click()`);
